@@ -97,6 +97,15 @@ namespace Jeni.KaihenNavi
             _panelArea = Ui.Box("kn-section", "kn-panel");
             scroll.Add(_panelArea);
 
+            // ③の中身が短い項目に切り替えたとき、スクロール位置が巻き戻って①②まで動いて見えないよう、
+            // ③は少なくとも画面の高さぶんの場所を取っておく
+            var panel = _panelArea;
+            scroll.RegisterCallback<GeometryChangedEvent>(e =>
+            {
+                var height = scroll.contentViewport.layout.height;
+                if (height > 0) panel.style.minHeight = height;
+            });
+
             root.Add(BuildFooter());
 
             ScanAvatars();

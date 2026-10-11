@@ -8,6 +8,8 @@ namespace UnityEngine
 {
     public enum FontStyle { Normal, Bold, Italic, BoldAndItalic }
 
+    public struct Rect { public float width; public float height; }
+
     public class Object
     {
         public string name;
@@ -248,6 +250,7 @@ namespace UnityEngine.UIElements
         StyleColor backgroundColor { get; set; }
         StyleBackground backgroundImage { get; set; }
         StyleLength paddingLeft { get; set; }
+        StyleLength minHeight { get; set; }
     }
 
     public class StyleSheet : UnityEngine.ScriptableObject { }
@@ -290,6 +293,7 @@ namespace UnityEngine.UIElements
 
     public class VisualElement
     {
+        public UnityEngine.Rect layout;
         public IStyle style;
         public IResolvedStyle resolvedStyle;
         public IVisualElementScheduler schedule;
@@ -339,7 +343,8 @@ namespace UnityEngine.UIElements
     }
 
     public enum ScrollViewMode { Vertical, Horizontal }
-    public class ScrollView : VisualElement { public ScrollView(ScrollViewMode mode) { } }
+    public class ScrollView : VisualElement { public ScrollView(ScrollViewMode mode) { } public VisualElement contentViewport; }
+    public class GeometryChangedEvent : EventBase { }
 }
 
 namespace UnityEditor.UIElements

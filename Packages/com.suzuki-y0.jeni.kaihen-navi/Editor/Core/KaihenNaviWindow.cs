@@ -75,6 +75,7 @@ namespace Jeni.KaihenNavi
             root.AddToClassList("kn-root");
             root.EnableInClassList("kn-dark", EditorGUIUtility.isProSkin);
             root.EnableInClassList("kn-light", !EditorGUIUtility.isProSkin);
+            FontLoader.Apply(root, L10n.Current);
             var sheet = AssetDatabase.LoadAssetAtPath<StyleSheet>(PackagePaths.StyleSheet);
             if (sheet != null && !root.styleSheets.Contains(sheet)) root.styleSheets.Add(sheet);
 

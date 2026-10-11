@@ -6,6 +6,8 @@ using System.Collections.Generic;
 
 namespace UnityEngine
 {
+    public enum FontStyle { Normal, Bold, Italic, BoldAndItalic }
+
     public class Object
     {
         public string name;
@@ -228,8 +230,20 @@ namespace UnityEngine.UIElements
         public static implicit operator StyleEnum<T>(T v) { return default(StyleEnum<T>); }
     }
 
+    public struct FontDefinition
+    {
+        public static FontDefinition FromSDFFont(UnityEngine.TextCore.Text.FontAsset f) { return default(FontDefinition); }
+    }
+
+    public struct StyleFontDefinition
+    {
+        public static implicit operator StyleFontDefinition(FontDefinition f) { return default(StyleFontDefinition); }
+    }
+
     public interface IStyle
     {
+        StyleFontDefinition unityFontDefinition { get; set; }
+        StyleEnum<UnityEngine.FontStyle> unityFontStyleAndWeight { get; set; }
         StyleEnum<DisplayStyle> display { get; set; }
         StyleColor backgroundColor { get; set; }
         StyleBackground backgroundImage { get; set; }
@@ -248,9 +262,38 @@ namespace UnityEngine.UIElements
     public class MouseDownEvent : EventBase { public int clickCount; }
     public delegate void EventCallback<T>(T evt);
 
+    public interface IVisualElementScheduledItem
+    {
+        IVisualElementScheduledItem Every(long intervalMs);
+        void Pause();
+    }
+
+    public interface IVisualElementScheduler
+    {
+        IVisualElementScheduledItem Execute(Action timerUpdateEvent);
+    }
+
+    public interface IResolvedStyle
+    {
+        UnityEngine.FontStyle unityFontStyleAndWeight { get; }
+    }
+
+    public struct UQueryBuilder<T> where T : VisualElement
+    {
+        public void ForEach(Action<T> funcCall) { }
+    }
+
+    public static class UQueryExtensions
+    {
+        public static UQueryBuilder<T> Query<T>(this VisualElement e) where T : VisualElement { return default(UQueryBuilder<T>); }
+    }
+
     public class VisualElement
     {
         public IStyle style;
+        public IResolvedStyle resolvedStyle;
+        public IVisualElementScheduler schedule;
+        public bool ClassListContains(string c) { return false; }
         public string tooltip;
         public VisualElementStyleSheetSet styleSheets;
         public void Add(VisualElement child) { }
@@ -413,5 +456,21 @@ namespace UnityEditor.PackageManager
     {
         public string assetPath;
         public static PackageInfo FindForAssembly(System.Reflection.Assembly a) { return null; }
+    }
+}
+
+namespace UnityEngine.TextCore.Text
+{
+    public struct FontWeightPair
+    {
+        public FontAsset regularTypeface;
+        public FontAsset italicTypeface;
+    }
+
+    public class FontAsset : UnityEngine.ScriptableObject
+    {
+        public FontWeightPair[] fontWeightTable { get { return null; } }
+        public System.Collections.Generic.List<FontAsset> fallbackFontAssetTable { get; set; }
+        public static FontAsset CreateFontAsset(string familyName, string styleName, int pointSize) { return null; }
     }
 }

@@ -1,0 +1,24 @@
+{
+    "name": "Jeni.KaihenNavi.Editor",
+    "rootNamespace": "Jeni.KaihenNavi",
+    "references": [
+        "nadena.dev.modular-avatar.core"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": false,
+    "defineConstraints": [],
+    "versionDefines": [
+        {
+            "name": "nadena.dev.modular-avatar",
+            "expression": "1.10.0",
+            "define": "KAIHENNAVI_MA"
+        }
+    ],
+    "noEngineReferences": false
+}

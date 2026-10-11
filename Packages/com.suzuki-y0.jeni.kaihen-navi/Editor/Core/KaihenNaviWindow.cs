@@ -31,6 +31,7 @@ namespace Jeni.KaihenNavi
         private Button _restoreButton;
         private Button _historyButton;
         private bool _scanQueued;
+        private readonly Dictionary<FeatureBase, VisualElement> _cards = new Dictionary<FeatureBase, VisualElement>();
 
         [MenuItem(MenuPath, false, 0)]
         public static void Open()
@@ -179,6 +180,7 @@ namespace Jeni.KaihenNavi
         private void BuildCards()
         {
             _cardsArea.Clear();
+            _cards.Clear();
             foreach (var feature in _features)
             {
                 var f = feature;
@@ -201,6 +203,16 @@ namespace Jeni.KaihenNavi
                 else if (!f.Implemented) card.Add(Ui.Text(L10n.Tr("card.soon"), "kn-card__badge"));
 
                 _cardsArea.Add(card);
+                _cards[f] = card;
+            }
+        }
+
+        /// <summary>カードは作り直さず、選択中の印だけ付け替える（作り直すと一瞬見た目が変わるため）。</summary>
+        private void UpdateCardSelection()
+        {
+            foreach (var pair in _cards)
+            {
+                pair.Value.EnableInClassList("kn-card--selected", pair.Key == _selected);
             }
         }
 
@@ -283,7 +295,7 @@ namespace Jeni.KaihenNavi
             UndoHelper.Separate();
             _selected = feature;
             _featureId = feature.Id;
-            BuildCards();
+            UpdateCardSelection();
             BuildPanel();
         }
 

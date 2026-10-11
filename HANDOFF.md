@@ -1,4 +1,4 @@
-# かいへんナビ 引き継ぎメモ（2026-10-11 時点）
+# かいへんナビ 引き継ぎメモ（2026-10-11 Unity 実機確認後）
 
 次の作業者（人でも AI でも）が、これだけ読めば続きから始められるようにまとめたもの。
 
@@ -15,42 +15,57 @@ Unity 標準機能を「やりたいこと」単位のかんたんな画面で�
 
 ## 2. いまの状態
 
-体験版の 3 機能と土台は実装済み。**Unity 上ではまだ一度も動かしていない**（作業環境に Unity が無かったため）。
-Mono と自作スタブで「MA なし／MA あり／製品版」の 3 通りのコンパイルは通っている（`tools/check.sh`）。
+体験版の 3 機能と土台は実装済みで、**2026-10-11 に Unity 2022.3.22f1 の実機で動作確認した**。
+確認環境: VCC プロジェクト（VRChat SDK Avatars 3.10.4 / Modular Avatar 1.18.7 / lilToon 2.3.4 / Gesture Manager 3.9.8）、アバターは Cazalis（Cazalis_Kisekae.prefab）1 体＋猫耳アクセ（ear / earL / earR）。
+Mono と自作スタブでの 3 通りのコンパイル確認（`tools/check.sh`）も引き続き通る。
 
 | 項目 | 状態 |
 | --- | --- |
-| パッケージ雛形（package.json、Editor 専用 asmdef、固定 GUID の .meta） | 済 |
-| EditorWindow（Tools > かいへんナビ） | 済・Unity 未確認 |
-| 自動バックアップ／元に戻す／履歴 | 済・Unity 未確認 |
-| 機能1 色変え | 済・Unity 未確認 |
-| 機能2 脱ぎ着メニュー生成（MA） | 済・Unity 未確認 |
-| 機能6 位置と大きさ | 済・Unity 未確認 |
-| 日英中韓の言語ファイル | 済 |
+| パッケージ雛形（package.json、Editor 専用 asmdef、固定 GUID の .meta） | 済・Unity 確認済み（コンパイルエラー 0） |
+| EditorWindow（Tools > かいへんナビ） | 済・Unity 確認済み（アバター自動検出、日本語・矢印の表示 OK） |
+| 自動バックアップ／元に戻す／履歴 | 済・Unity 確認済み（3 機能をまたいで最初の状態まで完全に戻る。ドメインリロード後も件数を保持） |
+| 機能1 色変え | 済・Unity 確認済み（複製先に保存、元マテリアルはハッシュで無変更を確認） |
+| 機能2 脱ぎ着メニュー生成（MA） | 済・Unity 確認済み（MA コンポーネントの設定、シーン上のプレビュー、Play 時の MA 処理まで）。Gesture Manager での切り替え操作だけ未確認 |
+| 機能6 位置と大きさ | 済・Unity 確認済み（移動量・拡大率どおりに動き、元に戻すで元の値へ） |
+| 日英中韓の言語ファイル | 済（日本語のみ Unity で表示確認） |
 | 製品版の残り 7 機能 | 未着手（カードだけ鍵付きで表示） |
 | VPM 配布・unitypackage・紹介動画・説明書 | 未着手 |
 
-## 3. 最優先でやること：Unity での動作確認
+## 3. Unity での動作確認の結果（2026-10-11）
 
-1. Unity 2022.3.22f1 の VCC（または ALCOM）プロジェクトを用意（VRChat SDK Avatars 3.5 以降）。lilToon と Modular Avatar 1.10 以降も入れる
-2. リポジトリの `Packages/com.suzuki-y0.jeni.kaihen-navi` をプロジェクトの `Packages/` にコピー
-3. Console の赤エラーをすべて潰す（下の「4. 未確認の前提」が怪しい順）
-4. Tools > かいへんナビ を開き、人気アバター 5 体ほどで次を確認
-   - 色変え: 髪チップでスライダーを動かす → `Assets/KaihenNavi/<アバター名>/Materials/` に複製ができ、元マテリアルは無変更
-   - 脱ぎ着: 服にチェック → メニューを作る → `KaihenNavi_Menu` が生成される。Play モードや Gesture Manager でメニューから切り替えられる
-   - 位置と大きさ: 頭のアクセを選び矢印で動く
-   - フッターの「元に戻す」で完全に戻る。「メニューを作り直す → 元に戻す」で前のメニューが復元される
-   - ピンク色や Missing があるアバターでも落ちない
-5. MA なしのプロジェクトでもコンパイルが通り、導入案内が出ることを確認
+### 確認できたこと
 
-## 4. 未確認の前提（Unity で最初に疑う所）
+- コンパイル: Console の赤エラー・警告 0。`Jeni.KaihenNavi.Editor.dll` が生成され、`KAIHENNAVI_MA` も有効（脱ぎ着画面が MA 版になる）
+- 色変え: 髪のスライダーで `Assets/KaihenNavi/Cazalis_Kisekae/Materials/` に複製ができ、シーンの見た目が変わる。File > Save Project 後の .mat に `_MainTexHSVG` が書かれる。lilToon の FakeShadow（色調補正なし）は設計どおり `_Color` 側が変わる。元アセット 99 ファイルの md5 は全工程で無変更
+- 脱ぎ着: `KaihenNavi_Menu` の下に MA Menu Item（Toggle、`KaihenNavi/<名前>`、既定 ON・保存・同期）と MA Object Toggle が正しく付く。対象を非表示にしても **MA のプレビューでシーン上は服が見えたまま**（懸念は問題なし）。Play で MA がメニューを処理し、服が既定 ON で表示される
+- 位置と大きさ: Head に付けた猫耳を「上」×3 で Y が 0.121→0.136（0.005×3）、+5%×2 で 0.77→0.847（110%）。元に戻すで元の値に戻る
+- 元に戻す: 「メニューを作り直す → 元に戻す」で前のメニュー（ブラ＋ショーツ）が復元。さらに戻すとメニューが消え、マテリアル参照も `Assets/Cazalis/Material/` の元マテリアルに戻る。手で追加した猫耳は消えない
+- 4 章の前提（MA 1.18.7 の API 名・asmdef 名、`PopupField` の名前空間、矢印と日本語の表示、`_MainTexHSVG`）はすべて問題なし
+- Play 終了時に出た赤エラー 3 件（`TreeViewController.IsItemDragSelectedOrSelected` の NullReference、GUIClip）は Unity 本体の Hierarchy 由来で、かいへんナビとは無関係
 
-- MA の API: `ModularAvatarMenuItem` の `Control`（VRCExpressionsMenu.Control）、`MenuSource`、`isSynced`、`isSaved`、`isDefault`。`ModularAvatarObjectToggle.Objects`（`List<ToggledObject>`、`ToggledObject.Object` / `.Active`）。`AvatarObjectReference.Set()` / `Get()`。最新 main のソースで確認したが、1.10 時点で全部あるかは未確認
-- MA の asmdef 名 `nadena.dev.modular-avatar.core`、パッケージ名 `nadena.dev.modular-avatar`（asmdef の versionDefines で `KAIHENNAVI_MA` を定義）
-- `PopupField<T>` の名前空間（2022.3 では UnityEditor.UIElements の想定。両方 using 済み）
-- MA の「Object Toggle の初期状態プレビュー」がシーンに出るか。出ないと、脱ぎ着メニュー作成後に服がシーン上で消えて見える（対象を非表示にし、メニュー既定 ON で表示する方式のため）
-- 矢印（↑↓←→）や日本語がエディタのフォントで表示されるか
-- lilToon 色調補正 `_MainTexHSVG`（既定 (0,1,1,1)、色相 -0.5〜0.5）。lilToon のシェーダーソースで確認済み
+### 直したこと
+
+- ヘッダー: 狭いウィンドウでタイトル・バッジと言語選択が重なっていた → 折り返し可能にし、ヘッダー／フッターが縦に押しつぶされないようにした
+- 本文の余白: 2022.3 の ScrollView は中間要素を挟むため、子セレクタ（`>`）指定の余白が効いておらず内容が左端にくっついていた → 子孫セレクタに変更
+- 脱ぎ着: 通信量（bit）がチェックを変えても更新されなかった → チェックのたびに数え直す
+- 脱ぎ着: 「元に戻す」やメニュー作り直しのあとも、チェックが前の手操作のまま残っていた → 実際のメニューの中身が変わったら、覚えたチェックを捨ててメニューに合わせる
+- 脱ぎ着: 小物が中のメッシュ名（「L」「R.001」など）で並んでいた → 小物のまとまりにメッシュが 1 つだけなら、まとまりの名前（「earL」など）を表示名にし、元のオブジェクト名を小さく添える
+
+### まだ確認できていないこと（次にやる）
+
+1. Gesture Manager のラジアルメニューから脱ぎ着を実際に切り替える（リモート操作ではインスペクターのクリックが Play 中に効かず未確認）
+2. 人気アバターをあと 4 体ほど（マヌカ、桔梗、セレスティア、ルルネなど）。Cazalis は目のマテリアルが「目 0」になった（目が顔マテリアルに含まれる型）。ほかのアバターでの部位判定を見る
+3. MA が入っていないプロジェクトでのコンパイルと導入案内（`tools/check.sh` の NoMA では通っている）
+4. ピンク色や Missing があるアバター
+5. 英語・中国語・韓国語の表示
+6. 最終版 USS（ヘッダー／フッターの `flex-shrink: 0`）の見た目（折り返し自体は確認済み）
+
+## 4. 気づいた改善点（未着手）
+
+- 「元に戻す」で最初の状態まで戻しても、`Assets/KaihenNavi/<アバター名>/Materials/` の複製マテリアルは残る（参照はされない）。掃除するかは要検討
+- 脱ぎ着の候補に素体の一部（Body_Base）や髪も並ぶ。初心者には多すぎるので、髪・素体は折りたたむなどしたい
+- ヒエラルキーにアクセを足しても位置と大きさの候補は自動では増えない（「更新」かカードの選び直しが必要）。`hierarchyChanged` で候補だけ取り直すとよい
+- テストに使ったプロジェクトは「自動リフレッシュ」がオフで、ファイルを差し替えたら Ctrl+R が必要だった（ツールの不具合ではない）
 
 ## 5. 設計の要点
 
@@ -87,7 +102,7 @@ tools/
 
 ## 7. 残りのタスク（資料の順）
 
-1. Unity での動作確認と修正（上記）
+1. Unity での動作確認と修正（Cazalis 1 体では完了。残りは 3 章「まだ確認できていないこと」）
 2. 紹介動画（30 秒程度）と説明書、BOOTH で無料体験版を公開
 3. 配布: [jeni-tools-vpm](https://github.com/Suzuki-Y-0/jeni-tools-vpm)（ID `com.suzuki-y0.jeni`）に追加するか検討＋unitypackage。ただし有料版の配布方法は別途決める
 4. 反応を見て製品版の 7 機能を追加（3 肌隠し、4 体型、5 身長、7 視点、8 ピンク修正、9 明るさ、10 サムネイル）
@@ -108,3 +123,5 @@ tools/
 - クラウドのセッションからは GitHub に新規リポジトリを作れない（既存リポジトリへの push は可）
 - リモート URL は大文字小文字込みで `https://github.com/Suzuki-Y-0/KaihenNavi.git`
 - コミット末尾に Co-Authored-By などの署名行を付けている
+- 動作確認に使ったプロジェクト: `C:\Users\NextG\Documents\VRChatCreatorCompanion\VRChatProjects\MCP Project`（`Packages/com.suzuki-y0.jeni.kaihen-navi` にコピー済み。シーンは未保存の Untitled）
+- Unity Hub はサインイン画面で止まるので、ALCOM の「Unity を開く」から起動した

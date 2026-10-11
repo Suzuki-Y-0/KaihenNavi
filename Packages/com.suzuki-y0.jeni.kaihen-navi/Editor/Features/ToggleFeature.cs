@@ -35,6 +35,11 @@ namespace Jeni.KaihenNavi
         private static readonly Dictionary<GameObject, bool> Picks = new Dictionary<GameObject, bool>();
         private static readonly Dictionary<GameObject, string> Labels = new Dictionary<GameObject, string>();
 
+#if KAIHENNAVI_MA
+        // チェックを覚えたときのメニューの中身。メニューが作り直し・削除・「元に戻す」で変わったら、覚えたチェックは捨てて実際のメニューに合わせる
+        private static string _picksMenuSignature = "";
+#endif
+
         public override string Id { get { return "toggle"; } }
         public override int Number { get { return 2; } }
         public override Color Accent { get { return Ui.Hex("#6CC08B"); } }
@@ -43,6 +48,9 @@ namespace Jeni.KaihenNavi
         public override VisualElement Build(FeatureContext ctx)
         {
             var root = new VisualElement();
+#if KAIHENNAVI_MA
+            SyncPicksWithMenu(ctx.Avatar);
+#endif
             var candidates = FindCandidates(ctx.Avatar);
 
 #if KAIHENNAVI_MA
@@ -64,7 +72,27 @@ namespace Jeni.KaihenNavi
             var menuRoot = avatar.transform.Find(MenuObjectName);
 
             Walk(avatar.transform, avatar.transform, 0, body, bones, menuRoot, result);
+
+            // 小物のメッシュ名は「L」「R.001」のように分かりにくいことが多いので、
+            // 小物のまとまり（体の骨やアバター直下に付いている親）にメッシュが 1 つだけなら、その名前を表示名にする
+            foreach (var c in result)
+            {
+                if (Labels.ContainsKey(c.Target)) continue;
+                var group = AccessoryRoot(avatar.transform, c.Target.transform, bones);
+                if (group == c.Target.transform) continue;
+                var meshes = group.GetComponentsInChildren<Renderer>(true)
+                    .Count(r => (r is SkinnedMeshRenderer || r is MeshRenderer) && r != body);
+                if (meshes == 1) c.Label = group.name;
+            }
+
             return result;
+        }
+
+        /// <summary>体の骨かアバター直下に付いている、いちばん上の親。</summary>
+        private static Transform AccessoryRoot(Transform avatarRoot, Transform t, HashSet<Transform> bones)
+        {
+            while (t.parent != null && t.parent != avatarRoot && !bones.Contains(t.parent)) t = t.parent;
+            return t;
         }
 
         private static void Walk(Transform avatarRoot, Transform parent, int depth, Renderer body,
@@ -117,7 +145,7 @@ namespace Jeni.KaihenNavi
             });
         }
 
-        private static VisualElement BuildList(List<Candidate> candidates, bool editableLabel)
+        private static VisualElement BuildList(List<Candidate> candidates, bool editableLabel, System.Action onPickChanged = null)
         {
             var list = Ui.Box("kn-list");
             foreach (var candidate in candidates)
@@ -132,6 +160,7 @@ namespace Jeni.KaihenNavi
                 {
                     c.Picked = e.newValue;
                     Picks[c.Target] = e.newValue;
+                    if (onPickChanged != null) onPickChanged();
                 });
                 row.Add(toggle);
 
@@ -154,6 +183,8 @@ namespace Jeni.KaihenNavi
                 }
 
                 var state = c.Target.activeSelf ? L10n.Tr("toggle.stateVisible") : L10n.Tr("toggle.stateHidden");
+                // 表示名を変えたものは、元のオブジェクト名も添えて見分けられるようにする
+                if (editableLabel && c.Label != c.Target.name) state += "  ・  " + c.Target.name;
                 texts.Add(Ui.Text(state, "kn-list__sub"));
                 row.Add(texts);
 
@@ -217,16 +248,23 @@ namespace Jeni.KaihenNavi
                 return;
             }
 
-            root.Add(Ui.Heading(L10n.Tr("toggle.pick")));
-            root.Add(BuildList(candidates, true));
-
-            // 同期パラメータの消費量（1 項目 1 bit）
-            var picked = candidates.Count(c => c.Picked);
+            // 同期パラメータの消費量（1 項目 1 bit）。チェックを変えるたびに数え直す
             var baseCost = AvatarParameterCost(ctx.Avatar);
             var max = VRCExpressionParameters.MAX_PARAMETER_COST;
-            var bits = Ui.Text(L10n.Tr("toggle.bits", baseCost, picked, max), "kn-bits");
+            var bits = Ui.Text("", "kn-bits");
+            var over = Ui.Notice(L10n.Tr("toggle.bitsOver"), "warn");
+            System.Action updateBits = () =>
+            {
+                var picked = candidates.Count(c => c.Picked);
+                bits.text = L10n.Tr("toggle.bits", baseCost, picked, max);
+                over.style.display = baseCost + picked > max ? DisplayStyle.Flex : DisplayStyle.None;
+            };
+
+            root.Add(Ui.Heading(L10n.Tr("toggle.pick")));
+            root.Add(BuildList(candidates, true, updateBits));
             root.Add(bits);
-            if (baseCost + picked > max) root.Add(Ui.Notice(L10n.Tr("toggle.bitsOver"), "warn"));
+            root.Add(over);
+            updateBits();
 
             var buttons = Ui.Box("kn-row");
             buttons.Add(Ui.Button(
@@ -263,6 +301,16 @@ namespace Jeni.KaihenNavi
 
             root.Add(buttons);
             root.Add(Ui.Notice(L10n.Tr("toggle.howToUse"), "ok"));
+        }
+
+        private static void SyncPicksWithMenu(VRCAvatarDescriptor avatar)
+        {
+            var signature = string.Join("|", ReadExisting(avatar)
+                .Select(e => e.Target.GetInstanceID() + ":" + e.Item.name).ToArray());
+            if (signature == _picksMenuSignature) return;
+            Picks.Clear();
+            Labels.Clear();
+            _picksMenuSignature = signature;
         }
 
         private static List<ExistingToggle> ReadExisting(VRCAvatarDescriptor avatar)

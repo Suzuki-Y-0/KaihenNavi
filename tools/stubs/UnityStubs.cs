@@ -10,6 +10,7 @@ namespace UnityEngine
     {
         public string name;
         public HideFlags hideFlags;
+        public int GetInstanceID() { return 0; }
         public static T Instantiate<T>(T original) where T : Object { return original; }
         public static implicit operator bool(Object o) { return !ReferenceEquals(o, null); }
     }
@@ -220,8 +221,16 @@ namespace UnityEngine.UIElements
         public static implicit operator StyleLength(float f) { return default(StyleLength); }
     }
 
+    public enum DisplayStyle { Flex, None }
+
+    public struct StyleEnum<T> where T : struct
+    {
+        public static implicit operator StyleEnum<T>(T v) { return default(StyleEnum<T>); }
+    }
+
     public interface IStyle
     {
+        StyleEnum<DisplayStyle> display { get; set; }
         StyleColor backgroundColor { get; set; }
         StyleBackground backgroundImage { get; set; }
         StyleLength paddingLeft { get; set; }

@@ -48,6 +48,8 @@
 
 .kn-header {
     flex-direction: row;
+    flex-wrap: wrap;
+    flex-shrink: 0;
     align-items: center;
     justify-content: space-between;
     padding: 10px 12px;
@@ -59,7 +61,8 @@
 .kn-header__titles {
     flex-direction: row;
     align-items: center;
-    flex-shrink: 1;
+    flex-shrink: 0;
+    margin-right: 8px;
 }
 
 .kn-header__title {
@@ -85,7 +88,7 @@
 
 .kn-language {
     width: 110px;
-    margin: 0;
+    margin: 0 0 0 auto;
 }
 
 /* ---------------------------------------------------------------- 本体 */
@@ -94,7 +97,7 @@
     flex-grow: 1;
 }
 
-.kn-body > .unity-scroll-view__content-viewport > .unity-scroll-view__content-container {
+.kn-body .unity-scroll-view__content-container {
     padding: 4px 12px 16px 12px;
 }
 
@@ -483,6 +486,7 @@
 
 .kn-footer {
     flex-direction: row;
+    flex-shrink: 0;
     align-items: center;
     padding: 6px 12px;
     background-color: var(--kn-surface);

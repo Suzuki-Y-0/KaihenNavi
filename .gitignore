@@ -1,0 +1,5 @@
+/tools/stubs/build/
+*.dll
+*.pdb
+.DS_Store
+Thumbs.db

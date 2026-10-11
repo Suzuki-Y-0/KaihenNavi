@@ -1,0 +1,21 @@
+{
+  "name": "com.suzuki-y0.jeni.kaihen-navi",
+  "displayName": "かいへんナビ (Kaihen Navi)",
+  "version": "0.1.0",
+  "unity": "2022.3",
+  "description": "Jeni Tools - VRChat初心者向けのかんたん改変ツール。「髪の色を変えたい」「服を脱ぎ着させたい」など、やりたいことから選ぶだけで改変できます。毎回自動でバックアップします。",
+  "author": {
+    "name": "Suzuki-Y-0",
+    "url": "https://github.com/Suzuki-Y-0"
+  },
+  "keywords": [
+    "VRChat",
+    "Avatar",
+    "Beginner"
+  ],
+  "vpmDependencies": {
+    "com.vrchat.avatars": ">=3.5.0"
+  },
+  "legacyFolders": {},
+  "legacyPackages": []
+}

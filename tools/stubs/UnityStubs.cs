@@ -128,6 +128,8 @@ namespace UnityEngine
         public void SetVector(string n, Vector4 v) { }
         public Color GetColor(string n) { return default(Color); }
         public void SetColor(string n, Color c) { }
+        public float GetFloat(string n) { return 0f; }
+        public void SetFloat(string n, float v) { }
     }
 
     public class ScriptableObject : Object

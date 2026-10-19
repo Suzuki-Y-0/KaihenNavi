@@ -46,7 +46,9 @@ namespace Jeni.KaihenNavi
         /// <summary>改変アバター（Avatars 以下の Prefab）か。ベースは含めない（自動保存で書き換えないため）。</summary>
         public static bool IsMinePath(string path)
         {
-            return path != null && path.Replace('\\', '/').StartsWith(WorkFolders.AvatarsRoot + "/") && path.EndsWith(".prefab");
+            if (path == null) return false;
+            path = path.Replace('\\', '/');
+            return path.StartsWith(WorkFolders.AvatarsRoot + "/") && path.EndsWith(".prefab") && !path.Contains("/Backups/");
         }
 
         /// <summary>改変のベース（Bases 以下の Prefab）か。</summary>
@@ -86,13 +88,22 @@ namespace Jeni.KaihenNavi
             var backups = backup.List(avatar);
             var basePrefab = PrefabUtility.IsPartOfPrefabInstance(target) ? PrefabUtility.GetCorrespondingObjectFromSource(target) : null;
 
+            // 買ったときの Prefab につながっていれば、先にベースへつなぎ替える（今までの改変はそのまま残る）。
+            // こうすると、新しく作った改変アバターと同じ「元アバター → ベース → 改変アバター」の形になる
+            GameObject parent = null;
+            if (basePrefab != null && !IsToolPath(AssetDatabase.GetAssetPath(basePrefab)))
+            {
+                parent = EnsureBase(basePrefab);
+                if (parent != null) ReplaceSource(target, parent);
+            }
+
             var folder = FolderFor(avatar.gameObject);
             var path = folder + "/" + System.IO.Path.GetFileName(folder) + ".prefab";
             bool ok;
             PrefabUtility.SaveAsPrefabAssetAndConnect(target, path, InteractionMode.UserAction, out ok);
             if (!ok) return null;
 
-            WorkFolders.WriteManifest(path, basePrefab);
+            WorkFolders.WriteManifest(path, basePrefab, parent);
             backup.Rekey(avatar, backups);
             return path;
         }
@@ -169,6 +180,63 @@ namespace Jeni.KaihenNavi
             if (saved == null) return null;
             WorkFolders.WriteManifest(path, original, original, "base");
             return saved;
+        }
+
+        /// <summary>
+        /// シーンのインスタンスがつながっている Prefab を差し替える（Unity 標準の「Prefab の置き換え」と同じ）。
+        /// 階層の場所で対応を取り、今までの変更（オーバーライド）は残す。ベースは元アバターと同じ階層なので全部残る。
+        /// </summary>
+        private static void ReplaceSource(GameObject instanceRoot, GameObject newSource)
+        {
+            var settings = new PrefabReplacingSettings
+            {
+                objectMatchMode = ObjectMatchMode.ByHierarchy,
+                changeRootNameToAssetName = false,
+            };
+            PrefabUtility.ReplacePrefabAssetOfPrefabInstance(instanceRoot, newSource, settings, InteractionMode.UserAction);
+        }
+
+        /// <summary>
+        /// ベースを通っていない改変アバター（元アバターから直接作った古いもの）を、ベースにつなぎ直す。
+        /// 一時的にシーンへ出して「元アバターのインスタンス＋改変」に戻し、ベースへ差し替えてから同じファイルに保存し直す
+        /// （ファイルの GUID はそのままなので、シーンに置いてあるものもつながったまま）。
+        /// 念のため、つなぎ直す前の Prefab を Backups フォルダにコピーしておく。失敗したら理由を返す。
+        /// </summary>
+        public static string Rebase(GameObject prefab)
+        {
+            var path = AssetDatabase.GetAssetPath(prefab);
+            if (!IsMinePath(path)) return "not-mine";
+            if (ParentBaseOf(prefab) != null) return null;
+            var original = OriginalOf(prefab);
+            if (original == null) return "no-original";
+            // 改変アバターの直接の親が元アバターのときだけ（別バージョンをさらに重ねたものは対象外）
+            if (PrefabUtility.GetCorrespondingObjectFromSource(prefab) != original) return "nested";
+
+            var parent = EnsureBase(original);
+            if (parent == null) return "no-base";
+
+            var folder = Path.GetDirectoryName(path).Replace('\\', '/');
+            var backupFolder = WorkFolders.Ensure(folder + "/Backups");
+            var backupPath = AssetDatabase.GenerateUniqueAssetPath(backupFolder + "/" + prefab.name + " (before base).prefab");
+            if (!AssetDatabase.CopyAsset(path, backupPath)) return "backup";
+
+            var instance = PrefabUtility.InstantiatePrefab(prefab) as GameObject;
+            if (instance == null) return "instantiate";
+            try
+            {
+                // 改変アバターのインスタンスを 1 段ほどくと、元アバターのインスタンス＋改変（オーバーライド）になる
+                PrefabUtility.UnpackPrefabInstance(instance, PrefabUnpackMode.OutermostRoot, InteractionMode.AutomatedAction);
+                ReplaceSource(instance, parent);
+                instance.name = prefab.name;
+                if (PrefabUtility.SaveAsPrefabAsset(instance, path) == null) return "save";
+            }
+            finally
+            {
+                Object.DestroyImmediate(instance);
+            }
+
+            WorkFolders.WriteManifest(path, original, parent);
+            return null;
         }
 
         /// <summary>この元アバターのベース（無ければ null）。avatar.json の元アバターの GUID で探す。</summary>
@@ -388,7 +456,9 @@ namespace Jeni.KaihenNavi
             if (!AssetDatabase.IsValidFolder(WorkFolders.AvatarsRoot)) return result;
             foreach (var guid in AssetDatabase.FindAssets("t:Prefab", new[] { WorkFolders.AvatarsRoot }))
             {
-                var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(AssetDatabase.GUIDToAssetPath(guid));
+                var assetPath = AssetDatabase.GUIDToAssetPath(guid);
+                if (assetPath.Contains("/Backups/")) continue;
+                var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(assetPath);
                 if (prefab != null && prefab.GetComponent<VRCAvatarDescriptor>() != null) result.Add(prefab);
             }
 

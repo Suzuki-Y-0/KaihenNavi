@@ -326,5 +326,10 @@
   "light.tip": "Double-click a row to find it in the scene. Unchecked rows are not changed.",
   "undo.light": "KaihenNavi: Change brightness/shadows",
   "new.baseFirst": "This is the first avatar made from this one, so a shared base for all edited avatars made from it is also created. Settings you want to share, such as the walking style, can be changed on the base.",
-  "new.baseReuse": "This will be made from this avatar's shared base. Shared settings changed on the base (such as the walking style) also apply to this avatar."
+  "new.baseReuse": "This will be made from this avatar's shared base. Shared settings changed on the base (such as the walking style) also apply to this avatar.",
+  "existing.noBase": "This avatar was made without the shared base. Reconnect it to the base so shared settings such as the walking style apply.",
+  "existing.rebase": "Reconnect to base",
+  "existing.rebaseConfirm": "Reconnect \"{0}\" to the shared base of \"{1}\".\n\nYour edits are kept. A copy of the current version is saved in this avatar's Backups folder just in case.",
+  "existing.rebaseDone": "Reconnected \"{0}\" to the base. Please check that it looks the same.",
+  "existing.rebaseFailed": "Could not reconnect ({0}). The avatar was not changed."
 }

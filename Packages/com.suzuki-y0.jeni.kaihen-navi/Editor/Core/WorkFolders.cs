@@ -21,7 +21,8 @@ namespace Jeni.KaihenNavi
     ///       改変アバター名.prefab    改変アバター（ベースのプレハブバリアント）
     ///       avatar.json              ほかのツール向けの説明（元アバター、作った日時など）
     ///       Materials/               色変えなどで複製したマテリアル
-    ///       Textures/                作ったテクスチャ
+    ///       Textures/                作ったテクスチャ（必要になったときだけ）
+    ///       Menus/                   メニュー整理で使う空のメニュー（必要になったときだけ）
     ///       Backups/                 自動バックアップ
     /// </summary>
     internal static class WorkFolders
@@ -33,7 +34,8 @@ namespace Jeni.KaihenNavi
         public const string ManifestName = "avatar.json";
         public const int ManifestFormat = 1;
 
-        private static readonly string[] AvatarSubfolders = { "Materials", "Textures", "Backups" };
+        // Textures・Menus などは、使うときに初めて作る（空のフォルダを増やさない）
+        private static readonly string[] AvatarSubfolders = { "Materials", "Backups" };
 
         /// <summary>
         /// このアバターのファイルを置くフォルダ。自分用アバターならその Prefab があるフォルダ、
@@ -132,7 +134,8 @@ namespace Jeni.KaihenNavi
                 "  <name>.prefab   Edited avatar (Prefab Variant of the base) / 改変アバター\n" +
                 "  avatar.json     Info for other tools (format " + ManifestFormat + ") / ほかのツール向けの説明\n" +
                 "  Materials/      Copied materials / 複製したマテリアル\n" +
-                "  Textures/       Generated textures / 作ったテクスチャ\n" +
+                "  Textures/       Generated textures, when needed / 作ったテクスチャ（必要なときだけ）\n" +
+                "  Menus/          Empty root menu for menu tidying, when needed / メニュー整理用（必要なときだけ）\n" +
                 "  Backups/        Automatic backups / 自動バックアップ\n" +
                 "  Thumbnail.png   Upload thumbnail / アップロード用サムネイル\n" +
                 "```\n\n" +

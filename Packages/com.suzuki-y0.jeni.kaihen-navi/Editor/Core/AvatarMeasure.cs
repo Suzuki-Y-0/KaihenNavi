@@ -1,3 +1,5 @@
+using System.Collections.Generic;
+using System.Linq;
 using UnityEngine;
 using VRC.SDK3.Avatars.Components;
 
@@ -42,6 +44,25 @@ namespace Jeni.KaihenNavi
             return h;
         }
 
+        /// <summary>着せた服（MA の Merge Armature が入っている、アバター直下のもの）。</summary>
+        private static List<Transform> OutfitRoots(VRCAvatarDescriptor avatar)
+        {
+            var result = new List<Transform>();
+#if KAIHENNAVI_MA
+            foreach (Transform child in avatar.transform)
+            {
+                if (child.GetComponentInChildren<nadena.dev.modular_avatar.core.ModularAvatarMergeArmature>(true) != null) result.Add(child);
+            }
+#endif
+            return result;
+        }
+
+        /// <summary>覚えている身長を捨てる（身長を変えたあとに測り直すため）。</summary>
+        public static void Forget()
+        {
+            _cachedId = 0;
+        }
+
         private static int _cachedId;
         private static double _cachedAt;
         private static float _cachedHeight;
@@ -55,10 +76,14 @@ namespace Jeni.KaihenNavi
             var found = false;
             var top = 0f;
             var baked = new Mesh();
+            var outfits = OutfitRoots(avatar);
             try
             {
                 foreach (var r in avatar.GetComponentsInChildren<Renderer>(false))
                 {
+                    // 着せた服は、アップロードのときに体の骨へ合わせられるまで元の大きさのまま置かれているので測らない
+                    if (outfits.Any(o => r.transform.IsChildOf(o))) continue;
+
                     float y;
                     var smr = r as SkinnedMeshRenderer;
                     if (smr != null)

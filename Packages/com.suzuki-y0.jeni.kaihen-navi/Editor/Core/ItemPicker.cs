@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using UnityEditor;
+using UnityEditor.UIElements;
 using UnityEngine;
 using UnityEngine.UIElements;
 using VRC.SDK3.Avatars.Components;
@@ -62,18 +63,34 @@ namespace Jeni.KaihenNavi
                 var prefab = PickFromDrag();
                 if (prefab == null) return;
                 DragAndDrop.AcceptDrag();
-
-                var actual = KindOf(prefab);
-                if (actual != kind && actual != ItemKind.Other)
-                {
-                    var key = actual == ItemKind.Outfit ? "pick.looksOutfit" : "pick.looksAccessory";
-                    if (!EditorUtility.DisplayDialog(L10n.Tr("app.name"), L10n.Tr(key, prefab.name), L10n.Tr("pick.useAnyway"), L10n.Tr("dialog.cancel"))) return;
-                }
-
-                onPicked(prefab);
+                Use(prefab, kind, onPicked);
             });
 
+            // ドラッグが難しいとき用：一覧から選ぶ（Unity 標準の選択画面が開く）
+            var field = new ObjectField(L10n.Tr("pick.orChoose")) { objectType = typeof(GameObject), allowSceneObjects = false };
+            field.AddToClassList("kn-drop__field");
+            field.RegisterValueChangedCallback(e =>
+            {
+                var prefab = e.newValue as GameObject;
+                field.SetValueWithoutNotify(null);
+                if (prefab == null) return;
+                Use(prefab, kind, onPicked);
+            });
+            zone.Add(field);
+
             return zone;
+        }
+
+        private static void Use(GameObject prefab, ItemKind kind, Action<GameObject> onPicked)
+        {
+            var actual = KindOf(prefab);
+            if (actual != kind && actual != ItemKind.Other)
+            {
+                var key = actual == ItemKind.Outfit ? "pick.looksOutfit" : "pick.looksAccessory";
+                if (!EditorUtility.DisplayDialog(L10n.Tr("app.name"), L10n.Tr(key, prefab.name), L10n.Tr("pick.useAnyway"), L10n.Tr("dialog.cancel"))) return;
+            }
+
+            onPicked(prefab);
         }
 
         /// <summary>ドラッグ中のもののうち、Project にある Prefab。</summary>

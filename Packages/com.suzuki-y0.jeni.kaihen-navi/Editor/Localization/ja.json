@@ -298,8 +298,8 @@
   "skin.noCutter": "入っているModular AvatarにMesh Cutterがありません。VCC（またはALCOM）でModular Avatarを新しいバージョンに更新してください。",
   "skin.cutterIntro": "Mesh Cutterは、体のメッシュの一部を、アップロードのときだけ切り取ります（元のアバターは変わりません）。服を選ぶと、その服を着ているときだけ切り取ります。",
   "skin.addCutter": "Mesh Cutterを置く",
-  "skin.cutterHow": "置いたあと、右のInspectorで「切り取るメッシュ」に体（Body）を入れ、切り取る範囲を決めてください。",
-  "skin.cutterAdded": "Mesh Cutterを置いて選びました。右のInspectorで、切り取るメッシュ（体）と範囲を設定してください。\n\n「元に戻す」で取り消せます。",
+  "skin.cutterHow": "切り取る前に、Inspector で「切り取る範囲」を決めてください（切り取る相手の肌のメッシュは入れてあります）。",
+  "skin.cutterAdded": "Mesh Cutter を置いて選びました。Inspector で切り取る範囲を決めてください。切り取る相手（肌のメッシュ）は入れてあります。\n\n「元に戻す」で取り消せます。",
   "undo.skin": "かいへんナビ: 肌を隠す",
   "light.intro": "明るさと影に関係する設定だけを出しています。元の見た目設定（マテリアル）は変更されません。変える前に自動でコピーを作ります。",
   "light.noLilToon": "lilToon の見た目設定が見つかりませんでした。この機能は lilToon を使っているアバター向けです。",
@@ -331,5 +331,7 @@
   "existing.rebase": "ベースにつなぎ直す",
   "existing.rebaseConfirm": "「{0}」を「{1}」の改変のベースにつなぎ直します。\n\n今までの改変はそのまま残ります。念のため、つなぎ直す前のものをこのアバターの Backups フォルダにコピーしておきます。",
   "existing.rebaseDone": "「{0}」をベースにつなぎ直しました。見た目が変わっていないか確かめてください。",
-  "existing.rebaseFailed": "つなぎ直せませんでした（{0}）。改変アバターは変わっていません。"
+  "existing.rebaseFailed": "つなぎ直せませんでした（{0}）。改変アバターは変わっていません。",
+  "skin.mesh": "どこの肌ですか？（数字は縮める用のシェイプキーの数）",
+  "pick.orChoose": "または一覧から選ぶ"
 }

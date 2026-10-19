@@ -30,6 +30,7 @@ namespace Jeni.KaihenNavi
             @"shrink|hide|_off\b|^off_|cut|kill|縮|隠|消|非表示", RegexOptions.IgnoreCase);
 
         private static int _mode;          // 0 = シェイプキー, 1 = Mesh Cutter
+        private static string _meshPath;   // 選んだ肌のメッシュ（アバターからの階層パス）
         private static int _targetIndex;   // 0 = いつも, 1.. = 着ている服
         private static bool _showAll;
 
@@ -41,7 +42,8 @@ namespace Jeni.KaihenNavi
         public override VisualElement Build(FeatureContext ctx)
         {
             var root = new VisualElement();
-            var body = AvatarFinder.FindBody(ctx.Avatar);
+            var bodies = SkinMeshes(ctx.Avatar);
+            var body = PickBody(ctx.Avatar, bodies);
             if (body == null || body.sharedMesh == null)
             {
                 root.Add(Ui.Notice(L10n.Tr("skin.noBody"), "warn"));
@@ -55,9 +57,66 @@ namespace Jeni.KaihenNavi
                 ctx.Rebuild();
             }));
 
-            if (_mode == 0) BuildShrink(ctx, root, body);
-            else BuildCutter(ctx, root);
+            if (_mode == 0)
+            {
+                // 顔と体が別のメッシュのアバターもあるので、どこの肌かを選べるようにする
+                if (bodies.Count > 1)
+                {
+                    root.Add(Ui.Heading(L10n.Tr("skin.mesh")));
+                    var labels = bodies.Select(b => b.name + "  " + ShrinkCount(b)).ToList();
+                    var meshPopup = new PopupField<string>(labels, Mathf.Max(0, bodies.IndexOf(body)));
+                    meshPopup.AddToClassList("kn-grow");
+                    meshPopup.RegisterValueChangedCallback(e =>
+                    {
+                        var i = labels.IndexOf(e.newValue);
+                        if (i < 0) return;
+                        _meshPath = HierarchyPath.Get(ctx.Avatar.transform, bodies[i].transform);
+                        ctx.Rebuild();
+                    });
+                    root.Add(meshPopup);
+                }
+
+                BuildShrink(ctx, root, body);
+            }
+            else BuildCutter(ctx, root, body);
             return root;
+        }
+
+        // ---------------------------------------------------------------- 肌のメッシュ
+
+        /// <summary>肌がありそうなメッシュ（シェイプキーがあり、着せた服の中ではないもの）。</summary>
+        private static List<SkinnedMeshRenderer> SkinMeshes(VRCAvatarDescriptor avatar)
+        {
+            var outfits = WornOutfits(avatar);
+            return avatar.GetComponentsInChildren<SkinnedMeshRenderer>(true)
+                .Where(r => r.sharedMesh != null && r.sharedMesh.blendShapeCount > 0)
+                .Where(r => !outfits.Any(o => r.transform.IsChildOf(o.transform)))
+                .ToList();
+        }
+
+        private static int ShrinkCount(SkinnedMeshRenderer r)
+        {
+            var count = 0;
+            for (var i = 0; i < r.sharedMesh.blendShapeCount; i++)
+            {
+                if (ShrinkPattern.IsMatch(r.sharedMesh.GetBlendShapeName(i))) count++;
+            }
+
+            return count;
+        }
+
+        /// <summary>選んだメッシュ。まだ選んでいなければ、縮める用のシェイプキーがいちばん多いもの（無ければ体の本体）。</summary>
+        private static SkinnedMeshRenderer PickBody(VRCAvatarDescriptor avatar, List<SkinnedMeshRenderer> bodies)
+        {
+            if (!string.IsNullOrEmpty(_meshPath))
+            {
+                var chosen = bodies.FirstOrDefault(b => HierarchyPath.Get(avatar.transform, b.transform) == _meshPath);
+                if (chosen != null) return chosen;
+            }
+
+            var best = bodies.OrderByDescending(ShrinkCount).FirstOrDefault();
+            if (best != null && ShrinkCount(best) > 0) return best;
+            return AvatarFinder.FindBody(avatar) ?? bodies.FirstOrDefault();
         }
 
         // ---------------------------------------------------------------- シェイプキーで縮める
@@ -208,7 +267,7 @@ namespace Jeni.KaihenNavi
 
         // ---------------------------------------------------------------- Mesh Cutter
 
-        private static void BuildCutter(FeatureContext ctx, VisualElement root)
+        private static void BuildCutter(FeatureContext ctx, VisualElement root, SkinnedMeshRenderer body)
         {
             var type = FindMeshCutter();
             if (type == null)
@@ -228,7 +287,7 @@ namespace Jeni.KaihenNavi
                 var p = place;
                 var row = Ui.Box("kn-list__row");
                 row.Add(Ui.Text(p == null ? L10n.Tr("skin.always") : L10n.Tr("skin.onlyWith", p.name), "kn-list__title", "kn-grow"));
-                row.Add(Ui.Button(L10n.Tr("skin.addCutter"), () => AddCutter(ctx, type, p), "kn-button--small", "kn-button--primary"));
+                row.Add(Ui.Button(L10n.Tr("skin.addCutter"), () => AddCutter(ctx, type, p, body), "kn-button--small", "kn-button--primary"));
                 list.Add(row);
             }
 
@@ -249,7 +308,7 @@ namespace Jeni.KaihenNavi
         }
 
         /// <summary>Mesh Cutter を置いて選ぶ（切り取る範囲は MA の画面で決めてもらう）。</summary>
-        private static void AddCutter(FeatureContext ctx, Type type, GameObject outfit)
+        private static void AddCutter(FeatureContext ctx, Type type, GameObject outfit, SkinnedMeshRenderer body)
         {
             var undoName = L10n.Tr("undo.skin");
             ctx.BeginEdit();
@@ -259,8 +318,21 @@ namespace Jeni.KaihenNavi
             var go = new GameObject(CutterObjectName);
             Undo.RegisterCreatedObjectUndo(go, undoName);
             go.transform.SetParent(parent, false);
-            Undo.AddComponent(go, type);
             ctx.NoteCreated(go);
+#if KAIHENNAVI_MA
+            var cutter = Undo.AddComponent(go, type);
+            // 切り取る相手（肌のメッシュ）は先に入れておく。範囲だけを MA の画面で決めてもらう
+            var objectProperty = type.GetProperty("Object");
+            if (cutter != null && body != null && objectProperty != null && objectProperty.PropertyType == typeof(AvatarObjectReference))
+            {
+                var reference = new AvatarObjectReference();
+                reference.Set(body.gameObject);
+                objectProperty.SetValue(cutter, reference, null);
+                EditorUtility.SetDirty(cutter);
+            }
+#else
+            Undo.AddComponent(go, type);
+#endif
 
             Selection.activeGameObject = go;
             EditorGUIUtility.PingObject(go);

@@ -84,15 +84,15 @@ namespace Jeni.KaihenNavi
 
             root.Add(Ui.Notice(L10n.Tr("body.intro"), "info"));
 
-            var layout = Ui.Box("kn-body");
-            _canvas = Ui.Box("kn-body__canvas");
+            var layout = Ui.Box("kn-figure");
+            _canvas = Ui.Box("kn-figure__canvas");
             _canvas.generateVisualContent += DrawOverlay;
             _canvas.RegisterCallback<PointerDownEvent>(e => OnPointerDown(ctx, e));
             _canvas.RegisterCallback<PointerMoveEvent>(e => OnPointerMove(ctx, e));
             _canvas.RegisterCallback<PointerUpEvent>(e => OnPointerUp(e));
             layout.Add(_canvas);
 
-            var side = Ui.Box("kn-body__side");
+            var side = Ui.Box("kn-figure__side");
             side.Add(BuildPartList(ctx));
             layout.Add(side);
             root.Add(layout);
@@ -120,7 +120,7 @@ namespace Jeni.KaihenNavi
 
         private VisualElement BuildPartList(FeatureContext ctx)
         {
-            var list = Ui.Box("kn-body__parts");
+            var list = Ui.Box("kn-figure__parts");
             for (var i = 0; i < Groups.Length; i++)
             {
                 var index = i;
@@ -129,8 +129,8 @@ namespace Jeni.KaihenNavi
                     _selected = index;
                     UndoHelper.Separate();
                     ctx.Rebuild();
-                }, "kn-button--small", "kn-body__part");
-                if (i == _selected) button.AddToClassList("kn-body__part--selected");
+                }, "kn-button--small", "kn-figure__part");
+                if (i == _selected) button.AddToClassList("kn-figure__part--selected");
                 list.Add(button);
             }
 
@@ -139,7 +139,7 @@ namespace Jeni.KaihenNavi
 
         private VisualElement BuildControls(FeatureContext ctx)
         {
-            var box = Ui.Box("kn-body__controls");
+            var box = Ui.Box("kn-figure__controls");
             var group = Groups[_selected];
             box.Add(Ui.Heading(L10n.Tr(group.Key)));
 

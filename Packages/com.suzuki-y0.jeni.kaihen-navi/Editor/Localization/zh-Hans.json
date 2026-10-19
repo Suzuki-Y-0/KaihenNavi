@@ -298,8 +298,8 @@
   "skin.noCutter": "已安装的Modular Avatar没有Mesh Cutter。请通过VCC（或ALCOM）更新Modular Avatar。",
   "skin.cutterIntro": "Mesh Cutter只在上传时切除身体网格的一部分（原版不变）。选择衣服后，只在穿着该衣服时切除。",
   "skin.addCutter": "放置Mesh Cutter",
-  "skin.cutterHow": "放置后，请在右侧Inspector中将身体（Body）设为要切除的网格，并决定切除范围。",
-  "skin.cutterAdded": "已放置并选中Mesh Cutter。请在右侧Inspector中设置要切除的网格（身体）和范围。\n\n可以用“还原”撤销。",
+  "skin.cutterHow": "请在 Inspector 中设置要切除的范围（要切除的皮肤网格已经设置好了）。",
+  "skin.cutterAdded": "已添加并选中 Mesh Cutter。请在 Inspector 中设置要切除的范围，皮肤网格已经设置好了。\n\n可以用“恢复”撤销。",
   "undo.skin": "KaihenNavi: 隐藏皮肤",
   "light.intro": "只显示与亮度和阴影有关的设置。不会修改原来的材质，修改前会自动复制一份。",
   "light.noLilToon": "没有找到 lilToon 的材质。此功能适用于使用 lilToon 的模型。",
@@ -331,5 +331,7 @@
   "existing.rebase": "重新连接到基础",
   "existing.rebaseConfirm": "将把“{0}”重新连接到“{1}”的改装基础上。\n\n之前的改装内容会保留。为保险起见，会把连接前的版本复制到这个虚拟形象的 Backups 文件夹中。",
   "existing.rebaseDone": "已将“{0}”重新连接到基础上。请确认外观没有变化。",
-  "existing.rebaseFailed": "无法重新连接（{0}）。改装虚拟形象没有被修改。"
+  "existing.rebaseFailed": "无法重新连接（{0}）。改装虚拟形象没有被修改。",
+  "skin.mesh": "哪个部分的皮肤？（数字是用于收缩的形态键数量）",
+  "pick.orChoose": "或者从列表中选择"
 }

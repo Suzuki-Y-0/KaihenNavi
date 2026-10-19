@@ -67,18 +67,36 @@ namespace Jeni.KaihenNavi
             });
 
             // ドラッグが難しいとき用：一覧から選ぶ（Unity 標準の選択画面が開く）
-            var field = new ObjectField(L10n.Tr("pick.orChoose")) { objectType = typeof(GameObject), allowSceneObjects = false };
-            field.AddToClassList("kn-drop__field");
-            field.RegisterValueChangedCallback(e =>
+            zone.Add(PickRow(typeof(GameObject), o =>
             {
-                var prefab = e.newValue as GameObject;
-                field.SetValueWithoutNotify(null);
-                if (prefab == null) return;
-                Use(prefab, kind, onPicked);
-            });
-            zone.Add(field);
+                var prefab = o as GameObject;
+                if (prefab != null) Use(prefab, kind, onPicked);
+            }));
 
             return zone;
+        }
+
+        /// <summary>
+        /// 一覧から選ぶ欄と「これにする」ボタン。Unity の選択画面は 1 回クリックしただけで値が入るので、
+        /// 選んだだけでは何もせず、ボタンを押したときに使う（選び直している途中で服を何着も着せないように）。
+        /// </summary>
+        public static VisualElement PickRow(Type type, Action<UnityEngine.Object> onUse)
+        {
+            var row = Ui.Box("kn-row", "kn-drop__pick");
+            var field = new ObjectField(L10n.Tr("pick.orChoose")) { objectType = type, allowSceneObjects = false };
+            field.AddToClassList("kn-drop__field");
+            row.Add(field);
+            var button = Ui.Button(L10n.Tr("pick.use"), () =>
+            {
+                var value = field.value;
+                if (value == null) return;
+                field.SetValueWithoutNotify(null);
+                onUse(value);
+            }, "kn-button--small", "kn-button--primary");
+            button.SetEnabled(false);
+            field.RegisterValueChangedCallback(e => button.SetEnabled(e.newValue != null));
+            row.Add(button);
+            return row;
         }
 
         private static void Use(GameObject prefab, ItemKind kind, Action<GameObject> onPicked)

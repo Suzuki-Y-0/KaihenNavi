@@ -37,6 +37,7 @@ namespace VRC.SDK3.Avatars.Components
         public Vector3 ViewPosition;
         public SkinnedMeshRenderer VisemeSkinnedMesh;
         public VRC.SDK3.Avatars.ScriptableObjects.VRCExpressionParameters expressionParameters;
+        public enum AnimLayerType { Base, Deprecated0, Additive, Gesture, Action, FX, Sitting, TPose, IKPose }
     }
 }
 
@@ -56,6 +57,20 @@ namespace nadena.dev.modular_avatar.core
     public class ModularAvatarMenuInstaller : AvatarTagComponent { }
 
     public class ModularAvatarMergeArmature : AvatarTagComponent { }
+
+    public enum MergeAnimatorPathMode { Relative, Absolute }
+    public enum MergeAnimatorMode { Append, Replace }
+
+    public class ModularAvatarMergeAnimator : AvatarTagComponent
+    {
+        public RuntimeAnimatorController animator;
+        public VRC.SDK3.Avatars.Components.VRCAvatarDescriptor.AnimLayerType layerType;
+        public bool deleteAttachedAnimator;
+        public MergeAnimatorPathMode pathMode;
+        public bool matchAvatarWriteDefaults;
+        public int layerPriority;
+        public MergeAnimatorMode mergeAnimatorMode;
+    }
 
     public enum ShapeChangeType { Delete, Set }
 

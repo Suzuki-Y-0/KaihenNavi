@@ -117,6 +117,7 @@ namespace UnityEngine
     }
 
     public class Shader : Object { public bool isSupported; }
+    public class RuntimeAnimatorController : Object { }
 
     public class Material : Object
     {
@@ -553,6 +554,8 @@ namespace UnityEditor
         public static void ApplyPrefabInstance(GameObject g, InteractionMode m) { }
         public static T GetCorrespondingObjectFromSource<T>(T o) where T : Object { return null; }
         public static Object InstantiatePrefab(Object o) { return null; }
+        public static Object InstantiatePrefab(Object o, Transform parent) { return null; }
+        public static void RevertObjectOverride(Object o, InteractionMode m) { }
         public static GameObject LoadPrefabContents(string path) { return null; }
         public static void UnloadPrefabContents(GameObject g) { }
         public static GameObject SaveAsPrefabAsset(GameObject g, string path) { return g; }

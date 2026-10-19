@@ -618,9 +618,13 @@
     color: var(--kn-text-sub);
 }
 
-.kn-drop__field {
+.kn-drop__pick {
     margin-top: 8px;
-    width: 100%;
+    justify-content: center;
+}
+
+.kn-drop__field {
+    flex-grow: 1;
     max-width: 420px;
 }
 

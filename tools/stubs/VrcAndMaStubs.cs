@@ -57,6 +57,21 @@ namespace nadena.dev.modular_avatar.core
 
     public class ModularAvatarMergeArmature : AvatarTagComponent { }
 
+    public enum ShapeChangeType { Delete, Set }
+
+    public struct ChangedShape
+    {
+        public AvatarObjectReference Object;
+        public string ShapeName;
+        public ShapeChangeType ChangeType;
+        public float Value;
+    }
+
+    public class ModularAvatarShapeChanger : AvatarTagComponent
+    {
+        public List<ChangedShape> Shapes { get; set; }
+    }
+
     public class ModularAvatarScaleAdjuster : AvatarTagComponent
     {
         public Vector3 Scale { get; set; }

@@ -9,8 +9,9 @@ using VRC.SDK3.Avatars.Components;
 namespace Jeni.KaihenNavi
 {
     /// <summary>
-    /// 機能 6：アクセの位置や大きさを直したい。
-    /// Transform を、大きな矢印ボタンとスライダーで動かす。向きはアバターから見た向き。
+    /// 機能 6：アクセをつけたい。
+    /// アクセの Prefab を選び、「頭」「首」などの場所を選ぶだけで体の骨に付ける（ヒエラルキーの親子関係は触らせない）。
+    /// 付けたあとは、大きな矢印ボタンとスライダーで位置・向き・大きさを直す。向きはアバターから見た向き。
     /// </summary>
     internal sealed class TransformFeature : FeatureBase
     {
@@ -25,6 +26,22 @@ namespace Jeni.KaihenNavi
         }
 
         private static GameObject _target;
+
+        // これから付けるアクセ（Prefab）と、付ける場所
+        private static GameObject _pending;
+        private static int _placeIndex;
+
+        private static readonly HumanBodyBones[] Places =
+        {
+            HumanBodyBones.Head, HumanBodyBones.Neck, HumanBodyBones.Chest, HumanBodyBones.Hips,
+            HumanBodyBones.RightHand, HumanBodyBones.LeftHand, HumanBodyBones.RightFoot, HumanBodyBones.LeftFoot,
+        };
+
+        private static readonly string[] PlaceKeys =
+        {
+            "attach.head", "attach.neck", "attach.chest", "attach.hips",
+            "attach.rightHand", "attach.leftHand", "attach.rightFoot", "attach.leftFoot",
+        };
         private static int _stepIndex = 1;
         private readonly Dictionary<GameObject, Baseline> _baselines = new Dictionary<GameObject, Baseline>();
         private Slider _size;
@@ -38,6 +55,8 @@ namespace Jeni.KaihenNavi
         {
             var root = new VisualElement();
             var avatar = ctx.Avatar;
+            root.Add(BuildAttach(ctx));
+
             var targets = FindTargets(avatar);
 
             if (_target != null && (!_target.transform.IsChildOf(avatar.transform) || _target == avatar.gameObject))
@@ -49,6 +68,7 @@ namespace Jeni.KaihenNavi
 
             // どれを直す？
             root.Add(Ui.Heading(L10n.Tr("transform.which")));
+            root.Add(Ui.Text(L10n.Tr("transform.whichHint"), "kn-hint"));
             var pickRow = Ui.Box("kn-row");
             if (targets.Count > 0)
             {
@@ -191,6 +211,121 @@ namespace Jeni.KaihenNavi
         public override void OnClosed()
         {
             _baselines.Clear();
+        }
+
+        // ---------------------------------------------------------------- つける
+
+        private static VisualElement BuildAttach(FeatureContext ctx)
+        {
+            var box = Ui.Box("kn-attach");
+            box.Add(Ui.Heading(L10n.Tr("attach.pick")));
+
+            if (_pending == null)
+            {
+                box.Add(ItemPicker.DropZone(L10n.Tr("attach.drop"), ItemKind.Accessory, prefab =>
+                {
+                    _pending = prefab;
+                    ctx.Rebuild();
+                }));
+
+                var suggestions = ItemPicker.Suggestions(ctx.Avatar, ItemKind.Accessory);
+                if (suggestions.Count > 0)
+                {
+                    box.Add(Ui.Text(L10n.Tr("attach.suggest"), "kn-hint"));
+                    box.Add(ItemPicker.SuggestionList(suggestions, prefab =>
+                    {
+                        _pending = prefab;
+                        ctx.Rebuild();
+                    }));
+                }
+
+                return box;
+            }
+
+            var chosen = Ui.Box("kn-row", "kn-attach__chosen");
+            chosen.Add(Ui.Text(L10n.Tr("attach.chosen", _pending.name), "kn-grow"));
+            chosen.Add(Ui.Button(L10n.Tr("attach.cancel"), () =>
+            {
+                _pending = null;
+                ctx.Rebuild();
+            }, "kn-button--small", "kn-button--ghost"));
+            box.Add(chosen);
+
+            box.Add(Ui.Heading(L10n.Tr("attach.where")));
+            var labels = new List<string>();
+            foreach (var key in PlaceKeys) labels.Add(L10n.Tr(key));
+            box.Add(Ui.Chips(labels, _placeIndex, i =>
+            {
+                _placeIndex = i;
+                ctx.Rebuild();
+            }));
+
+            box.Add(Ui.Button(L10n.Tr("attach.do"), () => Attach(ctx, _pending, Places[_placeIndex]), "kn-button--primary"));
+            return box;
+        }
+
+        /// <summary>
+        /// アクセを体の骨に付ける。まずアバターの足元を基準に置き（アバター用に作られたアクセはこれで正しい位置になる）、
+        /// 見た目が付ける場所から大きく離れていれば、その場所へ寄せる。
+        /// </summary>
+        private static void Attach(FeatureContext ctx, GameObject prefab, HumanBodyBones place)
+        {
+            var avatar = ctx.Avatar;
+            var animator = avatar.GetComponent<Animator>();
+            var bone = animator != null && animator.isHuman ? animator.GetBoneTransform(place) : null;
+            if (bone == null && place == HumanBodyBones.Chest && animator != null && animator.isHuman) bone = animator.GetBoneTransform(HumanBodyBones.Spine);
+            if (bone == null)
+            {
+                EditorUtility.DisplayDialog(L10n.Tr("app.name"), L10n.Tr("attach.noBone"), L10n.Tr("dialog.ok"));
+                return;
+            }
+
+            var undoName = L10n.Tr("undo.attach");
+            ctx.BeginEdit();
+            UndoHelper.Separate();
+
+            var instance = PrefabUtility.InstantiatePrefab(prefab) as GameObject;
+            if (instance == null) return;
+            Undo.RegisterCreatedObjectUndo(instance, undoName);
+            instance.transform.SetParent(avatar.transform, false);
+            Undo.SetTransformParent(instance.transform, bone, undoName);
+
+            Bounds bounds;
+            if (TryBounds(instance, out bounds))
+            {
+                var limit = Mathf.Max(0.25f, avatar.ViewPosition.y * 0.25f);
+                if (Vector3.Distance(bounds.center, bone.position) > limit)
+                {
+                    instance.transform.position += bone.position - bounds.center;
+                }
+            }
+
+            ctx.NoteCreated(instance);
+            _target = instance;
+            _pending = null;
+            UndoHelper.Separate();
+            ctx.Rebuild();
+            Frame(instance.transform);
+        }
+
+        private static bool TryBounds(GameObject go, out Bounds bounds)
+        {
+            bounds = new Bounds();
+            var found = false;
+            foreach (var r in go.GetComponentsInChildren<Renderer>(true))
+            {
+                if (!found)
+                {
+                    bounds = r.bounds;
+                    found = true;
+                }
+                else
+                {
+                    bounds.Encapsulate(r.bounds);
+                }
+            }
+
+            return found;
         }
 
         // ---------------------------------------------------------------- 候補

@@ -14,6 +14,7 @@ namespace Jeni.KaihenNavi
                 new ColorFeature(),
                 new ToggleFeature(),
                 new BodyFeature(),
+                new WalkFeature(),
                 new SkinFeature(),
                 new ViewFeature(),
                 new PinkFeature(),

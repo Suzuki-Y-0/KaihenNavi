@@ -103,6 +103,17 @@ Mono と自作スタブでの 3 通りのコンパイル確認（`tools/check.sh
 - 体型の影絵を直接ドラッグする操作、身長を変えたときの視点の追従
 - 「歩き方」などベースの設定を変えたときに子の改変アバターへ反映されるか（ベースを書き換える機能はまだ無い）
 
+### 歩き方を変えたい（`WalkFeature`・製品版、10-19 実装・Unity で確認）
+
+- アバターの設定（Base 層）は直接書き換えない。`KaihenNavi_Walk` に MA Merge Animator（layerType = Base、mergeAnimatorMode = Replace、pathMode = Absolute）を付けて置くだけ。MA 1.18.7 の `RemoveLayerPass` が Replace を見て Base 層を空にしてから合成する（隠したオブジェクトも数えるので、隠しても無効にはならない）
+- 「このアバターだけ」= 改変アバターの中に置く（Undo・バックアップ対応）。「みんな」= ベースを `LoadPrefabContents` で開いて置く（Ctrl+Z 不可なので確認ダイアログ）
+- 置き換えが 2 つあると MA が `error.merge_animator.multiple_replacements` で止めるので、重なりを検出して「重なりを直す」（このアバターで足した方を消し、そのコントローラーをベースから来た部品への上書きにする）
+- このアバターだけ戻す: ベースから来た部品への上書きは、いったん保存してから改変アバターのファイル内で `RevertObjectOverride`
+- MA 用の歩き方 Prefab（GoGo Loco など）は中に入れるだけ。中に Merge Animator が無い Prefab は断る
+- 一覧から選ぶ欄（ObjectField）は 1 回クリックで値が入るため、「これにする」ボタンを押すまで使わない（服・アクセも同じ `ItemPicker.PickRow`）
+- 確認済み: このアバターだけ → みんな → 重なりを直す → このアバターだけ戻す → みんな戻す、の一連でファイルが期待どおりになる
+- 未確認: 実際に歩き方が変わるか（再生・アップロード）。GoGo Loco の Prefab での動作
+
 ## 4.5 改変アバター・服・アクセ（2026-10-19 追加・4.4 で確認）
 
 ブランチ `feature/my-avatar`。ターゲットは「Unity の標準の仕組み（ヒエラルキー、Prefab、バリアント）を触るのが苦手な初心者」。画面にはヒエラルキー・ボーン・バリアント・Setup Outfit などの言葉を出さない。

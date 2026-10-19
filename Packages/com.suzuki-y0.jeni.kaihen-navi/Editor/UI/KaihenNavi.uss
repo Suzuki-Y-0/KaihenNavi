@@ -563,3 +563,96 @@
 .kn-avatar-row__buttons {
     margin-top: 6px;
 }
+
+/* ---------------------------------------------------------------- ①の二択 */
+
+.kn-choices {
+    flex-direction: column;
+}
+
+.kn-choice {
+    width: 100%;
+    min-height: 72px;
+}
+
+.kn-choice__icon {
+    background-color: var(--kn-accent);
+    font-size: 20px;
+}
+
+.kn-current {
+    padding: 8px 10px;
+    border-radius: 8px;
+    border-width: 1px;
+    border-color: var(--kn-border);
+    background-color: var(--kn-surface);
+}
+
+.kn-current__name {
+    font-size: 15px;
+    -unity-font-style: bold;
+    white-space: normal;
+}
+
+/* ---------------------------------------------------------------- ドラッグして入れる枠・候補 */
+
+.kn-drop {
+    min-height: 64px;
+    margin: 4px 0 8px 0;
+    padding: 12px;
+    border-radius: 8px;
+    border-width: 2px;
+    border-color: var(--kn-border);
+    justify-content: center;
+    align-items: center;
+}
+
+.kn-drop--over {
+    border-color: var(--kn-accent);
+    background-color: var(--kn-selected);
+}
+
+.kn-drop__text {
+    white-space: normal;
+    -unity-text-align: middle-center;
+    color: var(--kn-text-sub);
+}
+
+.kn-suggest__row {
+    flex-direction: row;
+    align-items: center;
+    margin: 0;
+    padding: 6px;
+    border-width: 0;
+    border-radius: 0;
+    background-color: transparent;
+    -unity-text-align: middle-left;
+}
+
+.kn-suggest__row:hover {
+    background-color: var(--kn-surface-hover);
+}
+
+.kn-suggest__row--selected {
+    background-color: var(--kn-selected);
+}
+
+.kn-suggest__thumb {
+    width: 40px;
+    height: 40px;
+    min-width: 40px;
+    margin-right: 8px;
+    border-radius: 4px;
+    -unity-background-scale-mode: scale-to-fit;
+}
+
+.kn-attach {
+    margin-bottom: 8px;
+}
+
+.kn-attach__chosen {
+    align-items: center;
+    padding: 6px 10px;
+    border-radius: 6px;
+    background-color: var(--kn-selected);
+}

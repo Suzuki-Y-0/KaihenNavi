@@ -44,6 +44,11 @@ namespace Jeni.KaihenNavi
         private System.DateTime _lastSavedAt;
         private const double AutoSaveDelay = 1.5;
 
+        // ①の二択（新しく作る／前に作ったものを直す）
+        private readonly AvatarChooser _chooser = new AvatarChooser();
+        private bool _choosing;
+        private VisualElement _step2Header;
+
         // 「あとで」を押したアバター（エディタを開いている間だけ覚える）
         private static readonly HashSet<string> Postponed = new HashSet<string>();
 
@@ -109,7 +114,8 @@ namespace Jeni.KaihenNavi
             _avatarArea = Ui.Box("kn-section");
             scroll.Add(_avatarArea);
 
-            scroll.Add(Ui.StepHeader("2", L10n.Tr("step.feature")));
+            _step2Header = Ui.StepHeader("2", L10n.Tr("step.feature"));
+            scroll.Add(_step2Header);
             _cardsArea = Ui.Box("kn-section", "kn-cards");
             scroll.Add(_cardsArea);
 
@@ -183,33 +189,60 @@ namespace Jeni.KaihenNavi
         private void BuildAvatarArea()
         {
             _avatarArea.Clear();
-            if (_avatars.Count == 0)
+            _avatarStatus = null;
+            _saveLabel = null;
+
+            // アバターが決まるまでは二択を出し、②③は隠す
+            var choosing = _avatar == null || _choosing;
+            SetEditingVisible(!choosing);
+            if (choosing)
             {
-                _avatarArea.Add(Ui.Notice(L10n.Tr("avatar.none"), "warn"));
-                _avatarArea.Add(Ui.Button(L10n.Tr("avatar.rescan"), () =>
+                _chooser.Picked = OnAvatarPicked;
+                _chooser.Changed = BuildAvatarArea;
+                _chooser.Cancel = _avatar == null ? (System.Action)null : () =>
                 {
-                    ScanAvatars();
+                    _choosing = false;
                     BuildAvatarArea();
-                    BuildPanel();
-                    RefreshFooter();
-                }));
+                };
+                _avatarArea.Add(_chooser.Build());
                 return;
             }
 
-            var names = AvatarLabels(_avatars);
-            var index = Mathf.Max(0, _avatars.IndexOf(_avatar));
-            var dropdown = new DropdownField(L10n.Tr("avatar.label"), names, index);
-            dropdown.AddToClassList("kn-avatar-dropdown");
-            dropdown.RegisterValueChangedCallback(e =>
+            var current = Ui.Box("kn-row", "kn-current");
+            var texts = Ui.Box("kn-grow");
+            texts.Add(Ui.Text(L10n.Tr("current.label"), "kn-hint"));
+            texts.Add(Ui.Text(_avatar.name, "kn-current__name"));
+            current.Add(texts);
+            current.Add(Ui.Button(L10n.Tr("current.change"), () =>
             {
-                var i = names.IndexOf(e.newValue);
-                if (i >= 0) SelectAvatar(_avatars[i]);
-            });
-            _avatarArea.Add(dropdown);
+                SaveNow();
+                _choosing = true;
+                _chooser.CurrentMode = AvatarChooser.Mode.Start;
+                BuildAvatarArea();
+            }, "kn-button--small", "kn-button--ghost"));
+            _avatarArea.Add(current);
 
             _avatarStatus = Ui.Box("kn-avatar-status");
             _avatarArea.Add(_avatarStatus);
             RefreshAvatarStatus();
+        }
+
+        private void SetEditingVisible(bool visible)
+        {
+            var display = visible ? DisplayStyle.Flex : DisplayStyle.None;
+            if (_step2Header != null) _step2Header.style.display = display;
+            if (_cardsArea != null) _cardsArea.style.display = display;
+            if (_panelArea != null) _panelArea.style.display = display;
+        }
+
+        private void OnAvatarPicked(VRCAvatarDescriptor avatar)
+        {
+            _choosing = false;
+            ScanAvatars();
+            if (avatar != _avatar) SelectAvatar(avatar);
+            BuildAvatarArea();
+            BuildPanel();
+            RefreshFooter();
         }
 
         // ---------------------------------------------------------------- 自分用アバター
@@ -229,7 +262,6 @@ namespace Jeni.KaihenNavi
                     var path = MyAvatar.PrefabPath(_avatar);
                     var row = Ui.Box("kn-mine");
                     var texts = Ui.Box("kn-mine__texts");
-                    texts.Add(Ui.Text(L10n.Tr("mine.title", System.IO.Path.GetFileNameWithoutExtension(path)), "kn-mine__title"));
                     _saveLabel = Ui.Text("", "kn-mine__sub");
                     texts.Add(_saveLabel);
                     row.Add(texts);
@@ -429,6 +461,11 @@ namespace Jeni.KaihenNavi
                     // 一覧に新しいアバターを加え、選んだ状態で作り直す
                     BuildAvatarArea();
                 },
+                OpenFeature = id =>
+                {
+                    var feature = _features.FirstOrDefault(f => f.Id == id);
+                    if (feature != null) EditorApplication.delayCall += () => SelectFeature(feature);
+                },
             };
 
             try
@@ -494,7 +531,6 @@ namespace Jeni.KaihenNavi
                 next = _avatars.FirstOrDefault(a => BackupService.AvatarId(a) == _avatarId);
             }
 
-            if (next == null && _avatars.Count > 0) next = _avatars[0];
 
             if (next != _avatar)
             {
@@ -519,29 +555,13 @@ namespace Jeni.KaihenNavi
                 ScanAvatars();
 
                 // ツール自身の操作でも hierarchyChanged は起きるので、アバターの増減があったときだけ描き直す
-                if (!before.SequenceEqual(_avatars)) BuildAvatarArea();
+                if (!before.SequenceEqual(_avatars) || current != _avatar) BuildAvatarArea();
                 if (current != _avatar)
                 {
                     BuildPanel();
                     RefreshFooter();
                 }
             };
-        }
-
-        private static List<string> AvatarLabels(List<VRCAvatarDescriptor> avatars)
-        {
-            var labels = new List<string>();
-            foreach (var a in avatars)
-            {
-                var label = a.name;
-                if (!a.gameObject.activeInHierarchy) label += " " + L10n.Tr("avatar.hidden");
-                var n = 2;
-                var unique = label;
-                while (labels.Contains(unique)) unique = label + " (" + n++ + ")";
-                labels.Add(unique);
-            }
-
-            return labels;
         }
 
         // ---------------------------------------------------------------- 元に戻す

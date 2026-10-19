@@ -70,27 +70,125 @@ namespace Jeni.KaihenNavi
 
             // つなぎ替えるとバックアップの照合用 ID が変わるので、先に控えておく
             var backups = backup.List(avatar);
+            var basePrefab = PrefabUtility.IsPartOfPrefabInstance(target) ? PrefabUtility.GetCorrespondingObjectFromSource(target) : null;
 
-            var folder = WorkFolders.Ensure(FolderFor(avatar.gameObject));
-            var path = AssetDatabase.GenerateUniqueAssetPath(folder + "/" + WorkFolders.Sanitize(avatar.name) + ".prefab");
+            var folder = FolderFor(avatar.gameObject);
+            var path = folder + "/" + System.IO.Path.GetFileName(folder) + ".prefab";
             bool ok;
             PrefabUtility.SaveAsPrefabAssetAndConnect(target, path, InteractionMode.UserAction, out ok);
             if (!ok) return null;
 
+            WorkFolders.WriteManifest(path, basePrefab);
             backup.Rekey(avatar, backups);
             return path;
         }
 
         /// <summary>
-        /// 自分用アバターを置くフォルダ。すでにツールのフォルダ（複製マテリアルなど）があればそれを使う。
-        /// ただし別の自分用アバターが入っていれば、新しいフォルダにする。
+        /// 新しく改変アバターを作る。元のアバター（買ったときの Prefab）からプレハブバリアントを作り、
+        /// 決まった形のフォルダに置いて、シーンに出す（ほかのアバターは隠す）。
+        /// </summary>
+        public static VRCAvatarDescriptor CreateNew(GameObject basePrefab, string name, string undoName)
+        {
+            if (basePrefab == null || basePrefab.GetComponent<VRCAvatarDescriptor>() == null) return null;
+
+            var folder = WorkFolders.CreateAvatarFolder(name);
+            var path = folder + "/" + System.IO.Path.GetFileName(folder) + ".prefab";
+
+            HideOthers(undoName);
+            var instance = PrefabUtility.InstantiatePrefab(basePrefab) as GameObject;
+            if (instance == null) return null;
+            Undo.RegisterCreatedObjectUndo(instance, undoName);
+            instance.name = System.IO.Path.GetFileName(folder);
+
+            bool ok;
+            PrefabUtility.SaveAsPrefabAssetAndConnect(instance, path, InteractionMode.UserAction, out ok);
+            if (!ok) return null;
+
+            WorkFolders.WriteManifest(path, basePrefab);
+            Selection.activeGameObject = instance;
+            return instance.GetComponent<VRCAvatarDescriptor>();
+        }
+
+        /// <summary>
+        /// 前に作った改変アバターを開く。シーンにあればそれを表示し、なければシーンに出す。ほかのアバターは隠す。
+        /// </summary>
+        public static VRCAvatarDescriptor Open(GameObject prefab, string undoName)
+        {
+            var path = AssetDatabase.GetAssetPath(prefab);
+            VRCAvatarDescriptor found = null;
+            foreach (var a in AvatarFinder.FindInOpenScenes())
+            {
+                if (found == null && PrefabPath(a) == path) found = a;
+            }
+
+            if (found == null) return PlaceInScene(prefab, undoName);
+
+            HideOthers(undoName, found.gameObject);
+            if (!found.gameObject.activeSelf)
+            {
+                Undo.RecordObject(found.gameObject, undoName);
+                found.gameObject.SetActive(true);
+            }
+
+            Selection.activeGameObject = found.gameObject;
+            return found;
+        }
+
+        /// <summary>シーンのアバターのうち、keep 以外を隠す（アップロードの対象を 1 体にするため。Ctrl+Z で戻せる）。</summary>
+        private static void HideOthers(string undoName, GameObject keep = null)
+        {
+            foreach (var other in AvatarFinder.FindInOpenScenes())
+            {
+                if (other.gameObject == keep || !other.gameObject.activeSelf) continue;
+                Undo.RecordObject(other.gameObject, undoName);
+                other.gameObject.SetActive(false);
+            }
+        }
+
+        private static List<GameObject> _baseCache;
+
+        /// <summary>
+        /// 改変のもとにできるアバター（Assets 以下で、Avatar Descriptor が付いた Prefab。改変アバター自身は除く）。
+        /// Prefab を 1 つずつ開いて調べるので、プロジェクトが変わるまで覚えておく。
+        /// </summary>
+        public static List<GameObject> BaseAvatars()
+        {
+            if (_baseCache != null && _baseCache.TrueForAll(p => p != null)) return _baseCache;
+
+            var result = new List<GameObject>();
+            foreach (var guid in AssetDatabase.FindAssets("t:Prefab", new[] { "Assets" }))
+            {
+                var path = AssetDatabase.GUIDToAssetPath(guid);
+                if (path.StartsWith(WorkFolders.Root + "/")) continue;
+                var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(path);
+                if (prefab != null && prefab.GetComponent<VRCAvatarDescriptor>() != null) result.Add(prefab);
+            }
+
+            result.Sort((a, b) => string.CompareOrdinal(AssetDatabase.GetAssetPath(a), AssetDatabase.GetAssetPath(b)));
+            _baseCache = result;
+            return result;
+        }
+
+        public static void ForgetBaseAvatars()
+        {
+            _baseCache = null;
+        }
+
+        /// <summary>
+        /// 自分用アバターを置くフォルダ。すでにツールのフォルダ（複製マテリアルなど）があればそれを使い、
+        /// 足りないサブフォルダを作る。別の自分用アバターが入っていれば、新しいフォルダにする。
         /// </summary>
         private static string FolderFor(GameObject avatar)
         {
-            var folder = WorkFolders.Root + "/" + WorkFolders.Sanitize(avatar.name);
-            if (!AssetDatabase.IsValidFolder(folder)) return folder;
-            if (AssetDatabase.FindAssets("t:Prefab", new[] { folder }).Length == 0) return folder;
-            return AssetDatabase.GenerateUniqueAssetPath(folder);
+            var folder = WorkFolders.ForAvatar(avatar);
+            if (AssetDatabase.IsValidFolder(folder) && AssetDatabase.FindAssets("t:Prefab", new[] { folder }).Length == 0)
+            {
+                WorkFolders.EnsureReadme();
+                foreach (var sub in new[] { "Materials", "Textures", "Backups" }) WorkFolders.Ensure(folder + "/" + sub);
+                return folder;
+            }
+
+            return WorkFolders.CreateAvatarFolder(avatar.name);
         }
 
         // ---------------------------------------------------------------- 自動保存
@@ -177,11 +275,11 @@ namespace Jeni.KaihenNavi
             var source = AssetDatabase.GetAssetPath(prefab);
             if (!IsMinePath(source)) return null;
 
-            name = WorkFolders.Sanitize(name);
-            var folder = AssetDatabase.GenerateUniqueAssetPath(WorkFolders.Root + "/" + name);
-            WorkFolders.Ensure(folder);
+            var folder = WorkFolders.CreateAvatarFolder(name);
             var path = folder + "/" + Path.GetFileName(folder) + ".prefab";
-            return AssetDatabase.CopyAsset(source, path) ? path : null;
+            if (!AssetDatabase.CopyAsset(source, path)) return null;
+            WorkFolders.WriteManifest(path, OriginalOf(prefab));
+            return path;
         }
 
         /// <summary>名前を変える（Prefab と、それだけが入ったフォルダの両方）。失敗したら理由を返す。</summary>
@@ -203,19 +301,15 @@ namespace Jeni.KaihenNavi
                 if (!AssetDatabase.IsValidFolder(parent + "/" + name)) AssetDatabase.RenameAsset(folder, name);
             }
 
+            // avatar.json の名前もそろえる（元アバターの情報は前のまま）
+            WorkFolders.WriteManifest(AssetDatabase.GetAssetPath(prefab), null);
             return null;
         }
 
         /// <summary>シーンに出す。アップロードで迷わないよう、ほかのアバターは隠す（Ctrl+Z で戻せる）。</summary>
         public static VRCAvatarDescriptor PlaceInScene(GameObject prefab, string undoName)
         {
-            foreach (var other in AvatarFinder.FindInOpenScenes())
-            {
-                if (!other.gameObject.activeSelf) continue;
-                Undo.RecordObject(other.gameObject, undoName);
-                other.gameObject.SetActive(false);
-            }
-
+            HideOthers(undoName);
             var instance = PrefabUtility.InstantiatePrefab(prefab) as GameObject;
             if (instance == null) return null;
             Undo.RegisterCreatedObjectUndo(instance, undoName);

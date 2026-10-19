@@ -27,6 +27,7 @@ namespace UnityEngine
         public Transform transform;
         public T GetComponent<T>() { return default(T); }
         public T[] GetComponentsInChildren<T>(bool includeInactive) { return new T[0]; }
+        public T GetComponentInChildren<T>(bool includeInactive) { return default(T); }
     }
 
     public class Behaviour : Component { public bool enabled; }
@@ -42,6 +43,7 @@ namespace UnityEngine
         public void SetActive(bool value) { }
         public T GetComponent<T>() { return default(T); }
         public T[] GetComponentsInChildren<T>(bool includeInactive) { return new T[0]; }
+        public T GetComponentInChildren<T>(bool includeInactive) { return default(T); }
     }
 
     public class Transform : Component, System.Collections.IEnumerable
@@ -58,7 +60,7 @@ namespace UnityEngine
         public System.Collections.IEnumerator GetEnumerator() { yield break; }
     }
 
-    public class Renderer : Component { public Material[] sharedMaterials; }
+    public class Renderer : Component { public Material[] sharedMaterials; public Bounds bounds; }
     public class MeshRenderer : Renderer { }
     public class SkinnedMeshRenderer : Renderer
     {
@@ -105,7 +107,13 @@ namespace UnityEngine
         public Transform GetBoneTransform(HumanBodyBones b) { return null; }
     }
 
-    public enum HumanBodyBones { Hips = 0, Head = 10, LastBone = 55 }
+    public enum HumanBodyBones { Hips = 0, LeftFoot = 5, RightFoot = 6, Spine = 7, Chest = 8, Neck = 9, Head = 10, LeftHand = 17, RightHand = 18, LastBone = 55 }
+
+    public struct Bounds
+    {
+        public Vector3 center;
+        public void Encapsulate(Bounds b) { }
+    }
 
     public struct Vector2 { public Vector2(float x, float y) { } }
 
@@ -116,6 +124,9 @@ namespace UnityEngine
         public Vector3 normalized { get { return this; } }
         public static Vector3 operator +(Vector3 a, Vector3 b) { return a; }
         public static Vector3 operator -(Vector3 a) { return a; }
+        public static Vector3 operator -(Vector3 a, Vector3 b) { return a; }
+        public static float Distance(Vector3 a, Vector3 b) { return 0f; }
+        public static Vector3 zero;
         public static Vector3 operator *(Vector3 a, float d) { return a; }
         public static bool operator ==(Vector3 a, Vector3 b) { return true; }
         public static bool operator !=(Vector3 a, Vector3 b) { return false; }
@@ -131,6 +142,7 @@ namespace UnityEngine
 
     public struct Quaternion
     {
+        public static Quaternion identity;
         public static Quaternion AngleAxis(float a, Vector3 axis) { return default(Quaternion); }
         public static Quaternion operator *(Quaternion a, Quaternion b) { return a; }
         public static bool operator ==(Quaternion a, Quaternion b) { return true; }
@@ -151,6 +163,7 @@ namespace UnityEngine
     public static class JsonUtility
     {
         public static string ToJson(object o) { return ""; }
+        public static string ToJson(object o, bool pretty) { return ""; }
         public static T FromJson<T>(string json) { return default(T); }
     }
 
@@ -264,6 +277,9 @@ namespace UnityEngine.UIElements
     public abstract class EventBase { }
     public class MouseDownEvent : EventBase { public int clickCount; }
     public class FocusOutEvent : EventBase { }
+    public class DragUpdatedEvent : EventBase { }
+    public class DragLeaveEvent : EventBase { }
+    public class DragPerformEvent : EventBase { }
     public delegate void EventCallback<T>(T evt);
 
     public interface IVisualElementScheduledItem
@@ -305,6 +321,7 @@ namespace UnityEngine.UIElements
         public void Add(VisualElement child) { }
         public void Clear() { }
         public void AddToClassList(string c) { }
+        public void RemoveFromClassList(string c) { }
         public void EnableInClassList(string c, bool enable) { }
         public void SetEnabled(bool value) { }
         public void RegisterCallback<T>(EventCallback<T> callback) where T : EventBase { }
@@ -395,14 +412,26 @@ namespace UnityEditor
         public static void SaveAssets() { }
         public static void SaveAssetIfDirty(Object o) { }
         public static bool CopyAsset(string a, string b) { return true; }
+        public static void ImportAsset(string path) { }
+        public static string AssetPathToGUID(string path) { return ""; }
         public static string RenameAsset(string path, string name) { return ""; }
     }
 
     public enum InteractionMode { AutomatedAction, UserAction }
 
+    public enum DragAndDropVisualMode { None, Copy, Link, Move, Generic, Rejected }
+
+    public static class DragAndDrop
+    {
+        public static Object[] objectReferences;
+        public static DragAndDropVisualMode visualMode;
+        public static void AcceptDrag() { }
+    }
+
     public static class PrefabUtility
     {
         public static bool IsPartOfPrefabInstance(Object o) { return false; }
+        public static bool IsOutermostPrefabInstanceRoot(GameObject g) { return false; }
         public static GameObject GetOutermostPrefabInstanceRoot(Object o) { return null; }
         public static string GetPrefabAssetPathOfNearestInstanceRoot(Object o) { return null; }
         public static GameObject SaveAsPrefabAssetAndConnect(GameObject g, string path, InteractionMode m, out bool ok) { ok = true; return g; }
@@ -422,6 +451,7 @@ namespace UnityEditor
 
     public static class Undo
     {
+        public static void SetTransformParent(Transform t, Transform parent, string name) { }
         public static event Action undoRedoPerformed;
         public static void RecordObject(Object o, string name) { }
         public static void IncrementCurrentGroup() { }
@@ -452,6 +482,7 @@ namespace UnityEditor
         public static double timeSinceStartup;
         public static bool isPlayingOrWillChangePlaymode;
         public static Action hierarchyChanged;
+        public static bool ExecuteMenuItem(string path) { return false; }
         public static Action<PlayModeStateChange> playModeStateChanged;
         public static CallbackFunction delayCall;
         public delegate void CallbackFunction();

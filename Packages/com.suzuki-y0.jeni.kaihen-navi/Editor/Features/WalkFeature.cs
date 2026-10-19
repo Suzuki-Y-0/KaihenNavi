@@ -11,7 +11,7 @@ using nadena.dev.modular_avatar.core;
 namespace Jeni.KaihenNavi
 {
     /// <summary>
-    /// 機能 13：歩き方を変えたい（製品版）。
+    /// 機能 13：動きを変えたい（製品版）。歩き方（Base）・座り方（Sitting）・エモートや AFK（Action）を入れ替える。
     /// アバターの設定（Base 層のコントローラー）は直接書き換えず、MA Merge Animator を「置き換え（Replace）」モードで
     /// 置いたオブジェクト（KaihenNavi_Walk）を 1 つ足す。アップロードのときだけ MA が差し替えるので非破壊で、
     /// このオブジェクトを消せば元の歩き方に戻る。
@@ -20,6 +20,23 @@ namespace Jeni.KaihenNavi
     internal sealed class WalkFeature : FeatureBase
     {
         public const string WalkObjectName = "KaihenNavi_Walk";
+
+#if KAIHENNAVI_MA
+        // 入れ替えられる動き。FX（表情・メニューの切り替え）や Gesture（手の形）は丸ごと消えて困るので出さない
+        private static readonly VRCAvatarDescriptor.AnimLayerType[] Layers =
+        {
+            VRCAvatarDescriptor.AnimLayerType.Base,
+            VRCAvatarDescriptor.AnimLayerType.Sitting,
+            VRCAvatarDescriptor.AnimLayerType.Action,
+        };
+
+        private static readonly string[] ObjectNames = { WalkObjectName, "KaihenNavi_Sit", "KaihenNavi_Action" };
+        private static readonly string[] LayerKeys = { "walk.layerWalk", "walk.layerSit", "walk.layerAction" };
+        private static int _layer;
+
+        private static VRCAvatarDescriptor.AnimLayerType CurrentLayer { get { return Layers[_layer]; } }
+        private static string CurrentObjectName { get { return ObjectNames[_layer]; } }
+#endif
 
 #if KAIHENNAVI_MA
         private static int _scope;   // 0 = このアバターだけ, 1 = みんな（ベース）
@@ -38,8 +55,18 @@ namespace Jeni.KaihenNavi
             var avatar = ctx.Avatar;
             var basePrefab = BaseOf(avatar);
 
+            // どの動き？
+            root.Add(Ui.Heading(L10n.Tr("walk.which")));
+            root.Add(Ui.Chips(LayerKeys.Select(k => L10n.Tr(k)).ToList(), _layer, i =>
+            {
+                _layer = i;
+                UndoHelper.Separate();
+                ctx.Rebuild();
+            }));
+            root.Add(Ui.Text(L10n.Tr(LayerKeys[_layer] + "Hint"), "kn-hint"));
+
             // いまの歩き方
-            root.Add(Ui.Heading(L10n.Tr("walk.current")));
+            root.Add(Ui.Heading(L10n.Tr("walk.current", L10n.Tr(LayerKeys[_layer]))));
             var replacers = Replacers(avatar.gameObject);
             if (replacers.Count == 0)
             {
@@ -114,7 +141,7 @@ namespace Jeni.KaihenNavi
         private static List<ModularAvatarMergeAnimator> Replacers(GameObject root)
         {
             return root.GetComponentsInChildren<ModularAvatarMergeAnimator>(true)
-                .Where(m => m.layerType == VRCAvatarDescriptor.AnimLayerType.Base && m.mergeAnimatorMode == MergeAnimatorMode.Replace)
+                .Where(m => m.layerType == CurrentLayer && m.mergeAnimatorMode == MergeAnimatorMode.Replace)
                 .ToList();
         }
 
@@ -142,7 +169,7 @@ namespace Jeni.KaihenNavi
 
         private static ModularAvatarMergeAnimator FindWalk(Transform root)
         {
-            var t = root.Find(WalkObjectName);
+            var t = root.Find(CurrentObjectName);
             return t == null ? null : t.GetComponent<ModularAvatarMergeAnimator>();
         }
 
@@ -235,7 +262,7 @@ namespace Jeni.KaihenNavi
             }
             else
             {
-                var go = new GameObject(WalkObjectName);
+                var go = new GameObject(CurrentObjectName);
                 Undo.RegisterCreatedObjectUndo(go, undoName);
                 go.transform.SetParent(avatar.transform, false);
                 ctx.NoteCreated(go);
@@ -304,7 +331,7 @@ namespace Jeni.KaihenNavi
             var conflicts = OwnWalkChildren(basePrefab);
             var ok = EditBase(basePrefab, "walk.confirmAll", controller.name, contents =>
             {
-                if (Replacers(contents).Any(r => r.gameObject.name != WalkObjectName))
+                if (Replacers(contents).Any(r => r.gameObject.name != CurrentObjectName))
                 {
                     EditorUtility.DisplayDialog(L10n.Tr("app.name"), L10n.Tr("walk.resetFirst"), L10n.Tr("dialog.ok"));
                     return false;
@@ -313,7 +340,7 @@ namespace Jeni.KaihenNavi
                 var walk = FindWalk(contents.transform);
                 if (walk == null)
                 {
-                    var go = new GameObject(WalkObjectName);
+                    var go = new GameObject(CurrentObjectName);
                     go.transform.SetParent(contents.transform, false);
                     walk = go.AddComponent<ModularAvatarMergeAnimator>();
                 }
@@ -467,7 +494,7 @@ namespace Jeni.KaihenNavi
         private static void Configure(ModularAvatarMergeAnimator merge, RuntimeAnimatorController controller)
         {
             merge.animator = controller;
-            merge.layerType = VRCAvatarDescriptor.AnimLayerType.Base;
+            merge.layerType = CurrentLayer;
             merge.mergeAnimatorMode = MergeAnimatorMode.Replace;
             // 歩き方のアニメーションはアバターの根元からのパスで書かれているので、そのまま使う
             merge.pathMode = MergeAnimatorPathMode.Absolute;

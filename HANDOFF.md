@@ -103,7 +103,9 @@ Mono と自作スタブでの 3 通りのコンパイル確認（`tools/check.sh
 - 体型の影絵を直接ドラッグする操作、身長を変えたときの視点の追従
 - 「歩き方」などベースの設定を変えたときに子の改変アバターへ反映されるか（ベースを書き換える機能はまだ無い）
 
-### 歩き方を変えたい（`WalkFeature`・製品版、10-19 実装・Unity で確認）
+### 動きを変えたい（`WalkFeature`・製品版、10-19 実装・Unity で確認）
+
+- 歩き方（Base）・座り方（Sitting）・エモート/AFK（Action）を選べる。置くオブジェクトは `KaihenNavi_Walk` / `KaihenNavi_Sit` / `KaihenNavi_Action`。FX（表情・メニューの切り替えが全部消える）と Gesture（手の形）は出さない。座り方の差し替えと戻しも Unity で確認済み
 
 - アバターの設定（Base 層）は直接書き換えない。`KaihenNavi_Walk` に MA Merge Animator（layerType = Base、mergeAnimatorMode = Replace、pathMode = Absolute）を付けて置くだけ。MA 1.18.7 の `RemoveLayerPass` が Replace を見て Base 層を空にしてから合成する（隠したオブジェクトも数えるので、隠しても無効にはならない）
 - 「このアバターだけ」= 改変アバターの中に置く（Undo・バックアップ対応）。「みんな」= ベースを `LoadPrefabContents` で開いて置く（Ctrl+Z 不可なので確認ダイアログ）

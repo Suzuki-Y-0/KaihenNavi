@@ -79,7 +79,7 @@ namespace UnityEngine
         public void SetBlendShapeWeight(int i, float v) { }
     }
 
-    public class Mesh : Object { public int blendShapeCount; }
+    public class Mesh : Object { public int blendShapeCount; public string GetBlendShapeName(int i) { return ""; } }
     public class Texture : Object { public TextureWrapMode wrapMode; }
     public enum TextureFormat { RGBA32, RGB24 }
     public enum TextureWrapMode { Repeat, Clamp }
@@ -450,7 +450,7 @@ namespace UnityEngine.UIElements
     public class TextElement : VisualElement { public string text; }
     public class Label : TextElement { public Label() { } public Label(string text) { } }
     public class Button : TextElement { public Button() { } public Button(Action clickEvent) { } }
-    public class Toggle : BaseField<bool> { }
+    public class Toggle : BaseField<bool> { public Toggle() { } public Toggle(string label) { } }
     public class TextField : BaseField<string> { }
     public class Slider : BaseField<float>
     {
@@ -569,6 +569,7 @@ namespace UnityEditor
         public static void DestroyObjectImmediate(Object o) { }
         public static void RegisterCreatedObjectUndo(Object o, string n) { }
         public static T AddComponent<T>(GameObject go) where T : Component { return null; }
+        public static Component AddComponent(GameObject go, Type type) { return null; }
     }
 
     public static class EditorUtility

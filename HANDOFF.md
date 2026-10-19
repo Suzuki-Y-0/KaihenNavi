@@ -140,9 +140,10 @@ Assets/KaihenNavi/
 | 視点の高さを直したい | `ViewFeature` | 目のボーン中点＋身長の 1% 前を推奨値に。矢印で上下・前後。シーンにピンクの玉 | View Position の座標系（`TransformPoint` で合っているか）、玉の表示 |
 | ピンク色を直したい | `PinkFeature` | `Hidden/InternalErrorShader`・`Hidden/Locked/`・非対応・エラーを検出。.mat の中のプロパティ名（`_lilToonVersion` など）からシェーダーを判定して入手先を案内。空のマテリアル枠も一覧 | Poiyomi・UTS・Sunao の判定用プロパティ名が正しいか（要検証） |
 | きれいなサムネイルにしたい | `ThumbnailFeature` | 画角 18° の一時カメラで顔／上半身／全身・正面／斜め・背景色を選んで撮影。1200×900 の `Thumbnail.png` をアバターのフォルダに保存し、SDK で選んでもらう | 撮影結果の見た目、lilToon の描画、SDK でその画像を選べるか |
+| 服からはみ出る肌を隠したい | `SkinFeature` | (1) 素体のシュリンク用シェイプキー（名前に shrink / hide / 縮 / 隠 などを含むもの。「そのほかも出す」で全部）。「いつも隠す」は値を直接、服を選ぶと服の下の `KaihenNavi_SkinHide` に MA Shape Changer（Set 100）を置き、その服を着ているときだけ縮む。(2) MA に Mesh Cutter があれば（リフレクションで型を探す）服の下に置いて選択し、範囲は MA の画面で設定してもらう | `ModularAvatarShapeChanger.Shapes` / `ChangedShape` / `ShapeChangeType` の名前、Mesh Cutter の型名 `nadena.dev.modular_avatar.core.ModularAvatarMeshCutter`（要確認） |
 | アップロード先（体験版・①に表示） | `MyAvatar.BlueprintId` など | 新規作成と別バージョンでブループリント ID を外す。①に「まだアップロードしていない／前のアバターを更新」と「新しいアバターとして出す」。ほかの改変アバターと同じ ID なら警告 | `VRC.Core.PipelineManager.blueprintId` の扱い、SDK のアップロードが新規になるか |
 
-未着手: 服からはみ出る肌を隠したい（3）、明るさや影を整えたい（9・方針未決）、元アバターのメニュー整理（4.7 参照）
+未着手: 明るさや影を整えたい（9・方針未決）、元アバターのメニュー整理（4.7 参照）
 
 ## 5. 設計の要点
 

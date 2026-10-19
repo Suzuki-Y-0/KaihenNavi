@@ -18,7 +18,8 @@ namespace Jeni.KaihenNavi
         public static Material EnsureOwned(VRCAvatarDescriptor avatar, Material original, string undoName)
         {
             if (avatar == null || original == null) return null;
-            if (WorkFolders.IsOwned(original)) return original;
+            // ほかのアバター（別バージョンなど）用の複製は共有せず、このアバター用にもう一度複製する
+            if (WorkFolders.IsOwnedBy(original, avatar.gameObject)) return original;
 
             var folder = WorkFolders.Ensure(WorkFolders.Materials(avatar.gameObject));
             var copy = Object.Instantiate(original);

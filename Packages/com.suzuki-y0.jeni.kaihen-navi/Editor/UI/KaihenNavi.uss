@@ -505,3 +505,254 @@
 .kn-footer__label {
     color: var(--kn-text-sub);
 }
+
+/* ---------------------------------------------------------------- 自分用アバター */
+
+.kn-avatar-status {
+    margin-top: 6px;
+}
+
+.kn-mine {
+    flex-direction: row;
+    align-items: center;
+    padding: 6px 10px;
+    border-radius: 6px;
+    border-left-width: 4px;
+    border-left-color: var(--kn-ok-border);
+    background-color: var(--kn-ok);
+}
+
+.kn-mine__texts {
+    flex-grow: 1;
+    flex-shrink: 1;
+}
+
+.kn-mine__title {
+    -unity-font-style: bold;
+    white-space: normal;
+}
+
+.kn-mine__sub {
+    font-size: 11px;
+    color: var(--kn-text-sub);
+    white-space: normal;
+    margin-top: 2px;
+}
+
+.kn-mine-later {
+    justify-content: space-between;
+}
+
+.kn-avatar-row {
+    align-items: flex-start;
+    padding: 8px 6px;
+}
+
+.kn-avatar-row__thumb {
+    width: 64px;
+    height: 64px;
+    min-width: 64px;
+    margin-right: 10px;
+    border-radius: 6px;
+    border-width: 1px;
+    border-color: var(--kn-border);
+    background-color: var(--kn-surface);
+    -unity-background-scale-mode: scale-to-fit;
+}
+
+.kn-avatar-row__buttons {
+    margin-top: 6px;
+}
+
+/* ---------------------------------------------------------------- ①の二択 */
+
+.kn-choices {
+    flex-direction: column;
+}
+
+.kn-choice {
+    width: 100%;
+    min-height: 72px;
+}
+
+.kn-choice__icon {
+    background-color: var(--kn-accent);
+    font-size: 20px;
+}
+
+.kn-current {
+    padding: 8px 10px;
+    border-radius: 8px;
+    border-width: 1px;
+    border-color: var(--kn-border);
+    background-color: var(--kn-surface);
+}
+
+.kn-current__name {
+    font-size: 15px;
+    -unity-font-style: bold;
+    white-space: normal;
+}
+
+/* ---------------------------------------------------------------- ドラッグして入れる枠・候補 */
+
+.kn-drop {
+    min-height: 64px;
+    margin: 4px 0 8px 0;
+    padding: 12px;
+    border-radius: 8px;
+    border-width: 2px;
+    border-color: var(--kn-border);
+    justify-content: center;
+    align-items: center;
+}
+
+.kn-drop--over {
+    border-color: var(--kn-accent);
+    background-color: var(--kn-selected);
+}
+
+.kn-drop__text {
+    white-space: normal;
+    -unity-text-align: middle-center;
+    color: var(--kn-text-sub);
+}
+
+.kn-drop__pick {
+    margin-top: 8px;
+    justify-content: center;
+}
+
+.kn-drop__field {
+    flex-grow: 1;
+    max-width: 420px;
+}
+
+.kn-suggest__row {
+    flex-direction: row;
+    align-items: center;
+    margin: 0;
+    padding: 6px;
+    border-width: 0;
+    border-radius: 0;
+    background-color: transparent;
+    -unity-text-align: middle-left;
+}
+
+.kn-suggest__row:hover {
+    background-color: var(--kn-surface-hover);
+}
+
+.kn-suggest__row--selected {
+    background-color: var(--kn-selected);
+}
+
+.kn-suggest__thumb {
+    width: 40px;
+    height: 40px;
+    min-width: 40px;
+    margin-right: 8px;
+    border-radius: 4px;
+    -unity-background-scale-mode: scale-to-fit;
+}
+
+.kn-attach {
+    margin-bottom: 8px;
+}
+
+.kn-attach__chosen {
+    align-items: center;
+    padding: 6px 10px;
+    border-radius: 6px;
+    background-color: var(--kn-selected);
+}
+
+/* ---------------------------------------------------------------- 製品版の画面 */
+
+.kn-readout {
+    font-size: 13px;
+    -unity-font-style: bold;
+    margin: 4px 0 6px 0;
+    white-space: normal;
+}
+
+/* 体型・身長 */
+.kn-figure {
+    flex-direction: row;
+    align-items: flex-start;
+}
+
+.kn-figure__canvas {
+    width: 55%;
+    height: 420px;
+    min-width: 200px;
+    border-radius: 8px;
+    border-width: 1px;
+    border-color: var(--kn-border);
+    background-color: rgb(30, 30, 36);
+    -unity-background-scale-mode: scale-to-fit;
+    margin-right: 8px;
+}
+
+.kn-figure__side {
+    flex-grow: 1;
+    flex-shrink: 1;
+}
+
+.kn-figure__parts {
+    flex-direction: row;
+    flex-wrap: wrap;
+}
+
+.kn-figure__part {
+    margin: 0 4px 4px 0;
+}
+
+.kn-figure__part--selected {
+    background-color: var(--kn-accent);
+    color: var(--kn-accent-text);
+}
+
+.kn-figure__controls {
+    margin-top: 8px;
+}
+
+/* サムネイル */
+.kn-thumb-preview {
+    width: 100%;
+    max-width: 480px;
+    height: 270px;
+    border-radius: 8px;
+    border-width: 1px;
+    border-color: var(--kn-border);
+    -unity-background-scale-mode: scale-to-fit;
+    margin-bottom: 6px;
+}
+
+/* ピンク色・アップロード先 */
+.kn-pink {
+    margin: 6px 0 10px 0;
+    padding: 8px;
+    border-radius: 8px;
+    border-left-width: 4px;
+    border-left-color: var(--kn-warn-border);
+    background-color: var(--kn-warn);
+}
+
+.kn-upload {
+    margin-top: 4px;
+}
+
+/* ---------------------------------------------------------------- メニュー整理 */
+
+.kn-menu__row--hidden {
+    opacity: 0.55;
+}
+
+.kn-menu__icon {
+    width: 24px;
+    height: 24px;
+    margin-right: 6px;
+    flex-shrink: 0;
+    -unity-background-scale-mode: scale-to-fit;
+}

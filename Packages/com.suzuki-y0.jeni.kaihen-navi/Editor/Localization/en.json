@@ -324,5 +324,7 @@
   "light.shadowBlurHint": "Higher makes shadow edges softer.",
   "light.shadowOff": "{0} material(s) have shadows turned off. Shadow settings won't show shadows on them.",
   "light.tip": "Double-click a row to find it in the scene. Unchecked rows are not changed.",
-  "undo.light": "KaihenNavi: Change brightness/shadows"
+  "undo.light": "KaihenNavi: Change brightness/shadows",
+  "new.baseFirst": "This is the first avatar made from this one, so a shared base for all edited avatars made from it is also created. Settings you want to share, such as the walking style, can be changed on the base.",
+  "new.baseReuse": "This will be made from this avatar's shared base. Shared settings changed on the base (such as the walking style) also apply to this avatar."
 }

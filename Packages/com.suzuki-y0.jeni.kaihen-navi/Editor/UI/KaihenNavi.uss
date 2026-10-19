@@ -505,3 +505,61 @@
 .kn-footer__label {
     color: var(--kn-text-sub);
 }
+
+/* ---------------------------------------------------------------- 自分用アバター */
+
+.kn-avatar-status {
+    margin-top: 6px;
+}
+
+.kn-mine {
+    flex-direction: row;
+    align-items: center;
+    padding: 6px 10px;
+    border-radius: 6px;
+    border-left-width: 4px;
+    border-left-color: var(--kn-ok-border);
+    background-color: var(--kn-ok);
+}
+
+.kn-mine__texts {
+    flex-grow: 1;
+    flex-shrink: 1;
+}
+
+.kn-mine__title {
+    -unity-font-style: bold;
+    white-space: normal;
+}
+
+.kn-mine__sub {
+    font-size: 11px;
+    color: var(--kn-text-sub);
+    white-space: normal;
+    margin-top: 2px;
+}
+
+.kn-mine-later {
+    justify-content: space-between;
+}
+
+.kn-avatar-row {
+    align-items: flex-start;
+    padding: 8px 6px;
+}
+
+.kn-avatar-row__thumb {
+    width: 64px;
+    height: 64px;
+    min-width: 64px;
+    margin-right: 10px;
+    border-radius: 6px;
+    border-width: 1px;
+    border-color: var(--kn-border);
+    background-color: var(--kn-surface);
+    -unity-background-scale-mode: scale-to-fit;
+}
+
+.kn-avatar-row__buttons {
+    margin-top: 6px;
+}

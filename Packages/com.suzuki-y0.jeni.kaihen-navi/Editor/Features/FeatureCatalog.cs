@@ -19,6 +19,8 @@ namespace Jeni.KaihenNavi
                 new PlannedFeature("pink", 8, "#F06292"),
                 new PlannedFeature("light", 9, "#F2C14E"),
                 new PlannedFeature("thumbnail", 10, "#8E7DBE"),
+                new AvatarsFeature(),
+                new AvatarsFeature(),
             };
         }
     }

@@ -263,11 +263,13 @@ namespace UnityEngine.UIElements
 
     public abstract class EventBase { }
     public class MouseDownEvent : EventBase { public int clickCount; }
+    public class FocusOutEvent : EventBase { }
     public delegate void EventCallback<T>(T evt);
 
     public interface IVisualElementScheduledItem
     {
         IVisualElementScheduledItem Every(long intervalMs);
+        IVisualElementScheduledItem StartingIn(long delayMs);
         void Pause();
     }
 
@@ -392,7 +394,31 @@ namespace UnityEditor
         public static bool DeleteAsset(string path) { return true; }
         public static void SaveAssets() { }
         public static void SaveAssetIfDirty(Object o) { }
+        public static bool CopyAsset(string a, string b) { return true; }
+        public static string RenameAsset(string path, string name) { return ""; }
     }
+
+    public enum InteractionMode { AutomatedAction, UserAction }
+
+    public static class PrefabUtility
+    {
+        public static bool IsPartOfPrefabInstance(Object o) { return false; }
+        public static GameObject GetOutermostPrefabInstanceRoot(Object o) { return null; }
+        public static string GetPrefabAssetPathOfNearestInstanceRoot(Object o) { return null; }
+        public static GameObject SaveAsPrefabAssetAndConnect(GameObject g, string path, InteractionMode m, out bool ok) { ok = true; return g; }
+        public static bool HasPrefabInstanceAnyOverrides(GameObject g, bool includeDefault) { return false; }
+        public static void ApplyPrefabInstance(GameObject g, InteractionMode m) { }
+        public static T GetCorrespondingObjectFromSource<T>(T o) where T : Object { return null; }
+        public static Object InstantiatePrefab(Object o) { return null; }
+    }
+
+    public static class AssetPreview
+    {
+        public static Texture2D GetAssetPreview(Object o) { return null; }
+        public static Texture2D GetMiniThumbnail(Object o) { return null; }
+    }
+
+    public enum PlayModeStateChange { EnteredEditMode, ExitingEditMode, EnteredPlayMode, ExitingPlayMode }
 
     public static class Undo
     {
@@ -424,7 +450,9 @@ namespace UnityEditor
     public static class EditorApplication
     {
         public static double timeSinceStartup;
+        public static bool isPlayingOrWillChangePlaymode;
         public static Action hierarchyChanged;
+        public static Action<PlayModeStateChange> playModeStateChanged;
         public static CallbackFunction delayCall;
         public delegate void CallbackFunction();
     }
@@ -452,6 +480,15 @@ namespace UnityEditor
     public struct GlobalObjectId
     {
         public static GlobalObjectId GetGlobalObjectIdSlow(Object o) { return default(GlobalObjectId); }
+    }
+}
+
+namespace UnityEditor.SceneManagement
+{
+    public static class EditorSceneManager
+    {
+        public delegate void SceneClosingCallback(UnityEngine.SceneManagement.Scene scene, bool removingScene);
+        public static event SceneClosingCallback sceneClosing;
     }
 }
 

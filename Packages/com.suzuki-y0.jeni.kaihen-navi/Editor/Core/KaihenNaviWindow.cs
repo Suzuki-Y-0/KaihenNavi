@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using UnityEditor;
+using UnityEditor.SceneManagement;
 using UnityEngine;
 using UnityEngine.UIElements;
 using VRC.SDK3.Avatars.Components;
@@ -33,6 +34,19 @@ namespace Jeni.KaihenNavi
         private bool _scanQueued;
         private readonly Dictionary<FeatureBase, VisualElement> _cards = new Dictionary<FeatureBase, VisualElement>();
 
+        // 自分用アバターの案内と自動保存
+        private VisualElement _avatarStatus;
+        private Label _saveLabel;
+        private IVisualElementScheduledItem _autoSave;
+        private int _seenGroup = -1;
+        private double _seenAt;
+        private int _savedGroup = -1;
+        private System.DateTime _lastSavedAt;
+        private const double AutoSaveDelay = 1.5;
+
+        // 「あとで」を押したアバター（エディタを開いている間だけ覚える）
+        private static readonly HashSet<string> Postponed = new HashSet<string>();
+
         [MenuItem(MenuPath, false, 0)]
         public static void Open()
         {
@@ -47,6 +61,8 @@ namespace Jeni.KaihenNavi
             L10n.Changed += RebuildAll;
             Undo.undoRedoPerformed += OnUndoRedo;
             EditorApplication.hierarchyChanged += QueueScan;
+            EditorApplication.playModeStateChanged += OnPlayModeChanged;
+            EditorSceneManager.sceneClosing += OnSceneClosing;
             _backup.Changed += RefreshFooter;
         }
 
@@ -55,7 +71,10 @@ namespace Jeni.KaihenNavi
             L10n.Changed -= RebuildAll;
             Undo.undoRedoPerformed -= OnUndoRedo;
             EditorApplication.hierarchyChanged -= QueueScan;
+            EditorApplication.playModeStateChanged -= OnPlayModeChanged;
+            EditorSceneManager.sceneClosing -= OnSceneClosing;
             _backup.Changed -= RefreshFooter;
+            SaveNow();
             if (_selected != null) _selected.OnClosed();
             _backup.EndSession();
         }
@@ -107,6 +126,9 @@ namespace Jeni.KaihenNavi
             });
 
             root.Add(BuildFooter());
+
+            if (_autoSave != null) _autoSave.Pause();
+            _autoSave = root.schedule.Execute(AutoSaveTick).Every(1000);
 
             ScanAvatars();
             if (_selected == null && !string.IsNullOrEmpty(_featureId))
@@ -184,6 +206,146 @@ namespace Jeni.KaihenNavi
                 if (i >= 0) SelectAvatar(_avatars[i]);
             });
             _avatarArea.Add(dropdown);
+
+            _avatarStatus = Ui.Box("kn-avatar-status");
+            _avatarArea.Add(_avatarStatus);
+            RefreshAvatarStatus();
+        }
+
+        // ---------------------------------------------------------------- 自分用アバター
+
+        /// <summary>①の下に、自分用アバターの状態（作る案内・保存の状態）を出す。</summary>
+        private void RefreshAvatarStatus()
+        {
+            if (_avatarStatus == null) return;
+            _avatarStatus.Clear();
+            _saveLabel = null;
+            if (_avatar == null) return;
+
+            switch (MyAvatar.KindOf(_avatar))
+            {
+                case AvatarKind.Mine:
+                {
+                    var path = MyAvatar.PrefabPath(_avatar);
+                    var row = Ui.Box("kn-mine");
+                    var texts = Ui.Box("kn-mine__texts");
+                    texts.Add(Ui.Text(L10n.Tr("mine.title", System.IO.Path.GetFileNameWithoutExtension(path)), "kn-mine__title"));
+                    _saveLabel = Ui.Text("", "kn-mine__sub");
+                    texts.Add(_saveLabel);
+                    row.Add(texts);
+                    row.Add(Ui.Button(L10n.Tr("common.where"), () =>
+                    {
+                        var asset = AssetDatabase.LoadAssetAtPath<GameObject>(path);
+                        if (asset != null) EditorGUIUtility.PingObject(asset);
+                    }, "kn-button--small", "kn-button--ghost"));
+                    _avatarStatus.Add(row);
+                    UpdateSaveLabel();
+                    break;
+                }
+
+                case AvatarKind.Original:
+                {
+                    if (Postponed.Contains(_avatarId))
+                    {
+                        var later = Ui.Box("kn-row", "kn-mine-later");
+                        later.Add(Ui.Text(L10n.Tr("mine.notYet"), "kn-hint"));
+                        later.Add(Ui.Button(L10n.Tr("mine.create"), CreateMine, "kn-button--small"));
+                        _avatarStatus.Add(later);
+                        break;
+                    }
+
+                    _avatarStatus.Add(Ui.Notice(L10n.Tr("mine.suggest"), "warn"));
+                    var buttons = Ui.Box("kn-row");
+                    buttons.Add(Ui.Button(L10n.Tr("mine.create"), CreateMine, "kn-button--primary"));
+                    buttons.Add(Ui.Button(L10n.Tr("mine.later"), () =>
+                    {
+                        Postponed.Add(_avatarId);
+                        RefreshAvatarStatus();
+                    }, "kn-button--ghost"));
+                    _avatarStatus.Add(buttons);
+                    break;
+                }
+
+                default:
+                {
+                    _avatarStatus.Add(Ui.Notice(L10n.Tr("mine.unlinked"), "warn"));
+                    _avatarStatus.Add(Ui.Button(L10n.Tr("mine.createUnlinked"), CreateMine, "kn-button--primary"));
+                    break;
+                }
+            }
+        }
+
+        private void CreateMine()
+        {
+            if (_avatar == null) return;
+            if (_selected != null) _selected.OnClosed();
+            UndoHelper.Separate();
+
+            var path = MyAvatar.Create(_avatar, _backup);
+            if (path == null)
+            {
+                EditorUtility.DisplayDialog(L10n.Tr("app.name"), L10n.Tr("mine.failed"), L10n.Tr("dialog.ok"));
+                return;
+            }
+
+            _avatarId = BackupService.AvatarId(_avatar);
+            _lastSavedAt = System.DateTime.Now;
+            _savedGroup = Undo.GetCurrentGroup();
+            EditorUtility.DisplayDialog(L10n.Tr("app.name"),
+                L10n.Tr("mine.created", System.IO.Path.GetFileNameWithoutExtension(path)), L10n.Tr("dialog.ok"));
+
+            RefreshAvatarStatus();
+            BuildPanel();
+            RefreshFooter();
+        }
+
+        private void UpdateSaveLabel()
+        {
+            if (_saveLabel == null) return;
+            _saveLabel.text = _lastSavedAt == default(System.DateTime)
+                ? L10n.Tr("mine.autosave")
+                : L10n.Tr("mine.savedAt", _lastSavedAt.ToString("HH:mm:ss"));
+        }
+
+        /// <summary>
+        /// 操作が 1.5 秒止まったら、自分用アバターに保存する。
+        /// Undo のグループ番号を「何か変わった」目印にしているので、何も触っていない間は保存しない。
+        /// </summary>
+        private void AutoSaveTick()
+        {
+            if (_avatar == null || EditorApplication.isPlayingOrWillChangePlaymode) return;
+            var group = Undo.GetCurrentGroup();
+            var now = EditorApplication.timeSinceStartup;
+            if (group != _seenGroup)
+            {
+                _seenGroup = group;
+                _seenAt = now;
+                return;
+            }
+
+            if (group == _savedGroup || now - _seenAt < AutoSaveDelay) return;
+            _savedGroup = group;
+            SaveNow();
+        }
+
+        /// <summary>今すぐ保存する（ウィンドウを閉じる・シーンを閉じる・Play の前など）。</summary>
+        private void SaveNow()
+        {
+            if (_avatar == null) return;
+            MyAvatar.SaveMaterials(_avatar);
+            if (!MyAvatar.Save(_avatar)) return;
+            _lastSavedAt = System.DateTime.Now;
+            UpdateSaveLabel();
+        }
+
+        private void OnPlayModeChanged(PlayModeStateChange change)
+        {
+            if (change == PlayModeStateChange.ExitingEditMode) SaveNow();
+        }
+
+        private void OnSceneClosing(UnityEngine.SceneManagement.Scene scene, bool removingScene)
+        {
+            SaveNow();
         }
 
         private void BuildCards()
@@ -260,6 +422,13 @@ namespace Jeni.KaihenNavi
                 Backup = _backup,
                 FeatureId = _selected.Id,
                 Rebuild = BuildPanel,
+                SelectAvatar = a =>
+                {
+                    ScanAvatars();
+                    SelectAvatar(a);
+                    // 一覧に新しいアバターを加え、選んだ状態で作り直す
+                    BuildAvatarArea();
+                },
             };
 
             try
@@ -287,11 +456,14 @@ namespace Jeni.KaihenNavi
         private void SelectAvatar(VRCAvatarDescriptor avatar)
         {
             if (avatar == _avatar) return;
+            SaveNow();
             if (_selected != null) _selected.OnClosed();
             _backup.EndSession();
             UndoHelper.Separate();
             _avatar = avatar;
             _avatarId = avatar == null ? null : BackupService.AvatarId(avatar);
+            _lastSavedAt = default(System.DateTime);
+            RefreshAvatarStatus();
             BuildPanel();
             RefreshFooter();
         }
@@ -299,6 +471,7 @@ namespace Jeni.KaihenNavi
         private void SelectFeature(FeatureBase feature)
         {
             if (feature == _selected) return;
+            SaveNow();
             if (_selected != null) _selected.OnClosed();
             _backup.EndSession();
             UndoHelper.Separate();

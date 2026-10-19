@@ -272,6 +272,7 @@ namespace Jeni.KaihenNavi
                     }, "kn-button--small", "kn-button--ghost"));
                     _avatarStatus.Add(row);
                     UpdateSaveLabel();
+                    _avatarStatus.Add(BuildUploadTarget());
                     break;
                 }
 
@@ -305,6 +306,36 @@ namespace Jeni.KaihenNavi
                     break;
                 }
             }
+        }
+
+        /// <summary>アップロード先（新しく出る／前のアバターを更新する）と、上書き事故の警告。</summary>
+        private VisualElement BuildUploadTarget()
+        {
+            var box = Ui.Box("kn-upload");
+            var id = MyAvatar.BlueprintId(_avatar.gameObject);
+            var row = Ui.Box("kn-row");
+            row.Add(Ui.Text(id.Length == 0 ? L10n.Tr("upload.new") : L10n.Tr("upload.update", id), "kn-hint", "kn-grow"));
+            if (id.Length > 0)
+            {
+                row.Add(Ui.Button(L10n.Tr("upload.makeNew"), () =>
+                {
+                    if (!EditorUtility.DisplayDialog(L10n.Tr("app.name"), L10n.Tr("upload.makeNewConfirm"),
+                            L10n.Tr("upload.makeNew"), L10n.Tr("dialog.cancel"))) return;
+                    MyAvatar.ClearBlueprintId(_avatar.gameObject);
+                    SaveNow();
+                    RefreshAvatarStatus();
+                }, "kn-button--small", "kn-button--ghost"));
+            }
+
+            box.Add(row);
+
+            var same = MyAvatar.SameUploadTarget(_avatar);
+            if (same.Count > 0)
+            {
+                box.Add(Ui.Notice(L10n.Tr("upload.conflict", string.Join("、", same.Select(p => p.name).ToArray())), "warn"));
+            }
+
+            return box;
         }
 
         private void CreateMine()

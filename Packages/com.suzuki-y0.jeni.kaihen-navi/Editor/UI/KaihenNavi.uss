@@ -656,3 +656,79 @@
     border-radius: 6px;
     background-color: var(--kn-selected);
 }
+
+/* ---------------------------------------------------------------- 製品版の画面 */
+
+.kn-readout {
+    font-size: 13px;
+    -unity-font-style: bold;
+    margin: 4px 0 6px 0;
+    white-space: normal;
+}
+
+/* 体型・身長 */
+.kn-body {
+    flex-direction: row;
+    align-items: flex-start;
+}
+
+.kn-body__canvas {
+    width: 55%;
+    height: 420px;
+    min-width: 200px;
+    border-radius: 8px;
+    border-width: 1px;
+    border-color: var(--kn-border);
+    background-color: rgb(30, 30, 36);
+    -unity-background-scale-mode: scale-to-fit;
+    margin-right: 8px;
+}
+
+.kn-body__side {
+    flex-grow: 1;
+    flex-shrink: 1;
+}
+
+.kn-body__parts {
+    flex-direction: row;
+    flex-wrap: wrap;
+}
+
+.kn-body__part {
+    margin: 0 4px 4px 0;
+}
+
+.kn-body__part--selected {
+    background-color: var(--kn-accent);
+    color: var(--kn-accent-text);
+}
+
+.kn-body__controls {
+    margin-top: 8px;
+}
+
+/* サムネイル */
+.kn-thumb-preview {
+    width: 100%;
+    max-width: 480px;
+    height: 270px;
+    border-radius: 8px;
+    border-width: 1px;
+    border-color: var(--kn-border);
+    -unity-background-scale-mode: scale-to-fit;
+    margin-bottom: 6px;
+}
+
+/* ピンク色・アップロード先 */
+.kn-pink {
+    margin: 6px 0 10px 0;
+    padding: 8px;
+    border-radius: 8px;
+    border-left-width: 4px;
+    border-left-color: var(--kn-warn-border);
+    background-color: var(--kn-warn);
+}
+
+.kn-upload {
+    margin-top: 4px;
+}

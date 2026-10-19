@@ -38,6 +38,9 @@ namespace Jeni.KaihenNavi
         private static readonly List<IBackupParticipant> Participants = new List<IBackupParticipant>
         {
             new ToggleMenuBackup(),
+#if KAIHENNAVI_MA
+            new BodyScaleBackup(),
+#endif
         };
 
         private string _sessionKey;

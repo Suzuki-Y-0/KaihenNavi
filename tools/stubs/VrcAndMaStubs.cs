@@ -57,6 +57,11 @@ namespace nadena.dev.modular_avatar.core
 
     public class ModularAvatarMergeArmature : AvatarTagComponent { }
 
+    public class ModularAvatarScaleAdjuster : AvatarTagComponent
+    {
+        public Vector3 Scale { get; set; }
+    }
+
     public class ModularAvatarMenuItem : AvatarTagComponent
     {
         public VRC.SDK3.Avatars.ScriptableObjects.VRCExpressionsMenu.Control Control;
@@ -75,5 +80,13 @@ namespace nadena.dev.modular_avatar.core
     public class ModularAvatarObjectToggle : AvatarTagComponent
     {
         public List<ToggledObject> Objects { get; set; }
+    }
+}
+
+namespace VRC.Core
+{
+    public class PipelineManager : UnityEngine.MonoBehaviour
+    {
+        public string blueprintId;
     }
 }

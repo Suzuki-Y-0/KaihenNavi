@@ -8,7 +8,11 @@ namespace UnityEngine
 {
     public enum FontStyle { Normal, Bold, Italic, BoldAndItalic }
 
-    public struct Rect { public float width; public float height; }
+    public struct Rect
+    {
+        public float x, y, width, height;
+        public Rect(float x, float y, float w, float h) { this.x = x; this.y = y; width = w; height = h; }
+    }
 
     public class Object
     {
@@ -16,6 +20,7 @@ namespace UnityEngine
         public HideFlags hideFlags;
         public int GetInstanceID() { return 0; }
         public static T Instantiate<T>(T original) where T : Object { return original; }
+        public static void DestroyImmediate(Object o) { }
         public static implicit operator bool(Object o) { return !ReferenceEquals(o, null); }
     }
 
@@ -41,6 +46,7 @@ namespace UnityEngine
         public bool activeSelf;
         public bool activeInHierarchy;
         public void SetActive(bool value) { }
+        public T AddComponent<T>() where T : Component { return null; }
         public T GetComponent<T>() { return default(T); }
         public T[] GetComponentsInChildren<T>(bool includeInactive) { return new T[0]; }
         public T GetComponentInChildren<T>(bool includeInactive) { return default(T); }
@@ -57,6 +63,8 @@ namespace UnityEngine
         public bool IsChildOf(Transform p) { return false; }
         public void SetParent(Transform p, bool worldPositionStays) { }
         public Vector3 TransformDirection(Vector3 v) { return v; }
+        public Vector3 TransformPoint(Vector3 v) { return v; }
+        public Vector3 InverseTransformPoint(Vector3 v) { return v; }
         public System.Collections.IEnumerator GetEnumerator() { yield break; }
     }
 
@@ -73,20 +81,48 @@ namespace UnityEngine
 
     public class Mesh : Object { public int blendShapeCount; }
     public class Texture : Object { public TextureWrapMode wrapMode; }
-    public enum TextureFormat { RGBA32 }
+    public enum TextureFormat { RGBA32, RGB24 }
     public enum TextureWrapMode { Repeat, Clamp }
     public class Texture2D : Texture
     {
         public Texture2D(int w, int h, TextureFormat f, bool mip) { }
         public void SetPixel(int x, int y, Color c) { }
+        public Color32[] GetPixels32() { return new Color32[0]; }
+        public void SetPixels32(Color32[] p) { }
+        public void ReadPixels(Rect r, int x, int y) { }
+        public byte[] EncodeToPNG() { return new byte[0]; }
         public void Apply() { }
     }
+
+    public enum RenderTextureFormat { ARGB32 }
+    public class RenderTexture : Texture
+    {
+        public RenderTexture(int w, int h, int depth, RenderTextureFormat f) { }
+        public int antiAliasing;
+        public static RenderTexture active;
+        public void Release() { }
+    }
+
+    public enum CameraClearFlags { Skybox, SolidColor }
+    public class Camera : Behaviour
+    {
+        public float fieldOfView, aspect, nearClipPlane, farClipPlane, orthographicSize;
+        public bool orthographic;
+        public CameraClearFlags clearFlags;
+        public Color backgroundColor;
+        public RenderTexture targetTexture;
+        public void Render() { }
+        public Vector3 WorldToViewportPoint(Vector3 p) { return p; }
+    }
+
+    public class Shader : Object { public bool isSupported; }
 
     public class Material : Object
     {
         public Material(Material m) { }
         public Texture mainTexture;
         public Color color;
+        public Shader shader;
         public bool HasProperty(string n) { return false; }
         public Vector4 GetVector(string n) { return default(Vector4); }
         public void SetVector(string n, Vector4 v) { }
@@ -107,27 +143,45 @@ namespace UnityEngine
         public Transform GetBoneTransform(HumanBodyBones b) { return null; }
     }
 
-    public enum HumanBodyBones { Hips = 0, LeftFoot = 5, RightFoot = 6, Spine = 7, Chest = 8, Neck = 9, Head = 10, LeftHand = 17, RightHand = 18, LastBone = 55 }
+    public enum HumanBodyBones
+    {
+        Hips = 0, LeftUpperLeg = 1, RightUpperLeg = 2, LeftLowerLeg = 3, RightLowerLeg = 4, LeftFoot = 5, RightFoot = 6,
+        Spine = 7, Chest = 8, Neck = 9, Head = 10, LeftShoulder = 11, RightShoulder = 12, LeftUpperArm = 13, RightUpperArm = 14,
+        LeftLowerArm = 15, RightLowerArm = 16, LeftHand = 17, RightHand = 18, LeftToes = 19, RightToes = 20, LeftEye = 21, RightEye = 22,
+        Jaw = 23, LeftThumbProximal = 24, RightLittleDistal = 53, UpperChest = 54, LastBone = 55,
+    }
 
     public struct Bounds
     {
-        public Vector3 center;
+        public Vector3 center, max;
         public void Encapsulate(Bounds b) { }
     }
 
-    public struct Vector2 { public Vector2(float x, float y) { } }
+    public struct Vector2
+    {
+        public float x, y;
+        public Vector2(float x, float y) { this.x = x; this.y = y; }
+        public static Vector2 operator +(Vector2 a, Vector2 b) { return a; }
+        public static Vector2 operator -(Vector2 a, Vector2 b) { return a; }
+        public static Vector2 operator *(Vector2 a, float d) { return a; }
+        public static float Distance(Vector2 a, Vector2 b) { return 0f; }
+    }
 
     public struct Vector3
     {
         public float x, y, z;
         public Vector3(float x, float y, float z) { this.x = x; this.y = y; this.z = z; }
+        public float this[int i] { get { return x; } set { } }
         public Vector3 normalized { get { return this; } }
+        public static Vector3 zero, one, up, down, forward, back;
         public static Vector3 operator +(Vector3 a, Vector3 b) { return a; }
         public static Vector3 operator -(Vector3 a) { return a; }
         public static Vector3 operator -(Vector3 a, Vector3 b) { return a; }
-        public static float Distance(Vector3 a, Vector3 b) { return 0f; }
-        public static Vector3 zero;
         public static Vector3 operator *(Vector3 a, float d) { return a; }
+        public static Vector3 operator *(float d, Vector3 a) { return a; }
+        public static float Distance(Vector3 a, Vector3 b) { return 0f; }
+        public static Vector3 Cross(Vector3 a, Vector3 b) { return a; }
+        public static implicit operator Vector2(Vector3 v) { return new Vector2(v.x, v.y); }
         public static bool operator ==(Vector3 a, Vector3 b) { return true; }
         public static bool operator !=(Vector3 a, Vector3 b) { return false; }
         public override bool Equals(object o) { return false; }
@@ -144,7 +198,10 @@ namespace UnityEngine
     {
         public static Quaternion identity;
         public static Quaternion AngleAxis(float a, Vector3 axis) { return default(Quaternion); }
+        public static Quaternion LookRotation(Vector3 forward) { return default(Quaternion); }
+        public static Quaternion LookRotation(Vector3 forward, Vector3 up) { return default(Quaternion); }
         public static Quaternion operator *(Quaternion a, Quaternion b) { return a; }
+        public static Vector3 operator *(Quaternion a, Vector3 v) { return v; }
         public static bool operator ==(Quaternion a, Quaternion b) { return true; }
         public static bool operator !=(Quaternion a, Quaternion b) { return false; }
         public override bool Equals(object o) { return false; }
@@ -154,10 +211,18 @@ namespace UnityEngine
     public struct Color
     {
         public float r, g, b, a;
+        public Color(float r, float g, float b) { this.r = r; this.g = g; this.b = b; a = 1f; }
+        public Color(float r, float g, float b, float a) { this.r = r; this.g = g; this.b = b; this.a = a; }
         public static Color gray, white;
         public static void RGBToHSV(Color c, out float h, out float s, out float v) { h = s = v = 0; }
         public static Color HSVToRGB(float h, float s, float v) { return default(Color); }
         public static Color HSVToRGB(float h, float s, float v, bool hdr) { return default(Color); }
+    }
+
+    public struct Color32
+    {
+        public byte r, g, b, a;
+        public Color32(byte r, byte g, byte b, byte a) { this.r = r; this.g = g; this.b = b; this.a = a; }
     }
 
     public static class JsonUtility
@@ -171,12 +236,18 @@ namespace UnityEngine
 
     public static class Mathf
     {
+        public const float PI = 3.14159265f;
+        public const float Deg2Rad = PI / 180f;
         public static float Max(float a, float b) { return a; }
         public static int Max(int a, int b) { return a; }
+        public static float Min(float a, float b) { return a; }
         public static int Min(int a, int b) { return a; }
         public static float Clamp(float v, float a, float b) { return v; }
         public static float Clamp01(float v) { return v; }
         public static float Abs(float v) { return v; }
+        public static float Tan(float v) { return v; }
+        public static float Sin(float v) { return v; }
+        public static float Cos(float v) { return v; }
         public static float Repeat(float t, float l) { return t; }
         public static bool Approximately(float a, float b) { return true; }
     }
@@ -196,6 +267,8 @@ namespace UnityEngine
         public static SystemLanguage systemLanguage;
         public static void OpenURL(string url) { }
     }
+
+    public enum EventType { Repaint, Layout }
 
     public class GUIContent
     {
@@ -278,6 +351,31 @@ namespace UnityEngine.UIElements
     public class MouseDownEvent : EventBase { public int clickCount; }
     public class FocusOutEvent : EventBase { }
     public class DragUpdatedEvent : EventBase { }
+    public abstract class PointerEventBase : EventBase
+    {
+        public UnityEngine.Vector3 localPosition;
+        public int pointerId;
+    }
+    public class PointerDownEvent : PointerEventBase { }
+    public class PointerMoveEvent : PointerEventBase { }
+    public class PointerUpEvent : PointerEventBase { }
+
+    public class Painter2D
+    {
+        public float lineWidth;
+        public UnityEngine.Color strokeColor, fillColor;
+        public void BeginPath() { }
+        public void MoveTo(UnityEngine.Vector2 p) { }
+        public void LineTo(UnityEngine.Vector2 p) { }
+        public void ClosePath() { }
+        public void Stroke() { }
+        public void Fill() { }
+    }
+
+    public class MeshGenerationContext
+    {
+        public Painter2D painter2D;
+    }
     public class DragLeaveEvent : EventBase { }
     public class DragPerformEvent : EventBase { }
     public delegate void EventCallback<T>(T evt);
@@ -316,6 +414,11 @@ namespace UnityEngine.UIElements
         public IResolvedStyle resolvedStyle;
         public IVisualElementScheduler schedule;
         public bool ClassListContains(string c) { return false; }
+        public UnityEngine.Rect contentRect;
+        public Action<MeshGenerationContext> generateVisualContent;
+        public void MarkDirtyRepaint() { }
+        public void CapturePointer(int id) { }
+        public void ReleasePointer(int id) { }
         public string tooltip;
         public VisualElementStyleSheetSet styleSheets;
         public void Add(VisualElement child) { }
@@ -352,6 +455,7 @@ namespace UnityEngine.UIElements
     public class Slider : BaseField<float>
     {
         public Slider(string label, float start, float end) { }
+        public float lowValue, highValue;
         public bool showInputField;
     }
 
@@ -439,6 +543,10 @@ namespace UnityEditor
         public static void ApplyPrefabInstance(GameObject g, InteractionMode m) { }
         public static T GetCorrespondingObjectFromSource<T>(T o) where T : Object { return null; }
         public static Object InstantiatePrefab(Object o) { return null; }
+        public static GameObject LoadPrefabContents(string path) { return null; }
+        public static void UnloadPrefabContents(GameObject g) { }
+        public static GameObject SaveAsPrefabAsset(GameObject g, string path) { return g; }
+        public static T GetCorrespondingObjectFromOriginalSource<T>(T o) where T : Object { return null; }
     }
 
     public static class AssetPreview
@@ -497,7 +605,27 @@ namespace UnityEditor
     public class SceneView : EditorWindow
     {
         public static SceneView lastActiveSceneView;
+        public static Action<SceneView> duringSceneGui;
+        public static void RepaintAll() { }
         public bool FrameSelected() { return true; }
+        public void LookAt(Vector3 point, Quaternion direction, float size) { }
+    }
+
+    public static class Handles
+    {
+        public static Color color;
+        public static void SphereHandleCap(int id, Vector3 position, Quaternion rotation, float size, EventType type) { }
+        public static void DrawLine(Vector3 a, Vector3 b) { }
+    }
+
+    public static class HandleUtility
+    {
+        public static float GetHandleSize(Vector3 p) { return 1f; }
+    }
+
+    public static class ShaderUtil
+    {
+        public static bool ShaderHasError(Shader s) { return false; }
     }
 
     public class GenericMenu

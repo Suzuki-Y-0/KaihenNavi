@@ -557,6 +557,7 @@ namespace Jeni.KaihenNavi
             }
 
             UndoHelper.End();
+            AvatarMeasure.Forget();
             UpdateHeightLabel();
             Refresh();
         }

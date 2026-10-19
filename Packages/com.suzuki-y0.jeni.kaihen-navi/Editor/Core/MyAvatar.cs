@@ -360,7 +360,7 @@ namespace Jeni.KaihenNavi
             if (AssetDatabase.IsValidFolder(folder) && AssetDatabase.FindAssets("t:Prefab", new[] { folder }).Length == 0)
             {
                 WorkFolders.EnsureReadme();
-                foreach (var sub in new[] { "Materials", "Textures", "Backups" }) WorkFolders.Ensure(folder + "/" + sub);
+                foreach (var sub in new[] { "Materials", "Backups" }) WorkFolders.Ensure(folder + "/" + sub);
                 return folder;
             }
 

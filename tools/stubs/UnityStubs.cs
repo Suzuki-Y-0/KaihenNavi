@@ -549,6 +549,18 @@ namespace UnityEditor
         public static void UnloadPrefabContents(GameObject g) { }
         public static GameObject SaveAsPrefabAsset(GameObject g, string path) { return g; }
         public static T GetCorrespondingObjectFromOriginalSource<T>(T o) where T : Object { return null; }
+        public static void ReplacePrefabAssetOfPrefabInstance(GameObject root, GameObject asset, PrefabReplacingSettings s, InteractionMode m) { }
+        public static void UnpackPrefabInstance(GameObject root, PrefabUnpackMode mode, InteractionMode m) { }
+    }
+
+    public enum PrefabUnpackMode { OutermostRoot, Completely }
+    public enum ObjectMatchMode { NoMatchingPerformed, ByName, ByHierarchy }
+
+    public class PrefabReplacingSettings
+    {
+        public bool logInfo;
+        public bool changeRootNameToAssetName;
+        public ObjectMatchMode objectMatchMode;
     }
 
     public static class AssetPreview

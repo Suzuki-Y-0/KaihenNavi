@@ -249,6 +249,12 @@ namespace Jeni.KaihenNavi
             var original = MyAvatar.OriginalOf(prefab);
             texts.Add(Ui.Text(L10n.Tr("avatars.from", original == null ? "-" : original.name), "kn-list__sub"));
 
+            // ベースを通っていない古い改変アバター：共通の設定（歩き方など）が効かないので、つなぎ直しを勧める
+            if (original != null && MyAvatar.ParentBaseOf(prefab) == null)
+            {
+                texts.Add(Ui.Text(L10n.Tr("existing.noBase"), "kn-hint"));
+            }
+
             var buttons = Ui.Box("kn-row", "kn-avatar-row__buttons");
             buttons.Add(Ui.Button(L10n.Tr("existing.open"), () =>
             {
@@ -267,6 +273,24 @@ namespace Jeni.KaihenNavi
                         return;
                     }
 
+                    if (Changed != null) Changed();
+                }, "kn-button--small"));
+            }
+
+            if (original != null && MyAvatar.ParentBaseOf(prefab) == null)
+            {
+                buttons.Add(Ui.Button(L10n.Tr("existing.rebase"), () =>
+                {
+                    if (!EditorUtility.DisplayDialog(L10n.Tr("app.name"), L10n.Tr("existing.rebaseConfirm", prefab.name, original.name),
+                            L10n.Tr("existing.rebase"), L10n.Tr("dialog.cancel")))
+                    {
+                        return;
+                    }
+
+                    var error = MyAvatar.Rebase(prefab);
+                    EditorUtility.DisplayDialog(L10n.Tr("app.name"),
+                        error == null ? L10n.Tr("existing.rebaseDone", prefab.name) : L10n.Tr("existing.rebaseFailed", error),
+                        L10n.Tr("dialog.ok"));
                     if (Changed != null) Changed();
                 }, "kn-button--small"));
             }

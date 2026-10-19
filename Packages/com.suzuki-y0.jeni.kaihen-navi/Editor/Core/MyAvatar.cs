@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using System.IO;
 using UnityEditor;
 using UnityEngine;
+using VRC.Core;
 using VRC.SDK3.Avatars.Components;
 
 namespace Jeni.KaihenNavi
@@ -100,6 +101,9 @@ namespace Jeni.KaihenNavi
             Undo.RegisterCreatedObjectUndo(instance, undoName);
             instance.name = System.IO.Path.GetFileName(folder);
 
+            // 元のアバターをアップロードしたことがあると、その ID を引き継いで上書きしてしまうので外す
+            ClearBlueprintId(instance);
+
             bool ok;
             PrefabUtility.SaveAsPrefabAssetAndConnect(instance, path, InteractionMode.UserAction, out ok);
             if (!ok) return null;
@@ -191,6 +195,42 @@ namespace Jeni.KaihenNavi
             return WorkFolders.CreateAvatarFolder(avatar.name);
         }
 
+        // ---------------------------------------------------------------- アップロード先（ブループリント ID）
+
+        /// <summary>アップロード先の ID。まだアップロードしていなければ空。</summary>
+        public static string BlueprintId(GameObject avatar)
+        {
+            var pm = avatar == null ? null : avatar.GetComponent<PipelineManager>();
+            return pm == null || string.IsNullOrEmpty(pm.blueprintId) ? "" : pm.blueprintId;
+        }
+
+        /// <summary>ID を外す（次のアップロードで新しいアバターになる）。外したら true。</summary>
+        public static bool ClearBlueprintId(GameObject avatar)
+        {
+            var pm = avatar == null ? null : avatar.GetComponent<PipelineManager>();
+            if (pm == null || string.IsNullOrEmpty(pm.blueprintId)) return false;
+            Undo.RecordObject(pm, "KaihenNavi");
+            pm.blueprintId = "";
+            EditorUtility.SetDirty(pm);
+            return true;
+        }
+
+        /// <summary>同じアップロード先を使っている、ほかの改変アバター（上書き事故の元）。</summary>
+        public static List<GameObject> SameUploadTarget(VRCAvatarDescriptor avatar)
+        {
+            var result = new List<GameObject>();
+            var id = BlueprintId(avatar.gameObject);
+            if (id.Length == 0) return result;
+            var own = PrefabPath(avatar);
+            foreach (var prefab in All())
+            {
+                if (AssetDatabase.GetAssetPath(prefab) == own) continue;
+                if (BlueprintId(prefab) == id) result.Add(prefab);
+            }
+
+            return result;
+        }
+
         // ---------------------------------------------------------------- 自動保存
 
         /// <summary>シーン上の改変のうち、まだ自分用アバターに保存していないものがあるか。</summary>
@@ -278,6 +318,18 @@ namespace Jeni.KaihenNavi
             var folder = WorkFolders.CreateAvatarFolder(name);
             var path = folder + "/" + Path.GetFileName(folder) + ".prefab";
             if (!AssetDatabase.CopyAsset(source, path)) return null;
+
+            // 複製元と同じアップロード先にならないよう、ID を外す
+            var contents = PrefabUtility.LoadPrefabContents(path);
+            try
+            {
+                if (ClearBlueprintId(contents)) PrefabUtility.SaveAsPrefabAsset(contents, path);
+            }
+            finally
+            {
+                PrefabUtility.UnloadPrefabContents(contents);
+            }
+
             WorkFolders.WriteManifest(path, OriginalOf(prefab));
             return path;
         }

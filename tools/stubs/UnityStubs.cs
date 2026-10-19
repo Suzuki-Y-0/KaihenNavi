@@ -77,9 +77,10 @@ namespace UnityEngine
         public Transform[] bones;
         public float GetBlendShapeWeight(int i) { return 0; }
         public void SetBlendShapeWeight(int i, float v) { }
+        public void BakeMesh(Mesh m, bool useScale) { }
     }
 
-    public class Mesh : Object { public int blendShapeCount; public string GetBlendShapeName(int i) { return ""; } }
+    public class Mesh : Object { public int blendShapeCount; public Vector3[] vertices; public string GetBlendShapeName(int i) { return ""; } }
     public class Texture : Object { public TextureWrapMode wrapMode; }
     public enum TextureFormat { RGBA32, RGB24 }
     public enum TextureWrapMode { Repeat, Clamp }
@@ -474,6 +475,13 @@ namespace UnityEngine.UIElements
 
 namespace UnityEditor.UIElements
 {
+    public class ObjectField : UnityEngine.UIElements.BaseField<UnityEngine.Object>
+    {
+        public ObjectField(string label) { }
+        public Type objectType;
+        public bool allowSceneObjects;
+    }
+
     public class PopupField<T> : UnityEngine.UIElements.BaseField<T>
     {
         public PopupField(List<T> choices, int defaultIndex) { }

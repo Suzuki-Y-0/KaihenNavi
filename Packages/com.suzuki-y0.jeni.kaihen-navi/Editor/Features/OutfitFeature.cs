@@ -100,10 +100,24 @@ namespace Jeni.KaihenNavi
             ctx.Rebuild();
         }
 
-        /// <summary>MA の Setup Outfit を、服を選んだ状態で呼ぶ。</summary>
+        /// <summary>
+        /// MA の Setup Outfit を呼ぶ。MA が公開している SetupOutfitUI(GameObject) を使う
+        /// （メニューを ExecuteMenuItem で呼ぶと、対象のオブジェクトが渡らず「選択されていません」になるため）。
+        /// MA のエディタ用アセンブリには直接の参照を持たないので、名前で探して呼ぶ。古い MA ならメニューを試す。
+        /// </summary>
         private static bool SetupOutfit(GameObject outfit)
         {
             Selection.activeGameObject = outfit;
+            var api = System.AppDomain.CurrentDomain.GetAssemblies()
+                .Select(a => a.GetType("nadena.dev.modular_avatar.core.editor.SetupOutfit", false))
+                .FirstOrDefault(t => t != null);
+            var method = api == null ? null : api.GetMethod("SetupOutfitUI", new[] { typeof(GameObject) });
+            if (method != null)
+            {
+                method.Invoke(null, new object[] { outfit });
+                return outfit.GetComponentInChildren<ModularAvatarMergeArmature>(true) != null;
+            }
+
             foreach (var menu in SetupOutfitMenus)
             {
                 if (EditorApplication.ExecuteMenuItem(menu)) return outfit.GetComponentInChildren<ModularAvatarMergeArmature>(true) != null;

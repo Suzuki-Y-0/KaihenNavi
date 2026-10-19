@@ -298,8 +298,8 @@
   "skin.noCutter": "설치된 Modular Avatar에 Mesh Cutter가 없습니다. VCC(또는 ALCOM)로 Modular Avatar를 업데이트해 주세요.",
   "skin.cutterIntro": "Mesh Cutter는 업로드할 때만 몸 메시의 일부를 잘라냅니다(원본은 바뀌지 않음). 옷을 고르면 그 옷을 입었을 때만 잘라냅니다.",
   "skin.addCutter": "Mesh Cutter 놓기",
-  "skin.cutterHow": "놓은 뒤 오른쪽 Inspector에서 자를 메시에 몸(Body)을 넣고 자를 범위를 정하세요.",
-  "skin.cutterAdded": "Mesh Cutter를 놓고 선택했습니다. 오른쪽 Inspector에서 자를 메시(몸)와 범위를 설정해 주세요.\n\n'되돌리기'로 취소할 수 있습니다.",
+  "skin.cutterHow": "Inspector에서 잘라낼 범위를 정해 주세요(잘라낼 피부 메시는 이미 넣어 두었습니다).",
+  "skin.cutterAdded": "Mesh Cutter를 추가하고 선택했습니다. Inspector에서 잘라낼 범위를 정해 주세요. 피부 메시는 이미 넣어 두었습니다.\n\n'되돌리기'로 취소할 수 있습니다.",
   "undo.skin": "KaihenNavi: 피부 숨기기",
   "light.intro": "밝기와 그림자에 관련된 설정만 표시합니다. 원래 머티리얼은 바뀌지 않으며, 바꾸기 전에 자동으로 복사본을 만듭니다.",
   "light.noLilToon": "lilToon 머티리얼을 찾지 못했습니다. 이 기능은 lilToon을 쓰는 아바타용입니다.",
@@ -331,5 +331,7 @@
   "existing.rebase": "베이스에 다시 연결",
   "existing.rebaseConfirm": "\"{0}\"을(를) \"{1}\"의 개조 베이스에 다시 연결합니다.\n\n지금까지의 개조 내용은 그대로 남습니다. 만약을 위해 연결하기 전의 것을 이 아바타의 Backups 폴더에 복사해 둡니다.",
   "existing.rebaseDone": "\"{0}\"을(를) 베이스에 다시 연결했습니다. 겉모습이 바뀌지 않았는지 확인해 주세요.",
-  "existing.rebaseFailed": "다시 연결하지 못했습니다({0}). 개조 아바타는 바뀌지 않았습니다."
+  "existing.rebaseFailed": "다시 연결하지 못했습니다({0}). 개조 아바타는 바뀌지 않았습니다.",
+  "skin.mesh": "어느 부분의 피부인가요? (숫자는 줄이기용 셰이프 키 수)",
+  "pick.orChoose": "또는 목록에서 고르기"
 }

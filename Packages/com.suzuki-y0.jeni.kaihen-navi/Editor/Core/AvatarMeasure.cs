@@ -28,21 +28,70 @@ namespace Jeni.KaihenNavi
         /// <summary>足元から頭のてっぺんまでのおおよその高さ（m）。メッシュの大きさで測る。</summary>
         public static float Height(VRCAvatarDescriptor avatar)
         {
+            // 何度も呼ばれる（サムネイルの撮り直しなど）ので、少しの間は覚えておく
+            var now = UnityEditor.EditorApplication.timeSinceStartup;
+            if (avatar.GetInstanceID() == _cachedId && now - _cachedAt < 2.0) return _cachedHeight;
+
+            var h = MeasureTop(avatar) - avatar.transform.position.y;
+            // メッシュが見つからないときは視点の高さから見積もる
+            if (h <= 0.1f) h = Mathf.Max(0.5f, avatar.ViewPosition.y / 0.92f);
+
+            _cachedId = avatar.GetInstanceID();
+            _cachedAt = now;
+            _cachedHeight = h;
+            return h;
+        }
+
+        private static int _cachedId;
+        private static double _cachedAt;
+        private static float _cachedHeight;
+
+        /// <summary>
+        /// いちばん上の頂点の高さ。レンダラーの外枠（bounds）は実際より大きめなことが多いので、
+        /// スキンメッシュは今のポーズで頂点を計算して測る。
+        /// </summary>
+        private static float MeasureTop(VRCAvatarDescriptor avatar)
+        {
             var found = false;
             var top = 0f;
-            foreach (var r in avatar.GetComponentsInChildren<Renderer>(false))
+            var baked = new Mesh();
+            try
             {
-                if (!(r is SkinnedMeshRenderer) && !(r is MeshRenderer)) continue;
-                var y = r.bounds.max.y;
-                if (!found || y > top) top = y;
-                found = true;
+                foreach (var r in avatar.GetComponentsInChildren<Renderer>(false))
+                {
+                    float y;
+                    var smr = r as SkinnedMeshRenderer;
+                    if (smr != null)
+                    {
+                        if (smr.sharedMesh == null) continue;
+                        smr.BakeMesh(baked, true);
+                        var vertices = baked.vertices;
+                        if (vertices.Length == 0) continue;
+                        // useScale = true で焼いた頂点はスケール込みなので、位置と回転だけ足す
+                        var origin = smr.transform.position;
+                        var rotation = smr.transform.rotation;
+                        y = float.MinValue;
+                        foreach (var v in vertices) y = Mathf.Max(y, (origin + rotation * v).y);
+                    }
+                    else if (r is MeshRenderer)
+                    {
+                        y = r.bounds.max.y;
+                    }
+                    else
+                    {
+                        continue;
+                    }
+
+                    if (!found || y > top) top = y;
+                    found = true;
+                }
+            }
+            finally
+            {
+                Object.DestroyImmediate(baked);
             }
 
-            var h = found ? top - avatar.transform.position.y : 0f;
-            if (h > 0.1f) return h;
-
-            // メッシュが見つからないときは視点の高さから見積もる
-            return Mathf.Max(0.5f, avatar.ViewPosition.y / 0.92f);
+            return found ? top : avatar.transform.position.y;
         }
 
         /// <summary>目の中心（ワールド座標）。目のボーンが無ければ頭のボーンから見積もる。見つからなければ null。</summary>

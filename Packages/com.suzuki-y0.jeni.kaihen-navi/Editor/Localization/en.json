@@ -298,8 +298,8 @@
   "skin.noCutter": "The installed Modular Avatar has no Mesh Cutter. Update Modular Avatar with VCC (or ALCOM).",
   "skin.cutterIntro": "Mesh Cutter removes part of the body mesh only at upload time (the original is not changed). Choose an outfit to cut only while wearing it.",
   "skin.addCutter": "Add Mesh Cutter",
-  "skin.cutterHow": "After adding, set the body (Body) as the mesh to cut in the Inspector and choose the area to cut.",
-  "skin.cutterAdded": "Added and selected a Mesh Cutter. Set the mesh (body) and the area to cut in the Inspector.\n\nUse Restore to undo.",
+  "skin.cutterHow": "Choose the area to cut in the Inspector (the skin mesh to cut is already set).",
+  "skin.cutterAdded": "Added and selected a Mesh Cutter. Choose the area to cut in the Inspector; the skin mesh is already set.\n\nUse Restore to undo.",
   "undo.skin": "KaihenNavi: Hide skin",
   "light.intro": "Only brightness and shadow settings are shown. Original materials are never changed; a copy is made automatically before editing.",
   "light.noLilToon": "No lilToon materials were found. This feature is for avatars that use lilToon.",
@@ -331,5 +331,7 @@
   "existing.rebase": "Reconnect to base",
   "existing.rebaseConfirm": "Reconnect \"{0}\" to the shared base of \"{1}\".\n\nYour edits are kept. A copy of the current version is saved in this avatar's Backups folder just in case.",
   "existing.rebaseDone": "Reconnected \"{0}\" to the base. Please check that it looks the same.",
-  "existing.rebaseFailed": "Could not reconnect ({0}). The avatar was not changed."
+  "existing.rebaseFailed": "Could not reconnect ({0}). The avatar was not changed.",
+  "skin.mesh": "Which skin mesh? (number = shrink shape keys)",
+  "pick.orChoose": "Or pick from a list"
 }

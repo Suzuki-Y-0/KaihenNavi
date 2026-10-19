@@ -618,6 +618,12 @@
     color: var(--kn-text-sub);
 }
 
+.kn-drop__field {
+    margin-top: 8px;
+    width: 100%;
+    max-width: 420px;
+}
+
 .kn-suggest__row {
     flex-direction: row;
     align-items: center;
@@ -667,12 +673,12 @@
 }
 
 /* 体型・身長 */
-.kn-body {
+.kn-figure {
     flex-direction: row;
     align-items: flex-start;
 }
 
-.kn-body__canvas {
+.kn-figure__canvas {
     width: 55%;
     height: 420px;
     min-width: 200px;
@@ -684,26 +690,26 @@
     margin-right: 8px;
 }
 
-.kn-body__side {
+.kn-figure__side {
     flex-grow: 1;
     flex-shrink: 1;
 }
 
-.kn-body__parts {
+.kn-figure__parts {
     flex-direction: row;
     flex-wrap: wrap;
 }
 
-.kn-body__part {
+.kn-figure__part {
     margin: 0 4px 4px 0;
 }
 
-.kn-body__part--selected {
+.kn-figure__part--selected {
     background-color: var(--kn-accent);
     color: var(--kn-accent-text);
 }
 
-.kn-body__controls {
+.kn-figure__controls {
     margin-top: 8px;
 }
 

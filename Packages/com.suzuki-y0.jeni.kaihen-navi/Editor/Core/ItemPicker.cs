@@ -162,7 +162,7 @@ namespace Jeni.KaihenNavi
             if (path != null)
             {
                 var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(path);
-                var original = MyAvatar.IsMinePath(path) ? MyAvatar.OriginalOf(prefab) : prefab;
+                var original = MyAvatar.IsMinePath(path) || MyAvatar.IsBasePath(path) ? MyAvatar.OriginalOf(prefab) : prefab;
                 if (original != null) names.Add(original.name);
             }
 

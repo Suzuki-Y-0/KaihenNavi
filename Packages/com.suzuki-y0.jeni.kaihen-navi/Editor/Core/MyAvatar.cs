@@ -43,9 +43,22 @@ namespace Jeni.KaihenNavi
             return string.IsNullOrEmpty(path) ? null : path;
         }
 
+        /// <summary>改変アバター（Avatars 以下の Prefab）か。ベースは含めない（自動保存で書き換えないため）。</summary>
         public static bool IsMinePath(string path)
         {
-            return path != null && path.Replace('\\', '/').StartsWith(WorkFolders.Root + "/") && path.EndsWith(".prefab");
+            return path != null && path.Replace('\\', '/').StartsWith(WorkFolders.AvatarsRoot + "/") && path.EndsWith(".prefab");
+        }
+
+        /// <summary>改変のベース（Bases 以下の Prefab）か。</summary>
+        public static bool IsBasePath(string path)
+        {
+            return path != null && path.Replace('\\', '/').StartsWith(WorkFolders.BasesRoot + "/") && path.EndsWith(".prefab");
+        }
+
+        /// <summary>ツールが作った Prefab（改変アバターかベース）か。</summary>
+        private static bool IsToolPath(string path)
+        {
+            return path != null && path.Replace('\\', '/').StartsWith(WorkFolders.Root + "/");
         }
 
         private static GameObject InstanceRoot(VRCAvatarDescriptor avatar)
@@ -85,18 +98,24 @@ namespace Jeni.KaihenNavi
         }
 
         /// <summary>
-        /// 新しく改変アバターを作る。元のアバター（買ったときの Prefab）からプレハブバリアントを作り、
+        /// 新しく改変アバターを作る。元のアバター（買ったときの Prefab）→ 改変のベース → 改変アバター、の
+        /// 2 段のプレハブバリアントにする（ベースは元アバターごとに 1 つで、無ければ作る）。
         /// 決まった形のフォルダに置いて、シーンに出す（ほかのアバターは隠す）。
         /// </summary>
         public static VRCAvatarDescriptor CreateNew(GameObject basePrefab, string name, string undoName)
         {
             if (basePrefab == null || basePrefab.GetComponent<VRCAvatarDescriptor>() == null) return null;
 
+            // 選んだのが元アバターならベースを用意する（ベースそのものを選んだときはそれを使う）
+            var parent = IsBasePath(AssetDatabase.GetAssetPath(basePrefab)) ? basePrefab : EnsureBase(basePrefab);
+            if (parent == null) return null;
+            var original = IsBasePath(AssetDatabase.GetAssetPath(basePrefab)) ? OriginalOf(basePrefab) : basePrefab;
+
             var folder = WorkFolders.CreateAvatarFolder(name);
             var path = folder + "/" + System.IO.Path.GetFileName(folder) + ".prefab";
 
             HideOthers(undoName);
-            var instance = PrefabUtility.InstantiatePrefab(basePrefab) as GameObject;
+            var instance = PrefabUtility.InstantiatePrefab(parent) as GameObject;
             if (instance == null) return null;
             Undo.RegisterCreatedObjectUndo(instance, undoName);
             instance.name = System.IO.Path.GetFileName(folder);
@@ -108,9 +127,94 @@ namespace Jeni.KaihenNavi
             PrefabUtility.SaveAsPrefabAssetAndConnect(instance, path, InteractionMode.UserAction, out ok);
             if (!ok) return null;
 
-            WorkFolders.WriteManifest(path, basePrefab);
+            WorkFolders.WriteManifest(path, original, parent);
             Selection.activeGameObject = instance;
             return instance.GetComponent<VRCAvatarDescriptor>();
+        }
+
+        // ---------------------------------------------------------------- 改変のベース
+
+        /// <summary>
+        /// 元アバターの「改変のベース」を返す。無ければ Bases/元アバター名/ に作る。
+        /// ベースは元アバターのプレハブバリアントで、改変アバターはすべてこれのバリアントになる。
+        /// 歩き方などの共通の設定はベースで変えれば、同じ元アバターから作った改変アバター全員に効く
+        /// （改変アバター側で同じ所を変えていれば、そちらが優先）。元アバターが更新されれば、ベース経由で全員に届く。
+        /// </summary>
+        public static GameObject EnsureBase(GameObject original)
+        {
+            if (original == null) return null;
+            var existing = BaseOf(original);
+            if (existing != null) return existing;
+
+            WorkFolders.EnsureReadme();
+            WorkFolders.Ensure(WorkFolders.BasesRoot);
+            var folder = AssetDatabase.GenerateUniqueAssetPath(WorkFolders.BasesRoot + "/" + WorkFolders.Sanitize(original.name));
+            WorkFolders.Ensure(folder);
+            var path = folder + "/" + WorkFolders.Sanitize(original.name) + WorkFolders.BaseSuffix + ".prefab";
+
+            // シーンには残さない一時的なインスタンスから、バリアントとして保存する
+            var instance = PrefabUtility.InstantiatePrefab(original) as GameObject;
+            if (instance == null) return null;
+            GameObject saved;
+            try
+            {
+                ClearBlueprintId(instance);
+                saved = PrefabUtility.SaveAsPrefabAsset(instance, path);
+            }
+            finally
+            {
+                Object.DestroyImmediate(instance);
+            }
+
+            if (saved == null) return null;
+            WorkFolders.WriteManifest(path, original, original, "base");
+            return saved;
+        }
+
+        /// <summary>この元アバターのベース（無ければ null）。avatar.json の元アバターの GUID で探す。</summary>
+        public static GameObject BaseOf(GameObject original)
+        {
+            if (original == null || !AssetDatabase.IsValidFolder(WorkFolders.BasesRoot)) return null;
+            var guid = AssetDatabase.AssetPathToGUID(AssetDatabase.GetAssetPath(original));
+            foreach (var prefabGuid in AssetDatabase.FindAssets("t:Prefab", new[] { WorkFolders.BasesRoot }))
+            {
+                var path = AssetDatabase.GUIDToAssetPath(prefabGuid);
+                var manifest = WorkFolders.ReadManifest(Path.GetDirectoryName(path).Replace('\\', '/'));
+                if (manifest == null || manifest.basePrefabGuid != guid) continue;
+                var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(path);
+                if (prefab != null) return prefab;
+            }
+
+            return null;
+        }
+
+        /// <summary>改変アバターの親になっているベース（元アバターから直接作った古い改変アバターなら null）。</summary>
+        public static GameObject ParentBaseOf(GameObject prefab)
+        {
+            var current = prefab;
+            for (var i = 0; i < 16 && current != null; i++)
+            {
+                var source = PrefabUtility.GetCorrespondingObjectFromSource(current);
+                if (source == null) return null;
+                var path = AssetDatabase.GetAssetPath(source);
+                if (IsBasePath(path)) return source;
+                if (!IsToolPath(path)) return null;
+                current = source;
+            }
+
+            return null;
+        }
+
+        /// <summary>ベースから作った改変アバター（共通の設定を変えたときに影響を受けるもの）。</summary>
+        public static List<GameObject> ChildrenOf(GameObject basePrefab)
+        {
+            var result = new List<GameObject>();
+            foreach (var prefab in All())
+            {
+                if (ParentBaseOf(prefab) == basePrefab) result.Add(prefab);
+            }
+
+            return result;
         }
 
         /// <summary>
@@ -276,12 +380,13 @@ namespace Jeni.KaihenNavi
 
         // ---------------------------------------------------------------- 一覧（製品版）
 
-        /// <summary>自分用アバターの Prefab（Assets/KaihenNavi 以下の、Avatar Descriptor が付いた Prefab）。</summary>
+        /// <summary>改変アバターの Prefab（Assets/KaihenNavi/Avatars 以下の、Avatar Descriptor が付いた Prefab。ベースは含めない）。</summary>
         public static List<GameObject> All()
         {
             var result = new List<GameObject>();
             if (!AssetDatabase.IsValidFolder(WorkFolders.Root)) return result;
-            foreach (var guid in AssetDatabase.FindAssets("t:Prefab", new[] { WorkFolders.Root }))
+            if (!AssetDatabase.IsValidFolder(WorkFolders.AvatarsRoot)) return result;
+            foreach (var guid in AssetDatabase.FindAssets("t:Prefab", new[] { WorkFolders.AvatarsRoot }))
             {
                 var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(AssetDatabase.GUIDToAssetPath(guid));
                 if (prefab != null && prefab.GetComponent<VRCAvatarDescriptor>() != null) result.Add(prefab);
@@ -299,7 +404,7 @@ namespace Jeni.KaihenNavi
             {
                 var source = PrefabUtility.GetCorrespondingObjectFromSource(current);
                 if (source == null) return current == prefab ? null : current;
-                if (!IsMinePath(AssetDatabase.GetAssetPath(source))) return source;
+                if (!IsToolPath(AssetDatabase.GetAssetPath(source))) return source;
                 current = source;
             }
 
@@ -330,7 +435,7 @@ namespace Jeni.KaihenNavi
                 PrefabUtility.UnloadPrefabContents(contents);
             }
 
-            WorkFolders.WriteManifest(path, OriginalOf(prefab));
+            WorkFolders.WriteManifest(path, OriginalOf(prefab), ParentBaseOf(prefab));
             return path;
         }
 

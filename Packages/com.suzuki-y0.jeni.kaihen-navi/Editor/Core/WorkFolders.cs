@@ -10,9 +10,15 @@ namespace Jeni.KaihenNavi
     ///
     /// Assets/KaihenNavi/
     ///   README.md                    この形の説明
+    ///   Bases/
+    ///     元アバター名/              元アバター 1 体につき 1 フォルダ（初めて改変アバターを作るときに自動で作る）
+    ///       元アバター名 Base.prefab 改変のベース（元アバターのプレハブバリアント）。
+    ///                                同じ元アバターから作った改変アバターはすべてこれのバリアントになるので、
+    ///                                歩き方（アニメーションコントローラー）など共通の設定はここで変えれば全員に効く
+    ///       avatar.json              kind = "base"
     ///   Avatars/
     ///     改変アバター名/            改変アバター 1 体につき 1 フォルダ
-    ///       改変アバター名.prefab    改変アバター（元アバターのプレハブバリアント）
+    ///       改変アバター名.prefab    改変アバター（ベースのプレハブバリアント）
     ///       avatar.json              ほかのツール向けの説明（元アバター、作った日時など）
     ///       Materials/               色変えなどで複製したマテリアル
     ///       Textures/                作ったテクスチャ
@@ -22,6 +28,8 @@ namespace Jeni.KaihenNavi
     {
         public const string Root = "Assets/KaihenNavi";
         public const string AvatarsRoot = Root + "/Avatars";
+        public const string BasesRoot = Root + "/Bases";
+        public const string BaseSuffix = " Base";
         public const string ManifestName = "avatar.json";
         public const int ManifestFormat = 1;
 
@@ -55,12 +63,16 @@ namespace Jeni.KaihenNavi
         }
 
         /// <summary>ほかのツール向けの説明ファイル（avatar.json）を書く。</summary>
-        public static void WriteManifest(string prefabPath, GameObject basePrefab)
+        public static void WriteManifest(string prefabPath, GameObject basePrefab, GameObject parentPrefab = null, string kind = "avatar")
         {
             var folder = Path.GetDirectoryName(prefabPath).Replace('\\', '/');
+            var parentPath = parentPrefab == null ? "" : AssetDatabase.GetAssetPath(parentPrefab);
             var manifest = new AvatarManifest
             {
                 format = ManifestFormat,
+                kind = kind,
+                parentPrefabPath = parentPath,
+                parentPrefabGuid = parentPath.Length == 0 ? "" : AssetDatabase.AssetPathToGUID(parentPath),
                 tool = "KaihenNavi " + Edition.Version,
                 name = Path.GetFileNameWithoutExtension(prefabPath),
                 prefab = Path.GetFileName(prefabPath),
@@ -75,6 +87,13 @@ namespace Jeni.KaihenNavi
             {
                 manifest.basePrefabPath = old.basePrefabPath;
                 manifest.basePrefabGuid = old.basePrefabGuid;
+            }
+
+            if (old != null && parentPrefab == null)
+            {
+                manifest.parentPrefabPath = old.parentPrefabPath;
+                manifest.parentPrefabGuid = old.parentPrefabGuid;
+                if (!string.IsNullOrEmpty(old.kind)) manifest.kind = old.kind;
             }
 
             var path = folder + "/" + ManifestName;
@@ -101,20 +120,25 @@ namespace Jeni.KaihenNavi
         {
             Ensure(Root);
             var path = Root + "/README.md";
-            if (File.Exists(path)) return;
             var text =
                 "# KaihenNavi\n\n" +
                 "This folder is managed by KaihenNavi (かいへんナビ). Each edited avatar has its own folder.\n" +
                 "かいへんナビが管理するフォルダです。改変アバター 1 体につき 1 フォルダを使います。\n\n" +
                 "```\n" +
+                "Bases/<original>/\n" +
+                "  <original> Base.prefab  Shared base (Prefab Variant of the original) / 改変のベース（共通の設定はここ）\n" +
+                "  avatar.json             kind = \"base\"\n" +
                 "Avatars/<name>/\n" +
-                "  <name>.prefab   Edited avatar (Prefab Variant of the original) / 改変アバター\n" +
+                "  <name>.prefab   Edited avatar (Prefab Variant of the base) / 改変アバター\n" +
                 "  avatar.json     Info for other tools (format " + ManifestFormat + ") / ほかのツール向けの説明\n" +
                 "  Materials/      Copied materials / 複製したマテリアル\n" +
                 "  Textures/       Generated textures / 作ったテクスチャ\n" +
                 "  Backups/        Automatic backups / 自動バックアップ\n" +
+                "  Thumbnail.png   Upload thumbnail / アップロード用サムネイル\n" +
                 "```\n\n" +
                 "The original avatar files are never modified. / 元のアバターのファイルは変更しません。\n";
+            // ツールが管理する説明なので、形が変わったら書き直す
+            if (File.Exists(path) && File.ReadAllText(path, Encoding.UTF8) == text) return;
             File.WriteAllText(path, text, new UTF8Encoding(false));
             AssetDatabase.ImportAsset(path);
         }
@@ -178,11 +202,16 @@ namespace Jeni.KaihenNavi
     internal sealed class AvatarManifest
     {
         public int format;
+        /// <summary>"avatar"（改変アバター）か "base"（改変のベース）。</summary>
+        public string kind;
         public string tool;
         public string name;
         public string prefab;
         public string basePrefabPath;
         public string basePrefabGuid;
         public string createdAt;
+        /// <summary>直接の親（改変アバターならベース）。ベースなら元アバターと同じ。</summary>
+        public string parentPrefabPath;
+        public string parentPrefabGuid;
     }
 }

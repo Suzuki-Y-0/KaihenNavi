@@ -163,6 +163,7 @@ namespace Jeni.KaihenNavi
             root.Add(field);
             var where = Ui.Text(L10n.Tr("new.where", WorkFolders.AvatarsRoot + "/" + WorkFolders.Sanitize(_name ?? "")), "kn-hint");
             root.Add(where);
+            root.Add(Ui.Text(L10n.Tr(MyAvatar.BaseOf(_base) == null ? "new.baseFirst" : "new.baseReuse"), "kn-hint"));
             field.RegisterValueChangedCallback(e =>
             {
                 _name = e.newValue;

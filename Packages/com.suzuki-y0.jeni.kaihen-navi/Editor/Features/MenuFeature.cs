@@ -245,29 +245,70 @@ namespace Jeni.KaihenNavi
 
         // ---------------------------------------------------------------- 変える
 
-        private static void SetHidden(FeatureContext ctx, Transform t, bool hide)
+        /// <summary>
+        /// メニューの形を変える（隠す・並べ替え・「その他」へ移す）。
+        /// 改変アバターでは、取り出したメニューは自動保存で Prefab の一部になっていて、シーンでは親の付け替えや
+        /// 並べ替えができない（Unity の決まり）。なので、いったん保存してから改変アバターのファイルの中で変える。
+        /// Ctrl+Z では戻せないが、変える前に自動バックアップを取るので「元に戻す」で戻せる。
+        /// </summary>
+        private static void Restructure(FeatureContext ctx, string key, Action<Transform, Transform, bool> op)
         {
             var avatar = ctx.Avatar;
-            var menuRoot = avatar.transform.Find(RootName);
-            if (menuRoot == null) return;
-            var undoName = L10n.Tr("undo.menu");
             ctx.BeginEdit();
             UndoHelper.Separate();
-            if (hide)
+
+            if (MyAvatar.KindOf(avatar) == AvatarKind.Mine)
             {
-                var holder = Holder(menuRoot, undoName);
-                Undo.SetTransformParent(t, holder, undoName);
+                MyAvatar.Save(avatar);
+                var path = MyAvatar.PrefabPath(avatar);
+                var contents = PrefabUtility.LoadPrefabContents(path);
+                try
+                {
+                    var menuRoot = contents.transform.Find(RootName);
+                    var target = menuRoot == null ? null : FindKey(menuRoot, key);
+                    if (target == null) return;
+                    op(menuRoot, target, false);
+                    PrefabUtility.SaveAsPrefabAsset(contents, path);
+                }
+                finally
+                {
+                    PrefabUtility.UnloadPrefabContents(contents);
+                }
             }
             else
             {
-                // 元の場所（番号の上の段）に戻す。見つからなければいちばん上の段
-                var parent = ParentFor(menuRoot, t.name) ?? menuRoot;
-                Undo.SetTransformParent(t, parent, undoName);
-                SortByKey(parent, t);
+                var menuRoot = avatar.transform.Find(RootName);
+                var target = menuRoot == null ? null : FindKey(menuRoot, key);
+                if (target == null) return;
+                Undo.RegisterFullObjectHierarchyUndo(menuRoot.gameObject, L10n.Tr("undo.menu"));
+                op(menuRoot, target, true);
             }
 
             UndoHelper.Separate();
             ctx.Rebuild();
+        }
+
+        private static Transform FindKey(Transform menuRoot, string key)
+        {
+            return menuRoot.GetComponentsInChildren<Transform>(true).FirstOrDefault(x => x != menuRoot && x.name == key);
+        }
+
+        private static void SetHidden(FeatureContext ctx, Transform t, bool hide)
+        {
+            Restructure(ctx, t.name, (menuRoot, target, undo) =>
+            {
+                if (hide)
+                {
+                    target.SetParent(Holder(menuRoot, null), false);
+                }
+                else
+                {
+                    // 元の場所（番号の上の段）に戻す。見つからなければいちばん上の段
+                    var parent = ParentFor(menuRoot, target.name) ?? menuRoot;
+                    target.SetParent(parent, false);
+                    SortByKey(parent, target);
+                }
+            });
         }
 
         private static void Rename(FeatureContext ctx, Transform t, string label)
@@ -286,54 +327,46 @@ namespace Jeni.KaihenNavi
         {
             var index = t.GetSiblingIndex() + delta;
             if (index < 0 || t.parent == null || index >= t.parent.childCount) return;
-            ctx.BeginEdit();
-            UndoHelper.Separate();
-            Undo.RegisterFullObjectHierarchyUndo(t.parent.gameObject, L10n.Tr("undo.menu"));
-            t.SetSiblingIndex(index);
-            UndoHelper.Separate();
-            ctx.Rebuild();
+            // 「その他」と使わない置き場は動かさない
+            var neighbor = t.parent.GetChild(index);
+            if (neighbor.name == OtherName || neighbor.name == HiddenName) return;
+            Restructure(ctx, t.name, (menuRoot, target, undo) => target.SetSiblingIndex(index));
         }
 
         private static void ToOthers(FeatureContext ctx, Transform t)
         {
-            var menuRoot = ctx.Avatar.transform.Find(RootName);
-            var undoName = L10n.Tr("undo.menu");
-            ctx.BeginEdit();
-            UndoHelper.Separate();
-            var others = menuRoot.Find(OtherName);
-            if (others == null)
+            Restructure(ctx, t.name, (menuRoot, target, undo) =>
             {
-                var go = new GameObject(OtherName);
-                Undo.RegisterCreatedObjectUndo(go, undoName);
-                go.transform.SetParent(menuRoot, false);
-                ctx.NoteCreated(go);
-                var item = Undo.AddComponent<ModularAvatarMenuItem>(go);
-                item.Control = new VRCExpressionsMenu.Control
+                var others = menuRoot.Find(OtherName);
+                if (others == null)
                 {
-                    name = L10n.Tr("menu.othersName"),
-                    type = VRCExpressionsMenu.Control.ControlType.SubMenu,
-                };
-                item.MenuSource = SubmenuSource.Children;
-                item.label = L10n.Tr("menu.othersName");
-                others = go.transform;
-            }
+                    var go = new GameObject(OtherName);
+                    go.transform.SetParent(menuRoot, false);
+                    var item = go.AddComponent<ModularAvatarMenuItem>();
+                    item.Control = new VRCExpressionsMenu.Control
+                    {
+                        name = L10n.Tr("menu.othersName"),
+                        type = VRCExpressionsMenu.Control.ControlType.SubMenu,
+                    };
+                    item.MenuSource = SubmenuSource.Children;
+                    item.label = L10n.Tr("menu.othersName");
+                    others = go.transform;
+                }
 
-            Undo.SetTransformParent(t, others, undoName);
-            others.SetAsLastSibling();
-            UndoHelper.Separate();
-            ctx.Rebuild();
+                target.SetParent(others, false);
+                others.SetAsLastSibling();
+                var holder = menuRoot.Find(HiddenName);
+                if (holder != null) holder.SetAsLastSibling();
+            });
         }
 
         private static void FromOthers(FeatureContext ctx, Transform t)
         {
-            var menuRoot = ctx.Avatar.transform.Find(RootName);
-            var undoName = L10n.Tr("undo.menu");
-            ctx.BeginEdit();
-            UndoHelper.Separate();
-            Undo.SetTransformParent(t, menuRoot, undoName);
-            SortByKey(menuRoot, t);
-            UndoHelper.Separate();
-            ctx.Rebuild();
+            Restructure(ctx, t.name, (menuRoot, target, undo) =>
+            {
+                target.SetParent(menuRoot, false);
+                SortByKey(menuRoot, target);
+            });
         }
 
         // ---------------------------------------------------------------- 作る・消す

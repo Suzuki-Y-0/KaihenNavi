@@ -55,6 +55,8 @@ namespace nadena.dev.modular_avatar.core
 
     public class ModularAvatarMenuInstaller : AvatarTagComponent { }
 
+    public class ModularAvatarMergeArmature : AvatarTagComponent { }
+
     public class ModularAvatarMenuItem : AvatarTagComponent
     {
         public VRC.SDK3.Avatars.ScriptableObjects.VRCExpressionsMenu.Control Control;

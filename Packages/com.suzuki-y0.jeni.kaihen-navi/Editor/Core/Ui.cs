@@ -89,6 +89,30 @@ namespace Jeni.KaihenNavi
             return b;
         }
 
+        /// <summary>
+        /// アセットのサムネイルを背景に出す箱。サムネイルは作られるまで少しかかるので、出来るまで何度か見に行く。
+        /// </summary>
+        public static VisualElement Thumbnail(UnityEngine.Object asset, params string[] classes)
+        {
+            var box = Box(classes);
+            SetThumbnail(box, asset, 0);
+            return box;
+        }
+
+        private static void SetThumbnail(VisualElement box, UnityEngine.Object asset, int tries)
+        {
+            if (asset == null) return;
+            var texture = UnityEditor.AssetPreview.GetAssetPreview(asset);
+            if (texture != null)
+            {
+                box.style.backgroundImage = new StyleBackground(texture);
+                return;
+            }
+
+            if (tries == 0) box.style.backgroundImage = new StyleBackground(UnityEditor.AssetPreview.GetMiniThumbnail(asset));
+            if (tries < 20) box.schedule.Execute(() => SetThumbnail(box, asset, tries + 1)).StartingIn(250);
+        }
+
         public static Color Hex(string hex)
         {
             Color c;

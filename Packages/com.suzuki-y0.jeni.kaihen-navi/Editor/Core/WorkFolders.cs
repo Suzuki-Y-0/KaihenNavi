@@ -5,10 +5,27 @@ using UnityEngine;
 
 namespace Jeni.KaihenNavi
 {
-    /// <summary>ツールが作るファイルの置き場所（Assets/KaihenNavi/アバター名/...）。</summary>
+    /// <summary>
+    /// ツールが作るファイルの置き場所。フォルダの形はここだけで決める（ほかのツールからも探しやすくするため）。
+    ///
+    /// Assets/KaihenNavi/
+    ///   README.md                    この形の説明
+    ///   Avatars/
+    ///     改変アバター名/            改変アバター 1 体につき 1 フォルダ
+    ///       改変アバター名.prefab    改変アバター（元アバターのプレハブバリアント）
+    ///       avatar.json              ほかのツール向けの説明（元アバター、作った日時など）
+    ///       Materials/               色変えなどで複製したマテリアル
+    ///       Textures/                作ったテクスチャ
+    ///       Backups/                 自動バックアップ
+    /// </summary>
     internal static class WorkFolders
     {
         public const string Root = "Assets/KaihenNavi";
+        public const string AvatarsRoot = Root + "/Avatars";
+        public const string ManifestName = "avatar.json";
+        public const int ManifestFormat = 1;
+
+        private static readonly string[] AvatarSubfolders = { "Materials", "Textures", "Backups" };
 
         /// <summary>
         /// このアバターのファイルを置くフォルダ。自分用アバターならその Prefab があるフォルダ、
@@ -23,7 +40,83 @@ namespace Jeni.KaihenNavi
                 if (MyAvatar.IsMinePath(path)) return Path.GetDirectoryName(path).Replace('\\', '/');
             }
 
-            return Root + "/" + Sanitize(avatar.name);
+            return AvatarsRoot + "/" + Sanitize(avatar.name);
+        }
+
+        /// <summary>改変アバター用のフォルダを、決まった形で新しく作る。同じ名前があれば番号を付ける。</summary>
+        public static string CreateAvatarFolder(string name)
+        {
+            EnsureReadme();
+            Ensure(AvatarsRoot);
+            var folder = AssetDatabase.GenerateUniqueAssetPath(AvatarsRoot + "/" + Sanitize(name));
+            Ensure(folder);
+            foreach (var sub in AvatarSubfolders) Ensure(folder + "/" + sub);
+            return folder;
+        }
+
+        /// <summary>ほかのツール向けの説明ファイル（avatar.json）を書く。</summary>
+        public static void WriteManifest(string prefabPath, GameObject basePrefab)
+        {
+            var folder = Path.GetDirectoryName(prefabPath).Replace('\\', '/');
+            var manifest = new AvatarManifest
+            {
+                format = ManifestFormat,
+                tool = "KaihenNavi " + Edition.Version,
+                name = Path.GetFileNameWithoutExtension(prefabPath),
+                prefab = Path.GetFileName(prefabPath),
+                basePrefabPath = basePrefab == null ? "" : AssetDatabase.GetAssetPath(basePrefab),
+                basePrefabGuid = basePrefab == null ? "" : AssetDatabase.AssetPathToGUID(AssetDatabase.GetAssetPath(basePrefab)),
+                createdAt = System.DateTime.Now.ToString("yyyy-MM-ddTHH:mm:ss"),
+            };
+
+            var old = ReadManifest(folder);
+            if (old != null && !string.IsNullOrEmpty(old.createdAt)) manifest.createdAt = old.createdAt;
+            if (old != null && basePrefab == null)
+            {
+                manifest.basePrefabPath = old.basePrefabPath;
+                manifest.basePrefabGuid = old.basePrefabGuid;
+            }
+
+            var path = folder + "/" + ManifestName;
+            File.WriteAllText(path, JsonUtility.ToJson(manifest, true), new UTF8Encoding(false));
+            AssetDatabase.ImportAsset(path);
+        }
+
+        public static AvatarManifest ReadManifest(string folder)
+        {
+            var path = folder + "/" + ManifestName;
+            if (!File.Exists(path)) return null;
+            try
+            {
+                return JsonUtility.FromJson<AvatarManifest>(File.ReadAllText(path, Encoding.UTF8));
+            }
+            catch (System.Exception)
+            {
+                return null;
+            }
+        }
+
+        /// <summary>ルートにフォルダの形の説明を置く（無いときだけ）。</summary>
+        public static void EnsureReadme()
+        {
+            Ensure(Root);
+            var path = Root + "/README.md";
+            if (File.Exists(path)) return;
+            var text =
+                "# KaihenNavi\n\n" +
+                "This folder is managed by KaihenNavi (かいへんナビ). Each edited avatar has its own folder.\n" +
+                "かいへんナビが管理するフォルダです。改変アバター 1 体につき 1 フォルダを使います。\n\n" +
+                "```\n" +
+                "Avatars/<name>/\n" +
+                "  <name>.prefab   Edited avatar (Prefab Variant of the original) / 改変アバター\n" +
+                "  avatar.json     Info for other tools (format " + ManifestFormat + ") / ほかのツール向けの説明\n" +
+                "  Materials/      Copied materials / 複製したマテリアル\n" +
+                "  Textures/       Generated textures / 作ったテクスチャ\n" +
+                "  Backups/        Automatic backups / 自動バックアップ\n" +
+                "```\n\n" +
+                "The original avatar files are never modified. / 元のアバターのファイルは変更しません。\n";
+            File.WriteAllText(path, text, new UTF8Encoding(false));
+            AssetDatabase.ImportAsset(path);
         }
 
         public static string Materials(GameObject avatar)
@@ -78,5 +171,18 @@ namespace Jeni.KaihenNavi
             var result = sb.ToString().Trim().TrimEnd('.');
             return result.Length == 0 ? "Avatar" : result;
         }
+    }
+
+    /// <summary>avatar.json の中身。ほかのツールが読むので、項目は増やしても消さない。</summary>
+    [System.Serializable]
+    internal sealed class AvatarManifest
+    {
+        public int format;
+        public string tool;
+        public string name;
+        public string prefab;
+        public string basePrefabPath;
+        public string basePrefabGuid;
+        public string createdAt;
     }
 }

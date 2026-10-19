@@ -103,6 +103,15 @@ Mono と自作スタブでの 3 通りのコンパイル確認（`tools/check.sh
 - 体型の影絵を直接ドラッグする操作、身長を変えたときの視点の追従
 - 「歩き方」などベースの設定を変えたときに子の改変アバターへ反映されるか（ベースを書き換える機能はまだ無い）
 
+### メニューを整理したい（`MenuFeature`・製品版、10-19 実装）
+
+- 「メニューを整理できるようにする」で、元のメニュー（サブメニューも 8 段まで）を `KaihenNavi_AvatarMenu`（MA Menu Installer + Menu Group）の下に MA Menu Item として作る。オブジェクト名は元の場所の番号（"3.1" など）、表示名は label。アバター設定のメニューは `Avatars/<名前>/Menus/EmptyMenu.asset` に差し替える（MA の Extract Menu は元のメニューの隣に空のメニューを作るので使わず、自前で作る）
+- 使わない＝`KaihenNavi_HiddenMenu`（EditorOnly・メニュー部品なし）の下へ移す。MA の `MenuNodesUnder` は子の MenuSource しか見ず、**非表示の Menu Item も普通に出してしまう**（active を見ない）ため、隠すのではなく置き場所を変える
+- 並べ替え（↑↓）、名前の変更（FocusOut）、「その他へ」（`others` サブメニュー）。使わない項目には「オンのまま固定」など、パラメータの初期値から固定される状態を出す
+- 「元に戻す」用に `MenuTidyBackup`（元のメニューのパスと項目ごとの変更を JSON にして、戻すときに作り直す）。「元のメニューに戻す」で取り出したメニューを消して設定を元のメニューに戻す
+- 確認済み（テスト用スクリプトで NDMF の `AvatarProcessor.ProcessAvatar` まで通して、出来上がったメニューの中身を確認）: 使わない項目が消える、「その他」に入る、名前の変更が出る、変更を JSON にして作り直しても同じになる。元のメニューのファイル 9 個は無変更
+- 未確認: 画面での操作（デスクトップの Claude アプリが前面に出てしまい、今回は Unity の画面を操作できなかった）
+
 ### 動きを変えたい（`WalkFeature`・製品版、10-19 実装・Unity で確認）
 
 - 歩き方（Base）・座り方（Sitting）・エモート/AFK（Action）を選べる。置くオブジェクトは `KaihenNavi_Walk` / `KaihenNavi_Sit` / `KaihenNavi_Action`。FX（表情・メニューの切り替えが全部消える）と Gesture（手の形）は出さない。座り方の差し替えと戻しも Unity で確認済み
@@ -207,7 +216,7 @@ Assets/KaihenNavi/
 | 明るさや影を整えたい | `LightFeature` | lilToon のマテリアルだけを、アバター直下のアイテム（素体・髪・服など）ごとに一覧。チェックした行に、おすすめ（暗い場所でも見やすく / 影をやわらかく / まぶしくならないように / lilToon の標準）か、5 本のスライダー（`_LightMinLimit` `_LightMaxLimit` `_AsUnlit` `_ShadowStrength` `_ShadowBlur`、画面では ×100）を適用。変更前に MaterialCopier で複製。`_UseShadow` がオフのマテリアルは数を案内 | lilToon の標準値（MinLimit 0.05 / MaxLimit 1 / AsUnlit 0 / ShadowStrength 1 / ShadowBlur 0.1 と記憶で書いた）、プロパティ名、lilToon 判定 `_lilToonVersion` が HasProperty で取れるか、ロック（最適化）済みマテリアルで変わるか |
 | アップロード先（体験版・①に表示） | `MyAvatar.BlueprintId` など | 新規作成と別バージョンでブループリント ID を外す。①に「まだアップロードしていない／前のアバターを更新」と「新しいアバターとして出す」。ほかの改変アバターと同じ ID なら警告 | `VRC.Core.PipelineManager.blueprintId` の扱い、SDK のアップロードが新規になるか |
 
-未着手: 元アバターのメニュー整理（4.7 参照）
+未着手: なし（メニュー整理は 4.4 の後の節を参照）
 
 ## 5. 設計の要点
 

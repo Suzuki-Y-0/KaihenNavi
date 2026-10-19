@@ -45,6 +45,7 @@ namespace UnityEngine
         public Transform transform;
         public bool activeSelf;
         public bool activeInHierarchy;
+        public string tag;
         public void SetActive(bool value) { }
         public T AddComponent<T>() where T : Component { return null; }
         public T GetComponent<T>() { return default(T); }
@@ -62,6 +63,9 @@ namespace UnityEngine
         public Transform Find(string n) { return null; }
         public bool IsChildOf(Transform p) { return false; }
         public void SetParent(Transform p, bool worldPositionStays) { }
+        public int GetSiblingIndex() { return 0; }
+        public void SetSiblingIndex(int i) { }
+        public void SetAsLastSibling() { }
         public Vector3 TransformDirection(Vector3 v) { return v; }
         public Vector3 TransformPoint(Vector3 v) { return v; }
         public Vector3 InverseTransformPoint(Vector3 v) { return v; }
@@ -587,6 +591,7 @@ namespace UnityEditor
         public static void SetTransformParent(Transform t, Transform parent, string name) { }
         public static event Action undoRedoPerformed;
         public static void RecordObject(Object o, string name) { }
+        public static void RegisterFullObjectHierarchyUndo(Object o, string name) { }
         public static void IncrementCurrentGroup() { }
         public static int GetCurrentGroup() { return 0; }
         public static void SetCurrentGroupName(string n) { }

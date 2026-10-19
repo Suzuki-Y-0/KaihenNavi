@@ -9,24 +9,46 @@ namespace VRC.SDK3.Avatars.ScriptableObjects
     {
         public const int MAX_PARAMETER_COST = 256;
         public int CalcTotalCost() { return 0; }
+        public enum ValueType { Int, Float, Bool }
+        public class Parameter
+        {
+            public string name;
+            public ValueType valueType;
+            public float defaultValue;
+        }
+        public Parameter[] parameters;
     }
 
     public class VRCExpressionsMenu : ScriptableObject
     {
         public class Control
         {
-            public enum ControlType { Button = 101, Toggle = 102, SubMenu = 103 }
+            public enum ControlType { Button = 101, Toggle = 102, SubMenu = 103, TwoAxisPuppet = 201, FourAxisPuppet = 202, RadialPuppet = 203 }
+            public enum Style { Style1, Style2, Style3, Style4 }
 
             public class Parameter
             {
                 public string name;
             }
 
+            public struct Label
+            {
+                public string name;
+                public Texture2D icon;
+            }
+
             public string name;
+            public Texture2D icon;
             public ControlType type;
             public Parameter parameter;
             public float value;
+            public Style style;
+            public VRCExpressionsMenu subMenu;
+            public Parameter[] subParameters;
+            public Label[] labels;
         }
+
+        public List<Control> controls = new List<Control>();
     }
 }
 
@@ -37,6 +59,7 @@ namespace VRC.SDK3.Avatars.Components
         public Vector3 ViewPosition;
         public SkinnedMeshRenderer VisemeSkinnedMesh;
         public VRC.SDK3.Avatars.ScriptableObjects.VRCExpressionParameters expressionParameters;
+        public VRC.SDK3.Avatars.ScriptableObjects.VRCExpressionsMenu expressionsMenu;
         public enum AnimLayerType { Base, Deprecated0, Additive, Gesture, Action, FX, Sitting, TPose, IKPose }
     }
 }
@@ -55,6 +78,7 @@ namespace nadena.dev.modular_avatar.core
     }
 
     public class ModularAvatarMenuInstaller : AvatarTagComponent { }
+    public class ModularAvatarMenuGroup : AvatarTagComponent { public GameObject targetObject; }
 
     public class ModularAvatarMergeArmature : AvatarTagComponent { }
 
@@ -96,6 +120,7 @@ namespace nadena.dev.modular_avatar.core
     {
         public VRC.SDK3.Avatars.ScriptableObjects.VRCExpressionsMenu.Control Control;
         public SubmenuSource MenuSource;
+        public string label = "";
         public bool isSynced = true;
         public bool isSaved = true;
         public bool isDefault;

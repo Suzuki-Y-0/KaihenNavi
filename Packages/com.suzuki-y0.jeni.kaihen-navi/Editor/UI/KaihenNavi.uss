@@ -742,3 +742,17 @@
 .kn-upload {
     margin-top: 4px;
 }
+
+/* ---------------------------------------------------------------- メニュー整理 */
+
+.kn-menu__row--hidden {
+    opacity: 0.55;
+}
+
+.kn-menu__icon {
+    width: 24px;
+    height: 24px;
+    margin-right: 6px;
+    flex-shrink: 0;
+    -unity-background-scale-mode: scale-to-fit;
+}

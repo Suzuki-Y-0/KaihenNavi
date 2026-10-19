@@ -53,6 +53,9 @@ namespace Jeni.KaihenNavi
         /// <summary>操作エリアを作り直す（一覧の中身が変わったときなど）。</summary>
         public Action Rebuild;
 
+        /// <summary>①で選ぶアバターを切り替える（シーンに新しく出したときなど）。</summary>
+        public Action<VRCAvatarDescriptor> SelectAvatar;
+
         /// <summary>何かを変える直前に呼ぶ。最初の 1 回だけ自動バックアップを取る。</summary>
         public void BeginEdit()
         {

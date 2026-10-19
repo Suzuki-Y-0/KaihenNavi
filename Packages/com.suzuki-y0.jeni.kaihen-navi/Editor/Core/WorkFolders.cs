@@ -10,8 +10,19 @@ namespace Jeni.KaihenNavi
     {
         public const string Root = "Assets/KaihenNavi";
 
+        /// <summary>
+        /// このアバターのファイルを置くフォルダ。自分用アバターならその Prefab があるフォルダ、
+        /// まだなら Assets/KaihenNavi/アバター名。
+        /// </summary>
         public static string ForAvatar(GameObject avatar)
         {
+            if (avatar != null && PrefabUtility.IsPartOfPrefabInstance(avatar))
+            {
+                var root = PrefabUtility.GetOutermostPrefabInstanceRoot(avatar);
+                var path = root == null ? null : PrefabUtility.GetPrefabAssetPathOfNearestInstanceRoot(root);
+                if (MyAvatar.IsMinePath(path)) return Path.GetDirectoryName(path).Replace('\\', '/');
+            }
+
             return Root + "/" + Sanitize(avatar.name);
         }
 
@@ -25,7 +36,15 @@ namespace Jeni.KaihenNavi
             return ForAvatar(avatar) + "/Backups";
         }
 
-        /// <summary>このツールが作ったアセットかどうか（＝書き換えてよいか）。</summary>
+        /// <summary>このアバターのフォルダにある（＝このアバター専用で、書き換えてよい）アセットか。</summary>
+        public static bool IsOwnedBy(Object asset, GameObject avatar)
+        {
+            if (asset == null || avatar == null) return false;
+            var path = AssetDatabase.GetAssetPath(asset);
+            return !string.IsNullOrEmpty(path) && path.StartsWith(ForAvatar(avatar) + "/");
+        }
+
+        /// <summary>このツールが作ったアセットかどうか。</summary>
         public static bool IsOwned(Object asset)
         {
             if (asset == null) return false;

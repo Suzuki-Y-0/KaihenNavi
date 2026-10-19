@@ -94,6 +94,27 @@ namespace Jeni.KaihenNavi
             return result;
         }
 
+        /// <summary>
+        /// アバターの照合用 ID が変わったとき（自分用アバターにつなぎ替えたときなど）、
+        /// 前の ID で取ったバックアップを今のアバターのものとして付け替える。
+        /// </summary>
+        public void Rekey(VRCAvatarDescriptor avatar, List<BackupSnapshot> snapshots)
+        {
+            if (avatar == null || snapshots == null) return;
+            var id = AvatarId(avatar);
+            foreach (var s in snapshots)
+            {
+                if (s == null) continue;
+                s.avatarId = id;
+                s.avatarName = avatar.name;
+                EditorUtility.SetDirty(s);
+            }
+
+            AssetDatabase.SaveAssets();
+            EndSession();
+            RaiseChanged();
+        }
+
         public int Count(VRCAvatarDescriptor avatar)
         {
             return List(avatar).Count;

@@ -74,6 +74,7 @@ namespace UnityEngine
 
     public class Renderer : Component { public Material[] sharedMaterials; public Bounds bounds; }
     public class MeshRenderer : Renderer { }
+    public class MeshFilter : Component { public Mesh sharedMesh; }
     public class SkinnedMeshRenderer : Renderer
     {
         public Mesh sharedMesh;
@@ -504,6 +505,30 @@ namespace UnityEditor
         public UnityEngine.UIElements.VisualElement rootVisualElement;
         public static T GetWindow<T>() where T : EditorWindow { return null; }
         public void Show() { }
+    }
+
+    public class AssetImporter : Object
+    {
+        public string assetPath;
+        public static AssetImporter GetAtPath(string path) { return null; }
+        public void SaveAndReimport() { }
+    }
+
+    public enum ModelImporterNormals { Import, Calculate, None }
+
+    public class ModelImporter : AssetImporter
+    {
+        public bool isReadable;
+        public ModelImporterNormals importBlendShapeNormals;
+    }
+
+    public class SerializedProperty { public bool boolValue; }
+
+    public class SerializedObject
+    {
+        public SerializedObject(Object o) { }
+        public SerializedProperty FindProperty(string name) { return null; }
+        public bool ApplyModifiedPropertiesWithoutUndo() { return true; }
     }
 
     [AttributeUsage(AttributeTargets.Method)]

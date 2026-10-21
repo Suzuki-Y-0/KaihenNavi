@@ -364,14 +364,16 @@ namespace Jeni.KaihenNavi
             var issues = UploadCheck.Find(_avatar);
             if (issues.Count == 0) return;
 
-            _checkArea.Add(Ui.Notice(L10n.Tr("check.found", issues.Count), "warn"));
+            _checkArea.Add(Ui.Notice(L10n.Tr("check.attention", issues.Count), "warn"));
             _checkArea.Add(Ui.Text(UploadCheck.Describe(issues), "kn-hint"));
+            var fixableIssues = issues.Where(i => i.CanFix).ToList();
+            if (fixableIssues.Count == 0) return;
             var row = Ui.Box("kn-row");
             row.Add(Ui.Button(L10n.Tr("check.fix"), () =>
             {
-                if (!EditorUtility.DisplayDialog(L10n.Tr("app.name"), L10n.Tr("check.confirm", UploadCheck.Describe(issues)),
+                if (!EditorUtility.DisplayDialog(L10n.Tr("app.name"), L10n.Tr("check.confirm", UploadCheck.Describe(fixableIssues)),
                         L10n.Tr("check.fix"), L10n.Tr("dialog.cancel"))) return;
-                var fixedCount = UploadCheck.Fix(issues);
+                var fixedCount = UploadCheck.Fix(fixableIssues);
                 RefreshUploadCheck();
                 EditorUtility.DisplayDialog(L10n.Tr("app.name"), L10n.Tr("check.fixed", fixedCount), L10n.Tr("dialog.ok"));
             }, "kn-button--small", "kn-button--primary"));

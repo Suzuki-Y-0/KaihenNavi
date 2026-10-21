@@ -85,7 +85,7 @@ namespace UnityEngine
         public void BakeMesh(Mesh m, bool useScale) { }
     }
 
-    public class Mesh : Object { public int blendShapeCount; public Vector3[] vertices; public string GetBlendShapeName(int i) { return ""; } }
+    public class Mesh : Object { public bool isReadable; public int blendShapeCount; public Vector3[] vertices; public string GetBlendShapeName(int i) { return ""; } }
     public class Texture : Object { public TextureWrapMode wrapMode; }
     public enum TextureFormat { RGBA32, RGB24 }
     public enum TextureWrapMode { Repeat, Clamp }

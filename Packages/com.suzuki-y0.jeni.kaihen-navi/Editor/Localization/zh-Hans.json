@@ -401,5 +401,13 @@
   "menu.fixedOff": "固定为关",
   "menu.fixedValue": "固定为 {0}",
   "menu.fixedUnknown": "不清楚会固定在什么状态",
-  "undo.menu": "KaihenNavi: 整理菜单"
+  "undo.menu": "KaihenNavi: 整理菜单",
+  "mine.saveNow": "立即保存",
+  "check.fix": "修复",
+  "check.confirm": "将更改以下模型的导入设置。\n\n{0}\n\n模型的形状和颜色不会改变。与 VRChat SDK 的「Auto Fix」相同。\n但会更改所分发文件的设置（.meta），无法用「恢复原状」按钮恢复。",
+  "check.fixed": "已修复 {0} 个模型的导入设置。",
+  "check.kind.readWrite": "Read/Write 未开启",
+  "check.kind.normals": "形态键法线设置",
+  "check.attention": "上传前有 {0} 个模型需要修复（饰品或服装的导入设置）。",
+  "check.kind.normalsUnknown": "无法确认形态键法线设置（无法自动修复，请检查原始文件的设置）"
 }

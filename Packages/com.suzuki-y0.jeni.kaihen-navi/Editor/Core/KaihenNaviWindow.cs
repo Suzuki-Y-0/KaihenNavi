@@ -37,6 +37,7 @@ namespace Jeni.KaihenNavi
         // 自分用アバターの案内と自動保存
         private VisualElement _avatarStatus;
         private Label _saveLabel;
+        private VisualElement _checkArea;
         private IVisualElementScheduledItem _autoSave;
         private int _seenGroup = -1;
         private double _seenAt;
@@ -191,6 +192,7 @@ namespace Jeni.KaihenNavi
             _avatarArea.Clear();
             _avatarStatus = null;
             _saveLabel = null;
+            _checkArea = null;
 
             // アバターが決まるまでは二択を出し、②③は隠す
             var choosing = _avatar == null || _choosing;
@@ -225,6 +227,10 @@ namespace Jeni.KaihenNavi
             _avatarStatus = Ui.Box("kn-avatar-status");
             _avatarArea.Add(_avatarStatus);
             RefreshAvatarStatus();
+
+            _checkArea = Ui.Box("kn-upload-check");
+            _avatarArea.Add(_checkArea);
+            RefreshUploadCheck();
         }
 
         private void SetEditingVisible(bool visible)
@@ -265,6 +271,11 @@ namespace Jeni.KaihenNavi
                     _saveLabel = Ui.Text("", "kn-mine__sub");
                     texts.Add(_saveLabel);
                     row.Add(texts);
+                    row.Add(Ui.Button(L10n.Tr("mine.saveNow"), () =>
+                    {
+                        _savedGroup = Undo.GetCurrentGroup();
+                        SaveNow();
+                    }, "kn-button--small"));
                     row.Add(Ui.Button(L10n.Tr("common.where"), () =>
                     {
                         var asset = AssetDatabase.LoadAssetAtPath<GameObject>(path);
@@ -336,6 +347,37 @@ namespace Jeni.KaihenNavi
             }
 
             return box;
+        }
+
+        // ---------------------------------------------------------------- アップロード前のチェック
+
+        /// <summary>
+        /// SDK がアップロードを止めるモデルの読み込み設定（Read/Write など）を先に見つけて、①の下に出す。
+        /// 直すと配布物の読み込み設定（.meta）が変わるので、必ず確認を出す。
+        /// </summary>
+        private void RefreshUploadCheck()
+        {
+            if (_checkArea == null) return;
+            _checkArea.Clear();
+            if (_avatar == null) return;
+
+            var issues = UploadCheck.Find(_avatar);
+            if (issues.Count == 0) return;
+
+            _checkArea.Add(Ui.Notice(L10n.Tr("check.attention", issues.Count), "warn"));
+            _checkArea.Add(Ui.Text(UploadCheck.Describe(issues), "kn-hint"));
+            var fixableIssues = issues.Where(i => i.CanFix).ToList();
+            if (fixableIssues.Count == 0) return;
+            var row = Ui.Box("kn-row");
+            row.Add(Ui.Button(L10n.Tr("check.fix"), () =>
+            {
+                if (!EditorUtility.DisplayDialog(L10n.Tr("app.name"), L10n.Tr("check.confirm", UploadCheck.Describe(fixableIssues)),
+                        L10n.Tr("check.fix"), L10n.Tr("dialog.cancel"))) return;
+                var fixedCount = UploadCheck.Fix(fixableIssues);
+                RefreshUploadCheck();
+                EditorUtility.DisplayDialog(L10n.Tr("app.name"), L10n.Tr("check.fixed", fixedCount), L10n.Tr("dialog.ok"));
+            }, "kn-button--small", "kn-button--primary"));
+            _checkArea.Add(row);
         }
 
         private void CreateMine()
@@ -592,6 +634,9 @@ namespace Jeni.KaihenNavi
                     BuildPanel();
                     RefreshFooter();
                 }
+
+                // アクセや服を足したときも、アップロードを止める設定がないか見直す
+                RefreshUploadCheck();
             };
         }
 

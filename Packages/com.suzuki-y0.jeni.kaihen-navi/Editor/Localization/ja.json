@@ -401,5 +401,13 @@
   "menu.fixedOff": "オフのまま固定",
   "menu.fixedValue": "{0} のまま固定",
   "menu.fixedUnknown": "固定される状態はわかりません",
-  "undo.menu": "かいへんナビ: メニューを整理する"
+  "undo.menu": "かいへんナビ: メニューを整理する",
+  "mine.saveNow": "今すぐ保存",
+  "check.fix": "直す",
+  "check.confirm": "次のモデルの読み込み設定を変えます。\n\n{0}\n\nモデルの形や色は変わりません。VRChat SDK の「Auto Fix」と同じ変更です。\nただし配布されたファイルの設定（.meta）を変えるので、「元に戻す」ボタンでは戻りません。",
+  "check.fixed": "{0} 個のモデルの読み込み設定を直しました。",
+  "check.kind.readWrite": "Read/Write がオフ",
+  "check.kind.normals": "シェイプキーの法線の設定",
+  "check.attention": "アップロードの前に直す必要があるモデルが {0} 個あります（アクセや服の読み込み設定）。",
+  "check.kind.normalsUnknown": "シェイプキーの法線の設定を確認できませんでした（自動では直せません。元のファイルの設定を見てください）"
 }

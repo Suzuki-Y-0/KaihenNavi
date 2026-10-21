@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.Linq;
+using System.Reflection;
 using UnityEditor;
 using UnityEngine;
 using VRC.SDK3.Avatars.Components;
@@ -8,7 +9,9 @@ namespace Jeni.KaihenNavi
 {
     /// <summary>
     /// VRChat SDK がアップロードを止める問題のうち、モデルの読み込み設定が原因のものを先に見つけて直す。
-    /// SDK の Auto Fix と同じ変更（FBX の .meta の設定）だけを行い、モデルそのものは変えない。
+    /// 判定は SDK（VRCSdkControlPanelAvatarBuilder の CheckAvatarMeshesForMeshReadWriteSetting /
+    /// CheckAvatarMeshesForLegacyBlendShapesSetting）と同じにしてある。直し方も SDK の Auto Fix と同じで、
+    /// モデルの .meta の設定だけを変え、モデルそのものは変えない。
     /// </summary>
     internal static class UploadCheck
     {
@@ -19,7 +22,7 @@ namespace Jeni.KaihenNavi
             ReadWrite,
             /// <summary>シェイプキーの法線が Calculate なのに Legacy Blendshape Normals がオフ。</summary>
             BlendShapeNormals,
-            /// <summary>シェイプキーの法線の設定を確認できなかった。</summary>
+            /// <summary>シェイプキーの法線の設定を確認できなかった（Unity の内部の名前が変わったときなど）。</summary>
             BlendShapeNormalsUnknown,
         }
 
@@ -27,13 +30,14 @@ namespace Jeni.KaihenNavi
         public sealed class Issue
         {
             public string ModelPath;
-            public bool CanFix;
+            public bool CanFix = true;
             public readonly HashSet<Kind> Kinds = new HashSet<Kind>();
-            public readonly List<string> UsedBy = new List<string>();
         }
 
-        /// <summary>SDK と同じ、Unity 内部の設定名。</summary>
-        private const string LegacyBlendShapeNormals = "legacyComputeAllNormalsFromSmoothingGroupsWhenMeshHasBlendShapes";
+        /// <summary>SDK と同じく、ModelImporter の非公開プロパティをリフレクションで読む。</summary>
+        private static readonly PropertyInfo LegacyBlendShapeNormals = typeof(ModelImporter).GetProperty(
+            "legacyComputeAllNormalsFromSmoothingGroupsWhenMeshHasBlendShapes",
+            BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public);
 
         /// <summary>アバターの中で使われているメッシュの読み込み設定を調べる。</summary>
         public static List<Issue> Find(VRCAvatarDescriptor avatar)
@@ -41,55 +45,76 @@ namespace Jeni.KaihenNavi
             var result = new Dictionary<string, Issue>();
             if (avatar == null) return new List<Issue>();
 
-            foreach (var smr in avatar.GetComponentsInChildren<SkinnedMeshRenderer>(true))
+            foreach (var mesh in Meshes(avatar.gameObject))
             {
-                if (smr == null || smr.sharedMesh == null) continue;
-                Inspect(smr.sharedMesh, smr.gameObject.name, smr.sharedMesh.blendShapeCount > 0, result);
-            }
+                if (!AssetDatabase.Contains(mesh)) continue;
+                var path = AssetDatabase.GetAssetPath(mesh);
+                if (string.IsNullOrEmpty(path)) continue;
+                var importer = AssetImporter.GetAtPath(path) as ModelImporter;
+                if (importer == null) continue;
 
-            foreach (var mf in avatar.GetComponentsInChildren<MeshFilter>(true))
-            {
-                if (mf == null || mf.sharedMesh == null) continue;
-                Inspect(mf.sharedMesh, mf.gameObject.name, false, result);
+                var kinds = new List<Kind>();
+                if (!importer.isReadable) kinds.Add(Kind.ReadWrite);
+                if (importer.importBlendShapeNormals == ModelImporterNormals.Calculate)
+                {
+                    if (LegacyBlendShapeNormals == null) kinds.Add(Kind.BlendShapeNormalsUnknown);
+                    else if (!(bool)LegacyBlendShapeNormals.GetValue(importer, null)) kinds.Add(Kind.BlendShapeNormals);
+                }
+
+                if (kinds.Count == 0) continue;
+
+                Issue issue;
+                if (!result.TryGetValue(path, out issue))
+                {
+                    issue = new Issue { ModelPath = path };
+                    result.Add(path, issue);
+                }
+
+                foreach (var k in kinds) issue.Kinds.Add(k);
+                if (issue.Kinds.Contains(Kind.BlendShapeNormalsUnknown)) issue.CanFix = false;
             }
 
             return result.Values.OrderBy(i => i.ModelPath).ToList();
         }
 
-        private static void Inspect(Mesh mesh, string user, bool hasBlendShapes, Dictionary<string, Issue> result)
+        /// <summary>SDK と同じ範囲のメッシュ（スキンメッシュ・メッシュ・パーティクル。EditorOnly の下は除く）。</summary>
+        private static HashSet<Mesh> Meshes(GameObject root)
         {
-            var path = AssetDatabase.GetAssetPath(mesh);
-            if (string.IsNullOrEmpty(path) || !path.StartsWith("Assets/") && !path.StartsWith("Packages/")) return;
-            var importer = AssetImporter.GetAtPath(path) as ModelImporter;
-
-            var kinds = new List<Kind>();
-            if (importer != null ? !importer.isReadable : !mesh.isReadable) kinds.Add(Kind.ReadWrite);
-            if (hasBlendShapes && importer != null)
+            var meshes = new HashSet<Mesh>();
+            foreach (var smr in root.GetComponentsInChildren<SkinnedMeshRenderer>(true))
             {
-                var needsLegacyNormals = NeedsLegacyNormals(importer);
-                if (!needsLegacyNormals.HasValue) kinds.Add(Kind.BlendShapeNormalsUnknown);
-                else if (needsLegacyNormals.Value) kinds.Add(Kind.BlendShapeNormals);
-            }
-            if (kinds.Count == 0) return;
-
-            Issue issue;
-            if (!result.TryGetValue(path, out issue))
-            {
-                issue = new Issue { ModelPath = path, CanFix = importer != null };
-                result.Add(path, issue);
+                if (smr != null && smr.sharedMesh != null && !IsEditorOnly(smr.transform, root.transform)) meshes.Add(smr.sharedMesh);
             }
 
-            foreach (var k in kinds) issue.Kinds.Add(k);
-            // 同じファイルを複数箇所で使っていても、確認できない設定があれば自動では変更しない。
-            if (issue.Kinds.Contains(Kind.BlendShapeNormalsUnknown)) issue.CanFix = false;
-            if (!issue.UsedBy.Contains(user)) issue.UsedBy.Add(user);
+            foreach (var mf in root.GetComponentsInChildren<MeshFilter>(true))
+            {
+                if (mf != null && mf.sharedMesh != null && !IsEditorOnly(mf.transform, root.transform)) meshes.Add(mf.sharedMesh);
+            }
+
+            foreach (var psr in root.GetComponentsInChildren<ParticleSystemRenderer>(true))
+            {
+                if (psr == null || IsEditorOnly(psr.transform, root.transform)) continue;
+                var list = new Mesh[psr.meshCount];
+                psr.GetMeshes(list);
+                foreach (var m in list)
+                {
+                    if (m != null) meshes.Add(m);
+                }
+            }
+
+            return meshes;
         }
 
-        private static bool? NeedsLegacyNormals(ModelImporter importer)
+        /// <summary>自分か親（アバターまで）に EditorOnly タグが付いていればアップロードされない。</summary>
+        private static bool IsEditorOnly(Transform t, Transform root)
         {
-            if (importer.importBlendShapeNormals != ModelImporterNormals.Calculate) return false;
-            var property = new SerializedObject(importer).FindProperty(LegacyBlendShapeNormals);
-            return property == null ? (bool?)null : !property.boolValue;
+            for (; t != null; t = t.parent)
+            {
+                if (t.gameObject.tag == "EditorOnly") return true;
+                if (t == root) break;
+            }
+
+            return false;
         }
 
         /// <summary>見つかった問題を直す（読み込み設定を変えて読み込み直す）。直したファイルの数を返す。</summary>
@@ -103,15 +128,9 @@ namespace Jeni.KaihenNavi
                 if (importer == null) continue;
 
                 if (issue.Kinds.Contains(Kind.ReadWrite)) importer.isReadable = true;
-                if (issue.Kinds.Contains(Kind.BlendShapeNormals))
+                if (issue.Kinds.Contains(Kind.BlendShapeNormals) && LegacyBlendShapeNormals != null)
                 {
-                    var so = new SerializedObject(importer);
-                    var property = so.FindProperty(LegacyBlendShapeNormals);
-                    if (property != null)
-                    {
-                        property.boolValue = true;
-                        so.ApplyModifiedPropertiesWithoutUndo();
-                    }
+                    LegacyBlendShapeNormals.SetValue(importer, true, null);
                 }
 
                 importer.SaveAndReimport();
@@ -121,7 +140,7 @@ namespace Jeni.KaihenNavi
             return count;
         }
 
-        /// <summary>確認画面に出す一覧（「Assets/」を省いたファイル名と、問題の内容）。</summary>
+        /// <summary>画面と確認ダイアログに出す一覧（「Assets/」を省いたファイル名と、問題の内容）。</summary>
         public static string Describe(IEnumerable<Issue> issues)
         {
             var lines = new List<string>();
@@ -132,7 +151,6 @@ namespace Jeni.KaihenNavi
                     k == Kind.ReadWrite ? L10n.Tr("check.kind.readWrite") :
                     k == Kind.BlendShapeNormals ? L10n.Tr("check.kind.normals") :
                     L10n.Tr("check.kind.normalsUnknown")).ToArray());
-                if (!issue.CanFix && issue.Kinds.Contains(Kind.ReadWrite)) what += " / " + L10n.Tr("check.readWriteManual");
                 lines.Add("・" + name + "（" + what + "）");
             }
 

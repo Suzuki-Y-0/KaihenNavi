@@ -409,6 +409,5 @@
   "check.kind.readWrite": "Read/Write がオフ",
   "check.kind.normals": "シェイプキーの法線の設定",
   "check.attention": "アップロードの前に直す必要があるモデルが {0} 個あります（アクセや服の読み込み設定）。",
-  "check.kind.normalsUnknown": "シェイプキーの法線の設定を確認できませんでした（自動では直せません。元のファイルの設定を見てください）",
-  "check.readWriteManual": "自動では直せません：元のファイルの Read/Write をオンにしてください。"
+  "check.kind.normalsUnknown": "シェイプキーの法線の設定を確認できませんでした（自動では直せません。元のファイルの設定を見てください）"
 }

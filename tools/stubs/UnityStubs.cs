@@ -75,6 +75,7 @@ namespace UnityEngine
     public class Renderer : Component { public Material[] sharedMaterials; public Bounds bounds; }
     public class MeshRenderer : Renderer { }
     public class MeshFilter : Component { public Mesh sharedMesh; }
+    public class ParticleSystemRenderer : Renderer { public int meshCount; public int GetMeshes(Mesh[] meshes) { return 0; } }
     public class SkinnedMeshRenderer : Renderer
     {
         public Mesh sharedMesh;
@@ -542,6 +543,7 @@ namespace UnityEditor
 
     public static class AssetDatabase
     {
+        public static bool Contains(Object o) { return false; }
         public static string[] FindAssets(string filter) { return new string[0]; }
         public static string[] FindAssets(string filter, string[] folders) { return new string[0]; }
         public static string GUIDToAssetPath(string guid) { return null; }

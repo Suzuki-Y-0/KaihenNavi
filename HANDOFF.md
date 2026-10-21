@@ -31,7 +31,7 @@ Mono と自作スタブでの 3 通りのコンパイル確認（`tools/check.sh
 | 日英中韓の言語ファイル | 済（日本語のみ Unity で表示確認） |
 | 改変アバター（元アバター → ベース → 改変アバターの 2 段）・服・アクセ | 済・Unity 確認済み（4.4） |
 | 製品版の機能（体型・身長、肌、視点、ピンク、明るさ、サムネイル、動き、メニュー整理） | 済・Unity 確認済み（4.4 と各節。未確認の点は各節に記載） |
-| アップロード前のチェック（`UploadCheck`）・「今すぐ保存」ボタン | 実装済み・**Unity 未確認**（`feature/upload-check`、2026-10-21。4.9 参照） |
+| アップロード前のチェック（`UploadCheck`）・「今すぐ保存」ボタン | 済・Unity 確認済み（2026-10-21。4.9 参照） |
 | VPM 配布・unitypackage・紹介動画・説明書 | 未着手 |
 
 ## 3. Unity での動作確認の結果（2026-10-11）
@@ -240,14 +240,17 @@ Assets/KaihenNavi/
 
 未着手: なし（メニュー整理は 4.4 の後の節を参照）
 
-## 4.9 アップロード前のチェックと「今すぐ保存」（2026-10-21・`feature/upload-check`・Unity 未確認）
+## 4.9 アップロード前のチェックと「今すぐ保存」（2026-10-21・Unity 確認済み）
 
 - 経緯: 猫耳アクセ（`_Project/Items/Accessories/Ears_Tails/441/cat/fbx/*.fbx`）で、SDK が英語の警告（Read/Write オフ、Blendshape Normals が Calculate なのに Legacy オフ）を出してアップロードを止めた。初心者が詰まりやすいので先に日本語で知らせる
 - `Core/UploadCheck.cs`: アバター内の SkinnedMeshRenderer / MeshFilter のメッシュから ModelImporter を引き、`isReadable == false` と「シェイプキーあり かつ `importBlendShapeNormals == Calculate` かつ `legacyComputeAllNormalsFromSmoothingGroupsWhenMeshHasBlendShapes == false`」を見つける（SDK と同じ判定のつもり。要確認）
 - 直し方（ユーザーと決定）: 確認ダイアログで「モデルの形や色は変わらない／SDK の Auto Fix と同じ／配布ファイルの .meta を変えるので元に戻すでは戻らない」と説明してから、`isReadable = true` と legacy を true にして `SaveAndReimport`。元アセットを書き換えないルールの例外として、ユーザーが了承済み
 - 表示: ①の下（`kn-upload-check`）。アバター選択時と hierarchyChanged（アクセ・服を足したとき）に見直す。体験版でも使える
 - 「今すぐ保存」: 自動保存の帯（改変アバターのとき）に追加。`_savedGroup` を進めてから `SaveNow()`
-- **Unity で確かめること**: 猫耳（ear.prefab）を一時的に付けて警告が出るか → 「直す」で SDK の警告が消えるか → 確認後に `_backup/catmeta/` の .meta を戻して Ctrl+R、猫耳を外す。MCP Project の `_backup/_to_delete/` に一時スクリプト（KNAddEar.cs）を退避してある（削除許可が切れて消せなかった）
+- **判定は SDK と同じにした（10-21）**: SDK（Avatars 3.10.4）の `VRCSdkControlPanelAvatarBuilder` を読んで合わせた。対象はスキンメッシュ・メッシュ・パーティクルのメッシュ（EditorOnly の下は除く）。ModelImporter のあるメッシュだけ見る（.asset のメッシュは SDK も見ないので出さない）。法線はシェイプキーの有無に関係なく `importBlendShapeNormals == Calculate` かつ legacy オフ。legacy は SDK と同じく ModelImporter の非公開プロパティをリフレクションで読み書きする（SerializedObject では取れない）。プロパティが見つからないときは「確認できませんでした」と出して自動では直さない
+- **Unity で確認（10-21、MCP Project / Cazalis 改変＋猫耳 ear.prefab）**: SDK と同じ 2 つ（Read/Write オフ・シェイプキーの法線）を ear.fbx で検出 → 「直す」→ 確認ダイアログ → 「1 個のモデルの読み込み設定を直しました」→ かいへんナビの警告も SDK の 2 つの赤いエラーも消えた。「今すぐ保存」で保存時刻が更新された。確認後、猫耳を外し、ear.fbx などの .meta を元に戻した
+- 気づいた点: 確認ダイアログでは長いパスのせいで「・」だけが 1 行目に残る（Windows の折り返し）。保存の帯は手動で保存しても「自動で保存しました」と出る
+- 分担の記録: FBX 以外・確認不能の扱いの追加は Codex（GPT-6.1-Sol）に任せた。そのあと SDK の実装と照らして判定を直した
 
 ## 5. 設計の要点
 

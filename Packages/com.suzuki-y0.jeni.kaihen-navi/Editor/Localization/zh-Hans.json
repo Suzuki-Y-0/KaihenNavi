@@ -409,6 +409,5 @@
   "check.kind.readWrite": "Read/Write 未开启",
   "check.kind.normals": "形态键法线设置",
   "check.attention": "上传前有 {0} 个模型需要修复（饰品或服装的导入设置）。",
-  "check.kind.normalsUnknown": "无法确认形态键法线设置（无法自动修复，请检查原始文件的设置）",
-  "check.readWriteManual": "无法自动修复：请在原始文件的设置中开启 Read/Write。"
+  "check.kind.normalsUnknown": "无法确认形态键法线设置（无法自动修复，请检查原始文件的设置）"
 }

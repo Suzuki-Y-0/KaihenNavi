@@ -71,6 +71,7 @@ namespace UnityEngine
         public Vector3 TransformDirection(Vector3 v) { return v; }
         public Vector3 TransformPoint(Vector3 v) { return v; }
         public Vector3 InverseTransformPoint(Vector3 v) { return v; }
+        public Vector3 InverseTransformVector(Vector3 v) { return v; }
         public System.Collections.IEnumerator GetEnumerator() { yield break; }
     }
 

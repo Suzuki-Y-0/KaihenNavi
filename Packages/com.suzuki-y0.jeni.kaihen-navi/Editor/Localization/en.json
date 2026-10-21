@@ -403,10 +403,12 @@
   "menu.fixedUnknown": "Fixed state unknown",
   "undo.menu": "KaihenNavi: Tidy up menu",
   "mine.saveNow": "Save now",
-  "check.found": "{0} model(s) have import settings that will block uploading to VRChat (accessory or outfit import settings).",
   "check.fix": "Fix",
   "check.confirm": "The import settings of these models will be changed.\n\n{0}\n\nThe shape and colors of the models do not change. This is the same change as \"Auto Fix\" in the VRChat SDK.\nSince it changes the settings (.meta) of the distributed files, the Undo button cannot revert it.",
   "check.fixed": "Fixed the import settings of {0} model(s).",
   "check.kind.readWrite": "Read/Write is off",
-  "check.kind.normals": "Blendshape normals setting"
+  "check.kind.normals": "Blendshape normals setting",
+  "check.attention": "{0} model(s) need to be fixed before uploading (accessory or outfit import settings).",
+  "check.kind.normalsUnknown": "Could not check the blendshape normals setting (cannot be fixed automatically; please check the original file's settings)",
+  "check.readWriteManual": "Cannot fix automatically: enable Read/Write in the original file settings."
 }

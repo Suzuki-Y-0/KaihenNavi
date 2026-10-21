@@ -409,5 +409,7 @@
   "check.kind.readWrite": "Read/Write 꺼짐",
   "check.kind.normals": "블렌드셰이프 노멀 설정",
   "check.attention": "업로드 전에 고쳐야 하는 모델이 {0}개 있습니다 (액세서리나 옷의 임포트 설정).",
-  "check.kind.normalsUnknown": "블렌드셰이프 노멀 설정을 확인하지 못했습니다 (자동으로 고칠 수 없습니다. 원본 파일의 설정을 확인해 주세요)"
+  "check.kind.normalsUnknown": "블렌드셰이프 노멀 설정을 확인하지 못했습니다 (자동으로 고칠 수 없습니다. 원본 파일의 설정을 확인해 주세요)",
+  "mine.savedManually": "{0}에 저장했습니다. 원본은 바뀌지 않습니다.",
+  "check.folder": "위치: {0}"
 }

@@ -56,6 +56,8 @@ namespace UnityEngine
     public class Transform : Component, System.Collections.IEnumerable
     {
         public Transform parent;
+        public Transform root;
+        public Vector3 lossyScale;
         public int childCount;
         public Vector3 position, localPosition, localScale, up, right, forward;
         public Quaternion rotation, localRotation;
@@ -182,6 +184,7 @@ namespace UnityEngine
         public float x, y, z;
         public Vector3(float x, float y, float z) { this.x = x; this.y = y; this.z = z; }
         public float this[int i] { get { return x; } set { } }
+        public float sqrMagnitude { get { return 0; } }
         public Vector3 normalized { get { return this; } }
         public static Vector3 zero, one, up, down, forward, back;
         public static Vector3 operator +(Vector3 a, Vector3 b) { return a; }
@@ -576,6 +579,7 @@ namespace UnityEditor
 
     public static class PrefabUtility
     {
+        public static void RecordPrefabInstancePropertyModifications(Object o) { }
         public static bool IsPartOfPrefabInstance(Object o) { return false; }
         public static bool IsOutermostPrefabInstanceRoot(GameObject g) { return false; }
         public static GameObject GetOutermostPrefabInstanceRoot(Object o) { return null; }

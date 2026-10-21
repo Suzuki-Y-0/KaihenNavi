@@ -146,12 +146,17 @@ namespace Jeni.KaihenNavi
             var lines = new List<string>();
             foreach (var issue in issues)
             {
-                var name = issue.ModelPath.StartsWith("Assets/") ? issue.ModelPath.Substring(7) : issue.ModelPath;
+                // 長いパスでも「・」とファイル名が離れないよう、ファイル名と置き場所を分けて書く
+                var path = issue.ModelPath.StartsWith("Assets/") ? issue.ModelPath.Substring(7) : issue.ModelPath;
+                var slash = path.LastIndexOf('/');
+                var name = slash < 0 ? path : path.Substring(slash + 1);
+                var folder = slash < 0 ? "" : path.Substring(0, slash);
                 var what = string.Join(" / ", issue.Kinds.OrderBy(k => k).Select(k =>
                     k == Kind.ReadWrite ? L10n.Tr("check.kind.readWrite") :
                     k == Kind.BlendShapeNormals ? L10n.Tr("check.kind.normals") :
                     L10n.Tr("check.kind.normalsUnknown")).ToArray());
-                lines.Add("・" + name + "（" + what + "）");
+                lines.Add("・" + name + "：" + what);
+                if (folder.Length > 0) lines.Add("　　" + L10n.Tr("check.folder", folder));
             }
 
             return string.Join("\n", lines.ToArray());

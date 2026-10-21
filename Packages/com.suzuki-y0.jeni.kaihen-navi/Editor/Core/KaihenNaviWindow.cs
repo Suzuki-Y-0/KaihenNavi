@@ -43,6 +43,7 @@ namespace Jeni.KaihenNavi
         private double _seenAt;
         private int _savedGroup = -1;
         private System.DateTime _lastSavedAt;
+        private bool _lastSaveManual;
         private const double AutoSaveDelay = 1.5;
 
         // ①の二択（新しく作る／前に作ったものを直す）
@@ -274,7 +275,7 @@ namespace Jeni.KaihenNavi
                     row.Add(Ui.Button(L10n.Tr("mine.saveNow"), () =>
                     {
                         _savedGroup = Undo.GetCurrentGroup();
-                        SaveNow();
+                        SaveNow(true);
                     }, "kn-button--small"));
                     row.Add(Ui.Button(L10n.Tr("common.where"), () =>
                     {
@@ -409,7 +410,7 @@ namespace Jeni.KaihenNavi
             if (_saveLabel == null) return;
             _saveLabel.text = _lastSavedAt == default(System.DateTime)
                 ? L10n.Tr("mine.autosave")
-                : L10n.Tr("mine.savedAt", _lastSavedAt.ToString("HH:mm:ss"));
+                : L10n.Tr(_lastSaveManual ? "mine.savedManually" : "mine.savedAt", _lastSavedAt.ToString("HH:mm:ss"));
         }
 
         /// <summary>
@@ -434,12 +435,14 @@ namespace Jeni.KaihenNavi
         }
 
         /// <summary>今すぐ保存する（ウィンドウを閉じる・シーンを閉じる・Play の前など）。</summary>
-        private void SaveNow()
+        /// <param name="manual">「今すぐ保存」ボタンから呼んだとき true（表示を「保存しました」にする）。</param>
+        private void SaveNow(bool manual = false)
         {
             if (_avatar == null) return;
             MyAvatar.SaveMaterials(_avatar);
             if (!MyAvatar.Save(_avatar)) return;
             _lastSavedAt = System.DateTime.Now;
+            _lastSaveManual = manual;
             UpdateSaveLabel();
         }
 

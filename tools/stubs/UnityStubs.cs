@@ -74,6 +74,8 @@ namespace UnityEngine
 
     public class Renderer : Component { public Material[] sharedMaterials; public Bounds bounds; }
     public class MeshRenderer : Renderer { }
+    public class MeshFilter : Component { public Mesh sharedMesh; }
+    public class ParticleSystemRenderer : Renderer { public int meshCount; public int GetMeshes(Mesh[] meshes) { return 0; } }
     public class SkinnedMeshRenderer : Renderer
     {
         public Mesh sharedMesh;
@@ -84,7 +86,7 @@ namespace UnityEngine
         public void BakeMesh(Mesh m, bool useScale) { }
     }
 
-    public class Mesh : Object { public int blendShapeCount; public Vector3[] vertices; public string GetBlendShapeName(int i) { return ""; } }
+    public class Mesh : Object { public bool isReadable; public int blendShapeCount; public Vector3[] vertices; public string GetBlendShapeName(int i) { return ""; } }
     public class Texture : Object { public TextureWrapMode wrapMode; }
     public enum TextureFormat { RGBA32, RGB24 }
     public enum TextureWrapMode { Repeat, Clamp }
@@ -506,6 +508,30 @@ namespace UnityEditor
         public void Show() { }
     }
 
+    public class AssetImporter : Object
+    {
+        public string assetPath;
+        public static AssetImporter GetAtPath(string path) { return null; }
+        public void SaveAndReimport() { }
+    }
+
+    public enum ModelImporterNormals { Import, Calculate, None }
+
+    public class ModelImporter : AssetImporter
+    {
+        public bool isReadable;
+        public ModelImporterNormals importBlendShapeNormals;
+    }
+
+    public class SerializedProperty { public bool boolValue; }
+
+    public class SerializedObject
+    {
+        public SerializedObject(Object o) { }
+        public SerializedProperty FindProperty(string name) { return null; }
+        public bool ApplyModifiedPropertiesWithoutUndo() { return true; }
+    }
+
     [AttributeUsage(AttributeTargets.Method)]
     public class MenuItem : Attribute { public MenuItem(string path, bool validate, int priority) { } }
 
@@ -517,6 +543,7 @@ namespace UnityEditor
 
     public static class AssetDatabase
     {
+        public static bool Contains(Object o) { return false; }
         public static string[] FindAssets(string filter) { return new string[0]; }
         public static string[] FindAssets(string filter, string[] folders) { return new string[0]; }
         public static string GUIDToAssetPath(string guid) { return null; }

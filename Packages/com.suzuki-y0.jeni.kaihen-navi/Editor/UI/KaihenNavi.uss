@@ -743,6 +743,15 @@
     margin-top: 4px;
 }
 
+.kn-upload-check {
+    margin-top: 6px;
+}
+
+.kn-upload-check > .kn-hint {
+    margin: 4px 0 4px 4px;
+    white-space: normal;
+}
+
 /* ---------------------------------------------------------------- メニュー整理 */
 
 .kn-menu__row--hidden {

@@ -14,8 +14,9 @@ namespace Jeni.KaihenNavi
     /// 機能 4：体型・身長を変えたい（製品版。旧「体型」「身長」を 1 つにまとめたもの）。
     /// アバターの正面シルエットに、簡単なボーン図（Unity のリグ設定画面のような点と線）を重ねて表示する。
     /// 点をつまんで上下に動かすと長さ、左右に動かすと太さが変わる。「全身」の点は身長。
-    /// 部位の大きさは Modular Avatar の Scale Adjuster（子の骨に影響しない）で非破壊に変え、
-    /// 身長は Armature の大きさを変えて、視点も目の位置に合わせ直す。
+    /// 部位の大きさは Modular Avatar の Scale Adjuster（子の骨の大きさに影響しない）で非破壊に変える。
+    /// 長さを変えたときは、子（すねに対する足首など）の位置だけを骨の向きに沿って動かす（BoneFollow）。
+    /// 太さを変えても子は動かさない。身長は Armature の大きさを変えて、視点も目の位置に合わせ直す。
     /// </summary>
     internal sealed class BodyFeature : FeatureBase
     {
@@ -411,46 +412,41 @@ namespace Jeni.KaihenNavi
         private void Read(Group group, out Vector3 scale, out int axis)
         {
             var bone = AvatarMeasure.Bone(_avatar, group.Bones[0]);
-            axis = LengthAxis(bone);
+            axis = BoneFollow.LengthAxis(bone, AvatarMeasure.HumanAnimator(_avatar));
             scale = Vector3.one;
             if (bone == null) return;
             var adjuster = bone.GetComponent<ModularAvatarScaleAdjuster>();
             if (adjuster != null) scale = adjuster.Scale;
         }
 
-        /// <summary>骨の長さ方向（子の骨がある向き）。x=0, y=1, z=2。分からなければ y。</summary>
-        private static int LengthAxis(Transform bone)
-        {
-            if (bone == null || bone.childCount == 0) return 1;
-            var d = bone.GetChild(0).localPosition;
-            var ax = Mathf.Abs(d.x);
-            var ay = Mathf.Abs(d.y);
-            var az = Mathf.Abs(d.z);
-            if (ax >= ay && ax >= az) return 0;
-            return ay >= az ? 1 : 2;
-        }
-
         private void SetPart(FeatureContext ctx, Group group, float lengthPercent, float widthPercent)
         {
             var undoName = L10n.Tr("undo.body");
+            var animator = AvatarMeasure.HumanAnimator(_avatar);
             ctx.BeginEdit();
             UndoHelper.Begin("body:" + group.Key, undoName);
+            var viewBefore = AvatarMeasure.SuggestedViewPosition(_avatar);
+            var feetBefore = BoneFollow.FeetHeight(animator);
             foreach (var b in group.Bones)
             {
                 var bone = AvatarMeasure.Bone(_avatar, b);
                 if (bone == null) continue;
-                var axis = LengthAxis(bone);
+                var axis = BoneFollow.LengthAxis(bone, animator);
                 var w = widthPercent / 100f;
                 var scale = group.Uniform ? Vector3.one * (lengthPercent / 100f) : new Vector3(w, w, w);
                 if (!group.Uniform) scale[axis] = lengthPercent / 100f;
 
                 var adjuster = bone.GetComponent<ModularAvatarScaleAdjuster>();
                 if (adjuster == null) adjuster = Undo.AddComponent<ModularAvatarScaleAdjuster>(bone.gameObject);
+                var old = adjuster.Scale;
                 Undo.RecordObject(adjuster, undoName);
                 adjuster.Scale = scale;
                 EditorUtility.SetDirty(adjuster);
+                BoneFollow.Apply(bone, animator, old, scale, undoName);
             }
 
+            BoneFollow.KeepFeetOnFloor(animator, feetBefore, undoName);
+            FollowView(viewBefore, undoName);
             UndoHelper.End();
             Refresh();
         }
@@ -465,7 +461,12 @@ namespace Jeni.KaihenNavi
             {
                 ctx.BeginEdit();
                 UndoHelper.Separate();
-                foreach (var b in group.Bones) RemoveAdjuster(AvatarMeasure.Bone(_avatar, b));
+                var viewBefore = AvatarMeasure.SuggestedViewPosition(_avatar);
+                var animator = AvatarMeasure.HumanAnimator(_avatar);
+                var feetBefore = BoneFollow.FeetHeight(animator);
+                foreach (var b in group.Bones) RemoveAdjuster(_avatar, AvatarMeasure.Bone(_avatar, b));
+                BoneFollow.KeepFeetOnFloor(animator, feetBefore, L10n.Tr("undo.body"));
+                FollowView(viewBefore, L10n.Tr("undo.body"));
             }
 
             UndoHelper.Separate();
@@ -477,22 +478,45 @@ namespace Jeni.KaihenNavi
             if (!EditorUtility.DisplayDialog(L10n.Tr("app.name"), L10n.Tr("body.resetAllConfirm"), L10n.Tr("body.resetAll"), L10n.Tr("dialog.cancel"))) return;
             ctx.BeginEdit();
             UndoHelper.Separate();
+            var allAnimator = AvatarMeasure.HumanAnimator(_avatar);
+            var allFeet = BoneFollow.FeetHeight(allAnimator);
             foreach (var g in Groups)
             {
                 if (g.Whole) continue;
-                foreach (var b in g.Bones) RemoveAdjuster(AvatarMeasure.Bone(_avatar, b));
+                foreach (var b in g.Bones) RemoveAdjuster(_avatar, AvatarMeasure.Bone(_avatar, b));
             }
+
+            BoneFollow.KeepFeetOnFloor(allAnimator, allFeet, L10n.Tr("undo.body"));
 
             SetHeight(ctx, 100f);
             UndoHelper.Separate();
             ctx.Rebuild();
         }
 
-        private static void RemoveAdjuster(Transform bone)
+        private static void RemoveAdjuster(VRCAvatarDescriptor avatar, Transform bone)
         {
             if (bone == null) return;
             var adjuster = bone.GetComponent<ModularAvatarScaleAdjuster>();
+            // 子の位置も元に戻す（Scale Adjuster が無くても、前の版でずれたままの子を直す）
+            BoneFollow.Apply(bone, AvatarMeasure.HumanAnimator(avatar), adjuster != null ? adjuster.Scale : Vector3.one, Vector3.one, L10n.Tr("undo.body"));
             if (adjuster != null) Undo.DestroyObjectImmediate(adjuster);
+        }
+
+        /// <summary>
+        /// 脚や胴の長さが変わると目の高さも変わるので、視点を同じだけ動かす。
+        /// 視点の機能で微調整した分を消さないよう、置き直すのではなく差の分だけずらす。
+        /// </summary>
+        private void FollowView(Vector3? before, string undoName)
+        {
+            AvatarMeasure.Forget();
+            var after = AvatarMeasure.SuggestedViewPosition(_avatar);
+            if (!before.HasValue || !after.HasValue) return;
+            var delta = after.Value - before.Value;
+            if (delta.sqrMagnitude < 1e-8f) return;
+            Undo.RecordObject(_avatar, undoName);
+            _avatar.ViewPosition += delta;
+            EditorUtility.SetDirty(_avatar);
+            UpdateHeightLabel();
         }
 
         // ---------------------------------------------------------------- 身長
@@ -571,6 +595,185 @@ namespace Jeni.KaihenNavi
     }
 
 #if KAIHENNAVI_MA
+    /// <summary>
+    /// 部位の長さを変えたときに、子（次の骨やアクセ）の位置を骨の向きに沿って動かす。
+    /// 子の大きさは変えない（Scale Adjuster のまま）。太さを変えても子は動かさない。
+    /// 頭・手・足（全体の大きさを変える部位）は、目や指の付け根が合うよう全方向に動かす。
+    /// 位置は「ベースの Prefab での位置 × 長さの倍率」で毎回計算し直すので、何度変えてもずれがたまらない。
+    /// </summary>
+    internal static class BoneFollow
+    {
+        private static readonly HumanBodyBones[] UniformBones =
+        {
+            HumanBodyBones.Head, HumanBodyBones.LeftHand, HumanBodyBones.RightHand, HumanBodyBones.LeftFoot, HumanBodyBones.RightFoot,
+        };
+
+        /// <summary>骨の長さ方向（次の骨がある向き）。x=0, y=1, z=2。分からなければ y。</summary>
+        public static int LengthAxis(Transform bone, Animator animator)
+        {
+            if (bone == null || bone.childCount == 0) return 1;
+            var child = NextBone(bone, animator);
+            var d = child.localPosition;
+            var ax = Mathf.Abs(d.x);
+            var ay = Mathf.Abs(d.y);
+            var az = Mathf.Abs(d.z);
+            if (ax >= ay && ax >= az) return 0;
+            return ay >= az ? 1 : 2;
+        }
+
+        /// <summary>子のうち、人型の骨（すねなら足）を優先する。無ければいちばん遠い子。</summary>
+        private static Transform NextBone(Transform bone, Animator animator)
+        {
+            Transform best = null;
+            var bestLength = -1f;
+            foreach (Transform c in bone)
+            {
+                if (animator != null && IsHumanBone(animator, c)) return c;
+                var length = c.localPosition.sqrMagnitude;
+                if (length > bestLength)
+                {
+                    best = c;
+                    bestLength = length;
+                }
+            }
+
+            return best;
+        }
+
+        private static bool IsHumanBone(Animator animator, Transform t)
+        {
+            for (var b = HumanBodyBones.Hips; b < HumanBodyBones.LastBone; b++)
+            {
+                if (animator.GetBoneTransform(b) == t) return true;
+            }
+
+            return false;
+        }
+
+        private static bool IsUniform(Animator animator, Transform bone)
+        {
+            if (animator == null) return false;
+            foreach (var b in UniformBones)
+            {
+                if (animator.GetBoneTransform(b) == bone) return true;
+            }
+
+            return false;
+        }
+
+        /// <summary>大きさが oldScale から newScale に変わったときに、子の位置を合わせる。</summary>
+        public static void Apply(Transform bone, Animator animator, Vector3 oldScale, Vector3 newScale, string undoName)
+        {
+            if (bone == null) return;
+            var uniform = IsUniform(animator, bone);
+            var axis = LengthAxis(bone, animator);
+
+            foreach (Transform child in bone)
+            {
+                // MA のプレビュー用など、隠れたオブジェクトは触らない
+                if (child.gameObject.hideFlags != HideFlags.None) continue;
+
+                var current = child.localPosition;
+                var next = current;
+                var baseline = BaselinePosition(child);
+                for (var i = 0; i < 3; i++)
+                {
+                    if (!uniform && i != axis) continue;
+                    next[i] = baseline.HasValue
+                        ? baseline.Value[i] * newScale[i]
+                        : current[i] * newScale[i] / Mathf.Max(1e-4f, oldScale[i]);
+                }
+
+                if ((next - current).sqrMagnitude < 1e-12f) continue;
+                Undo.RecordObject(child, undoName);
+                child.localPosition = next;
+                PrefabUtility.RecordPrefabInstancePropertyModifications(child);
+            }
+        }
+
+        /// <summary>足の高さ（左右の足首・つま先の骨のうち、いちばん低いもの）。測れなければ null。</summary>
+        public static float? FeetHeight(Animator animator)
+        {
+            if (animator == null) return null;
+            float? lowest = null;
+            foreach (var b in new[] { HumanBodyBones.LeftFoot, HumanBodyBones.RightFoot, HumanBodyBones.LeftToes, HumanBodyBones.RightToes })
+            {
+                var t = animator.GetBoneTransform(b);
+                if (t == null) continue;
+                var y = t.position.y;
+                if (!lowest.HasValue || y < lowest.Value) lowest = y;
+            }
+
+            return lowest;
+        }
+
+        /// <summary>
+        /// 脚の長さが変わると足が床にめり込んだり浮いたりするので、腰（Hips）を上下させて足を元の高さに戻す。
+        /// 目標は「ベースの Prefab での足の高さ × 身長の倍率」。ベースが分からなければ、変える前の高さに合わせる。
+        /// </summary>
+        public static void KeepFeetOnFloor(Animator animator, float? feetBefore, string undoName)
+        {
+            if (animator == null) return;
+            var after = FeetHeight(animator);
+            var hips = animator.GetBoneTransform(HumanBodyBones.Hips);
+            if (!after.HasValue || hips == null) return;
+
+            var target = BaselineFeetHeight(animator, hips) ?? feetBefore;
+            if (!target.HasValue) return;
+            var lift = target.Value - after.Value;
+            if (Mathf.Abs(lift) < 1e-5f) return;
+            Undo.RecordObject(hips, undoName);
+            hips.position += Vector3.up * lift;
+            PrefabUtility.RecordPrefabInstancePropertyModifications(hips);
+        }
+
+        private static float? BaselineFeetHeight(Animator animator, Transform hips)
+        {
+            float? lowest = null;
+            foreach (var b in new[] { HumanBodyBones.LeftFoot, HumanBodyBones.RightFoot, HumanBodyBones.LeftToes, HumanBodyBones.RightToes })
+            {
+                var t = animator.GetBoneTransform(b);
+                var source = t == null ? null : BaselineTransform(t);
+                if (source == null) continue;
+                var y = source.position.y - source.root.position.y;
+                if (!lowest.HasValue || y < lowest.Value) lowest = y;
+            }
+
+            if (!lowest.HasValue) return null;
+
+            // 身長（Armature の大きさ）を変えていれば、その分だけ足の高さも変わる
+            var ratio = 1f;
+            var armature = hips.parent;
+            var baseArmature = armature == null ? null : BaselineTransform(armature);
+            if (baseArmature != null && Mathf.Abs(baseArmature.localScale.y) > 1e-5f) ratio = armature.localScale.y / baseArmature.localScale.y;
+
+            var root = animator.transform;
+            return root.position.y + lowest.Value * ratio * root.lossyScale.y;
+        }
+
+        /// <summary>改変する前の位置（改変アバターの Prefab より手前＝ベースや元アバターでの位置）。無ければ null。</summary>
+        private static Vector3? BaselinePosition(Transform t)
+        {
+            var source = BaselineTransform(t);
+            return source == null ? (Vector3?)null : source.localPosition;
+        }
+
+        /// <summary>改変アバターの Prefab より手前（ベースや元アバター）で対応するもの。無ければ null。</summary>
+        private static Transform BaselineTransform(Transform t)
+        {
+            Object current = t;
+            for (var depth = 0; depth < 8; depth++)
+            {
+                var source = PrefabUtility.GetCorrespondingObjectFromSource(current) as Transform;
+                if (source == null) return null;
+                if (!MyAvatar.IsMinePath(AssetDatabase.GetAssetPath(source))) return source;
+                current = source;
+            }
+
+            return null;
+        }
+    }
+
     /// <summary>体型（Scale Adjuster）をバックアップに含め、「元に戻す」で消したり戻したりできるようにする。</summary>
     internal sealed class BodyScaleBackup : IBackupParticipant
     {
@@ -604,10 +807,14 @@ namespace Jeni.KaihenNavi
         {
             var data = string.IsNullOrEmpty(json) ? new Data() : JsonUtility.FromJson<Data>(json);
             var wanted = data.entries.ToDictionary(e => e.path, e => e.scale);
+            var animator = AvatarMeasure.HumanAnimator(avatar);
+            var feetBefore = BoneFollow.FeetHeight(animator);
 
             foreach (var a in avatar.GetComponentsInChildren<ModularAvatarScaleAdjuster>(true))
             {
                 var path = HierarchyPath.Get(avatar.transform, a.transform);
+                var old = a.Scale;
+                var bone = a.transform;
                 Vector3 scale;
                 if (path != null && wanted.TryGetValue(path, out scale))
                 {
@@ -617,8 +824,11 @@ namespace Jeni.KaihenNavi
                 }
                 else
                 {
+                    scale = Vector3.one;
                     Undo.DestroyObjectImmediate(a);
                 }
+
+                BoneFollow.Apply(bone, animator, old, scale, undoName);
             }
 
             foreach (var pair in wanted)
@@ -627,7 +837,10 @@ namespace Jeni.KaihenNavi
                 if (t == null) continue;
                 var added = Undo.AddComponent<ModularAvatarScaleAdjuster>(t.gameObject);
                 added.Scale = pair.Value;
+                BoneFollow.Apply(t, animator, Vector3.one, pair.Value, undoName);
             }
+
+            BoneFollow.KeepFeetOnFloor(animator, feetBefore, undoName);
         }
     }
 #endif

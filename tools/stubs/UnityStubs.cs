@@ -53,6 +53,7 @@ namespace UnityEngine
         public GameObject() { }
         public GameObject(string name) { }
         public Transform transform;
+        public UnityEngine.SceneManagement.Scene scene;
         public bool activeSelf;
         public bool activeInHierarchy;
         public string tag;
@@ -377,6 +378,8 @@ namespace UnityEngine.SceneManagement
     public struct Scene
     {
         public bool isLoaded;
+        public bool validForTests;
+        public bool IsValid() { return validForTests; }
         public UnityEngine.GameObject[] GetRootGameObjects() { return null; }
     }
 
@@ -682,8 +685,10 @@ namespace UnityEditor
         public static string[] GetDependencies(string[] paths, bool recursive) { return DependenciesForTests == null ? new string[0] : DependenciesForTests(paths); }
         public static bool Contains(Object o) { return false; }
         public static string[] FindAssets(string filter) { return new string[0]; }
+        public static Func<string, string[], string[]> FindForTests;
         public static string[] FindAssets(string filter, string[] folders)
-        { return PathsForTests == null ? new string[0] : Array.ConvertAll(Array.FindAll(PathsForTests(), p => Array.Exists(folders, f => p.StartsWith(f + "/"))), AssetPathToGUID); }
+        { if (FindForTests != null) return FindForTests(filter, folders);
+            return PathsForTests == null ? new string[0] : Array.ConvertAll(Array.FindAll(PathsForTests(), p => Array.Exists(folders, f => p.StartsWith(f + "/"))), AssetPathToGUID); }
         public static string GUIDToAssetPath(string guid) { return PathFromGuidForTests == null ? null : PathFromGuidForTests(guid); }
         public static T LoadAssetAtPath<T>(string path) where T : Object { return LoadForTests == null ? null : LoadForTests(path) as T; }
         public static string GetAssetPath(Object o) { return PathForTests == null ? null : PathForTests(o); }
@@ -773,8 +778,12 @@ namespace UnityEditor
 
     public static class EditorUtility
     {
-        public static void DisplayProgressBar(string title, string info, float progress) { }
-        public static void ClearProgressBar() { }
+        public static Func<Object, bool> PersistentForTests;
+        public static bool IsPersistent(Object o) { return PersistentForTests != null && PersistentForTests(o); }
+        public static Action<float> ProgressForTests;
+        public static Action ClearProgressForTests;
+        public static void DisplayProgressBar(string title, string info, float progress) { if (ProgressForTests != null) ProgressForTests(progress); }
+        public static void ClearProgressBar() { if (ClearProgressForTests != null) ClearProgressForTests(); }
         public static void SetDirty(Object o) { }
         public static Action<Object, Object> CopyForTests;
         public static void CopySerialized(Object src, Object dst) { if (CopyForTests != null) CopyForTests(src, dst); }

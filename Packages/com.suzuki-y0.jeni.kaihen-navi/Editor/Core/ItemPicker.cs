@@ -169,12 +169,16 @@ namespace Jeni.KaihenNavi
             return result;
         }
 
+        private static readonly Dictionary<ItemKind, string> OwnedQueries = new Dictionary<ItemKind, string>();
+
         /// <summary>台帳から名前で探す共通 UI。入力中は台帳のファイルや全 Prefab を読み直さない。</summary>
         public static VisualElement OwnedItems(ItemKind kind, Action<GameObject> onPicked)
         {
             var root = new VisualElement();
             root.Add(Ui.Heading(L10n.Tr("pick.owned")));
-            var field = new TextField();
+            // アクセを足すと画面が作り直されるので、入力した言葉は種類ごとに覚えておく
+            string remembered;
+            var field = new TextField { value = OwnedQueries.TryGetValue(kind, out remembered) ? remembered : "" };
             field.label = L10n.Tr("pick.searchName");
             root.Add(field);
             var controls = new VisualElement();
@@ -222,7 +226,11 @@ namespace Jeni.KaihenNavi
                     refresh();
                 }, "kn-button--small", "kn-button--ghost"));
             };
-            field.RegisterValueChangedCallback(e => refresh());
+            field.RegisterValueChangedCallback(e =>
+            {
+                OwnedQueries[kind] = e.newValue ?? "";
+                refresh();
+            });
             rebuildControls();
             refresh();
             return root;

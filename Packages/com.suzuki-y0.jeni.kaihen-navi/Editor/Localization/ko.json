@@ -476,5 +476,6 @@
   "kono.productCredit": "{0} ／ {1}",
   "kono.invalidFolder": "metadata 폴더가 들어 있는 KonoAsset 데이터 폴더를 선택해 주세요.",
   "kono.unsupportedVersion": "[KaihenNavi] KonoAsset 파일의 데이터 형식이 지원되지 않아 건너뜁니다. 지원하는 형식은 version 3입니다.",
-  "kono.more": "…"
+  "kono.more": "…",
+  "innerColor.checkingReferences": "사용 중인 파일을 확인하고 있어요…"
 }

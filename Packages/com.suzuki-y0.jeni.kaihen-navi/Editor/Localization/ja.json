@@ -476,5 +476,6 @@
   "kono.productCredit": "{0} ／ {1}",
   "kono.invalidFolder": "KonoAsset のデータがあるフォルダを選んでください。中に metadata フォルダがあります。",
   "kono.unsupportedVersion": "[KaihenNavi] KonoAsset のデータ形式が対応範囲外のため、そのファイルは読み込みません。対応する形式は version 3 です。",
-  "kono.more": "…"
+  "kono.more": "…",
+  "innerColor.checkingReferences": "使われているファイルを確認しています…"
 }

@@ -114,6 +114,17 @@ namespace Jeni.KaihenNavi
             AssetDatabase.GuidForTests = path => path != null && guids.ContainsKey(path) ? guids[path] : "";
             AssetDatabase.PathFromGuidForTests = guid => guids.First(p => p.Value == guid).Key;
             AssetDatabase.FolderForTests = Directory.Exists;
+            EditorUtility.PersistentForTests = asset => paths.ContainsKey(asset);
+            AssetDatabase.FindForTests = (filter, folders) =>
+            {
+                if (filter == "t:Prefab t:ScriptableObject t:Material")
+                    Check(folders.SequenceEqual(new[] { WorkFolders.Root }), "Reference search must stay within the tool root");
+                return assets.Where(pair => File.Exists(pair.Key) && folders.Any(f => pair.Key.StartsWith(f + "/", StringComparison.Ordinal)) &&
+                    (filter == "" || pair.Key.EndsWith(".prefab", StringComparison.Ordinal) ||
+                        pair.Value is ScriptableObject || pair.Value is Material) &&
+                    (filter != "t:BackupSnapshot" || pair.Value is BackupSnapshot))
+                    .Select(pair => guids[pair.Key]).ToArray();
+            };
             AssetDatabase.CreateForTests = Add;
             AssetDatabase.ImportForTests = Import;
             AssetDatabase.DeleteForTests = path =>
@@ -163,7 +174,17 @@ namespace Jeni.KaihenNavi
             Check(!WorkFolders.IsToolPath("Assets/KaihenNaviOther/file.mat"), "Similar root must not be owned");
             Check(!WorkFolders.IsToolPath("Assets/KaihenNavi/../Bought.mat"), "Traversal must not be owned");
             Check(!WorkFolders.IsToolPath("Assets/Purchased/Hair.mat"), "Purchased assets must not be owned");
-            var go = new GameObject { name = "TestAvatar" };
+            var roots = InnerColorAssets.ReferenceRoots(new[] {
+                WorkFolders.Root + "/Bases/Base.prefab", WorkFolders.Root + "/Bases/Base.prefab",
+                WorkFolders.Root + "/Avatars/Other/Backups/backup.asset", WorkFolders.Root + "/Avatars/Other/Materials/Hair.mat",
+                WorkFolders.Root + "/candidate.mat", "Assets/Purchased/Hair.mat", "Assets/KaihenNaviOther/Hair.mat",
+                WorkFolders.Root + "/../Purchased/Hair.mat", "", null
+            }, new HashSet<string> { WorkFolders.Root + "/candidate.mat" });
+            Check(roots.Length == 3 && roots.Contains(WorkFolders.Root + "/Bases/Base.prefab") &&
+                roots.Contains(WorkFolders.Root + "/Avatars/Other/Backups/backup.asset") &&
+                roots.Contains(WorkFolders.Root + "/Avatars/Other/Materials/Hair.mat"),
+                "Reference roots must exclude candidates, purchased assets and invalid paths, and deduplicate");
+            var go = new GameObject { name = "TestAvatar", scene = new UnityEngine.SceneManagement.Scene { validForTests = true, isLoaded = true } };
             var root = new Transform { gameObject = go }; root.transform = root; go.transform = root;
             var avatar = new VRCAvatarDescriptor { gameObject = go, transform = root };
             var hair = new SkinnedMeshRenderer { gameObject = go, transform = root };
@@ -248,18 +269,62 @@ namespace Jeni.KaihenNavi
             Check(next.materialPath == entry.materialPath && next.maskPath == entry.maskPath, "Preview after reset must use the same fixed paths");
             nextJournal.Track(next.maskPath); InnerColorMask.Save(next.maskPath, next.key, new float[16], 4);
             nextJournal.Commit("test");
-            var external = new MeshRenderer { sharedMaterials = new[] { hair.sharedMaterials[0] } }; renderers.Add(external);
+            var external = new MeshRenderer { gameObject = go, sharedMaterials = new[] { hair.sharedMaterials[0] } }; renderers.Add(external);
             Restore(avatar, next); nextState.data.entries.Clear();
             external.sharedMaterials[0].SetTexture("_Main2ndBlendMask", AssetDatabase.LoadAssetAtPath<Texture2D>(next.maskPath));
             var protectedJournal = InnerColorAssetUndo.Begin(avatar);
             InnerColorAssets.Cleanup(new HashSet<string> { next.materialPath, next.maskPath, "Assets/Purchased/Hair.mat" }, protectedJournal);
             Check(File.Exists(next.materialPath) && File.Exists(next.maskPath), "A renderer outside the avatar must protect copy and mask");
             renderers.Remove(external);
-            Add(new ScriptableObject(), "Assets/Another.prefab"); dependencies["Assets/Another.prefab"] = new[] { next.materialPath };
+            var persisted = new MeshRenderer { gameObject = go, sharedMaterials = external.sharedMaterials };
+            Add(persisted, "Assets/Purchased/LoadedRenderer.asset"); renderers.Add(persisted);
+            var detached = new MeshRenderer { gameObject = new GameObject(), sharedMaterials = external.sharedMaterials };
+            renderers.Add(detached);
+            var closed = new MeshRenderer { gameObject = new GameObject {
+                scene = new UnityEngine.SceneManagement.Scene { validForTests = true, isLoaded = false }
+            }, sharedMaterials = external.sharedMaterials }; renderers.Add(closed);
+            var unreferenced = InnerColorAssets.Referenced(new HashSet<string> { next.materialPath, next.maskPath });
+            Check(!unreferenced.Contains(next.materialPath) && !unreferenced.Contains(next.maskPath),
+                "Persistent renderers and objects outside loaded scenes must not protect candidates");
+            renderers.Remove(persisted); renderers.Remove(detached); renderers.Remove(closed);
+            foreach (var path in new[] { WorkFolders.Root + "/Avatars/Other/Other.prefab",
+                WorkFolders.Root + "/Bases/Base.prefab", WorkFolders.Root + "/Avatars/Other/Backups/backup.asset" })
+            {
+                Add(new ScriptableObject(), path); dependencies[path] = new[] { next.materialPath };
+                InnerColorAssets.Cleanup(new HashSet<string> { next.materialPath, next.maskPath }, protectedJournal);
+                Check(File.Exists(next.materialPath) && File.Exists(next.maskPath),
+                    "Tool prefab, base and backup must protect copy and mask transitively: " + path);
+                dependencies.Clear();
+            }
+            var keeper = new Material(source); keeper.SetTexture("_Main2ndBlendMask", AssetDatabase.LoadAssetAtPath<Texture2D>(next.maskPath));
+            Add(keeper, WorkFolders.Root + "/Avatars/Other/Materials/Keeper.mat");
+            Check(InnerColorAssets.Referenced(new HashSet<string> { next.materialPath, next.maskPath }).Contains(next.maskPath),
+                "A tool material must protect a directly referenced mask");
+            keeper.SetTexture("_Main2ndBlendMask", null);
+            Add(new ScriptableObject(), "Assets/Purchased/Outside.prefab");
+            dependencies["Assets/Purchased/Outside.prefab"] = new[] { next.materialPath };
+            var dependencyReader = AssetDatabase.DependenciesForTests;
+            var cleared = false;
+            var progress = new List<float>();
+            EditorUtility.ProgressForTests = value => progress.Add(value);
+            EditorUtility.ClearProgressForTests = () => cleared = true;
+            AssetDatabase.DependenciesForTests = pathsToRead =>
+            {
+                Check(pathsToRead.All(p => WorkFolders.IsToolPath(p) && p != next.materialPath && p != next.maskPath),
+                    "Only tool reference roots outside the candidates may be queried");
+                throw new InvalidOperationException("dependency read failed");
+            };
+            var failed = false;
+            try { InnerColorAssets.Cleanup(new HashSet<string> { next.materialPath, next.maskPath }, protectedJournal); }
+            catch (InvalidOperationException) { failed = true; }
+            Check(failed && cleared && File.Exists(next.materialPath) && File.Exists(next.maskPath),
+                "Failure must clear progress and leave cleanup candidates intact");
+            AssetDatabase.DependenciesForTests = dependencyReader;
+            cleared = false;
             InnerColorAssets.Cleanup(new HashSet<string> { next.materialPath, next.maskPath }, protectedJournal);
-            Check(File.Exists(next.materialPath) && File.Exists(next.maskPath), "An unloaded prefab must protect copy and mask transitively");
+            Check(cleared && progress.First() == 0 && progress.Last() == 1, "Successful scan must report progress and clear it");
+            EditorUtility.ProgressForTests = null; EditorUtility.ClearProgressForTests = null;
             dependencies.Clear();
-            InnerColorAssets.Cleanup(new HashSet<string> { next.materialPath, next.maskPath }, protectedJournal);
             Check(!File.Exists(next.materialPath) && !File.Exists(next.maskPath), "Unreferenced tool assets must be removed");
             Check(File.ReadAllBytes("Assets/Purchased/Hair.mat").SequenceEqual(originalBytes) && source.GetFloat("_UseMain2ndTex") == 0.25f, "Purchased asset must remain byte-for-byte and property unchanged");
             // 旧版の台帳を移動し、.mat 控えから元の値を読み戻せること。

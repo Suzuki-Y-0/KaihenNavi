@@ -464,5 +464,17 @@
   "innerColor.restored": "2nd カラーを、変更する前の設定に戻しました。",
   "innerColor.uvHint": "髪の作りによって仕上がりは変わります。同じ画像の場所を使う髪には、同じ色がつきます。画像が動く髪では色の場所も動くことがあります。",
   "undo.innerColor": "髪の内側の色を変える",
-  "innerColor.measuring": "髪の隠れているところを調べています。最初は少し時間がかかります。"
+  "innerColor.measuring": "髪の隠れているところを調べています。最初は少し時間がかかります。",
+  "kono.connected": "KonoAsset と連携中（{0} 商品）",
+  "kono.notFound": "KonoAsset が見つかりません",
+  "kono.chooseFolder": "フォルダを選ぶ",
+  "kono.reload": "読み込み直す",
+  "kono.selectProduct": "KonoAsset の商品を選ぶ",
+  "kono.unlink": "KonoAsset との結び付けを外す",
+  "kono.searchProducts": "商品名・作者で探す",
+  "kono.noProducts": "商品が見つかりませんでした。名前を変えてみてください。",
+  "kono.productCredit": "{0} ／ {1}",
+  "kono.invalidFolder": "KonoAsset のデータがあるフォルダを選んでください。中に metadata フォルダがあります。",
+  "kono.unsupportedVersion": "[KaihenNavi] KonoAsset のデータ形式が対応範囲外のため、そのファイルは読み込みません。対応する形式は version 3 です。",
+  "kono.more": "…"
 }

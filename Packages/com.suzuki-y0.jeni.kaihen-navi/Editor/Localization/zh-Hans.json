@@ -464,5 +464,17 @@
   "innerColor.restored": "已恢复原来的第二层颜色设置。",
   "innerColor.uvHint": "效果取决于头发的结构。共用同一贴图区域的头发会一起上色。动态贴图可能使上色位置移动。",
   "undo.innerColor": "改变头发内侧颜色",
-  "innerColor.measuring": "正在查找头发被遮住的地方。首次计算可能需要一些时间。"
+  "innerColor.measuring": "正在查找头发被遮住的地方。首次计算可能需要一些时间。",
+  "kono.connected": "已连接 KonoAsset（{0} 件商品）",
+  "kono.notFound": "未找到 KonoAsset",
+  "kono.chooseFolder": "选择文件夹",
+  "kono.reload": "重新读取",
+  "kono.selectProduct": "选择 KonoAsset 商品",
+  "kono.unlink": "取消与 KonoAsset 的关联",
+  "kono.searchProducts": "按商品名或作者搜索",
+  "kono.noProducts": "未找到商品，请尝试其他名称。",
+  "kono.productCredit": "{0} ／ {1}",
+  "kono.invalidFolder": "请选择存放 KonoAsset 数据的文件夹，其中应包含 metadata 文件夹。",
+  "kono.unsupportedVersion": "[KaihenNavi] KonoAsset 文件的数据格式不受支持，已跳过。支持的格式为 version 3。",
+  "kono.more": "…"
 }

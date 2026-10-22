@@ -415,5 +415,12 @@
   "toggle.clothes": "Clothes & accessories",
   "toggle.others": "Other (hair, body, etc.): {0}",
   "toggle.inMenu": "Already in the menu",
-  "pick.fromPackage": "From {0}"
+  "pick.fromPackage": "From {0}",
+  "pick.owned": "Find items you own",
+  "pick.searchName": "Search by name",
+  "pick.scanExisting": "Find items already in this project",
+  "pick.rescan": "Scan again",
+  "pick.scanning": "Looking for items…",
+  "pick.noOwnedResults": "No items found. Try another name or scan for items.",
+  "pick.scanFailed": "Could not scan for items. Please try again."
 }

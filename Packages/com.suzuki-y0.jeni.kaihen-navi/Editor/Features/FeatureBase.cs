@@ -28,6 +28,9 @@ namespace Jeni.KaihenNavi
         /// <summary>実装済みか（未実装は「近日追加」と表示する）。</summary>
         public virtual bool Implemented { get { return true; } }
 
+        /// <summary>アバター内のオブジェクト構成が変わったとき、候補を取り直す必要があるか。</summary>
+        public virtual bool RefreshOnHierarchyChange { get { return false; } }
+
         public string Title { get { return L10n.Tr("feature." + Id + ".title"); } }
         public string Description { get { return L10n.Tr("feature." + Id + ".desc"); } }
 

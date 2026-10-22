@@ -32,6 +32,7 @@ namespace Jeni.KaihenNavi
         private Button _restoreButton;
         private Button _historyButton;
         private bool _scanQueued;
+        private ulong _panelHierarchyHash;
         private readonly Dictionary<FeatureBase, VisualElement> _cards = new Dictionary<FeatureBase, VisualElement>();
 
         // 自分用アバターの案内と自動保存
@@ -78,6 +79,8 @@ namespace Jeni.KaihenNavi
             L10n.Changed -= RebuildAll;
             Undo.undoRedoPerformed -= OnUndoRedo;
             EditorApplication.hierarchyChanged -= QueueScan;
+            EditorApplication.delayCall -= RunQueuedScan;
+            _scanQueued = false;
             EditorApplication.playModeStateChanged -= OnPlayModeChanged;
             EditorSceneManager.sceneClosing -= OnSceneClosing;
             _backup.Changed -= RefreshFooter;
@@ -497,6 +500,8 @@ namespace Jeni.KaihenNavi
 
         private void BuildPanel()
         {
+            // 手動更新や機能切り替えでも比較の基準を更新し、同じ変更で二度作り直さない。
+            _panelHierarchyHash = HierarchyHash();
             _panelArea.Clear();
             if (_selected == null)
             {
@@ -617,30 +622,61 @@ namespace Jeni.KaihenNavi
             _avatarId = _avatar == null ? null : BackupService.AvatarId(_avatar);
         }
 
+        /// <summary>
+        /// 非表示も含めた構成だけを見る。位置・回転・大きさ・表示状態やコンポーネントの値は含めない。
+        /// 識別子も含め、同じ名前のオブジェクトに入れ替わった場合も候補の参照を取り直す。
+        /// </summary>
+        private ulong HierarchyHash()
+        {
+            if (_avatar == null || _selected == null || !_selected.RefreshOnHierarchyChange) return 0;
+            unchecked
+            {
+                var hash = 14695981039346656037UL;
+                var objects = _avatar.GetComponentsInChildren<Transform>(true);
+                foreach (var t in objects)
+                {
+                    hash = (hash ^ (ulong)t.GetInstanceID()) * 1099511628211UL;
+                    hash = (hash ^ (ulong)(t.parent == null ? 0 : t.parent.GetInstanceID())) * 1099511628211UL;
+                    hash = (hash ^ (ulong)t.childCount) * 1099511628211UL;
+                    foreach (var c in t.name) hash = (hash ^ c) * 1099511628211UL;
+                    hash = (hash ^ 0xFFFFUL) * 1099511628211UL;
+                }
+                return (hash ^ (ulong)objects.Length) * 1099511628211UL;
+            }
+        }
+
         private void QueueScan()
         {
             if (_scanQueued) return;
             _scanQueued = true;
-            EditorApplication.delayCall += () =>
+            // 同じフレームの変更をまとめ、入力イベントの処理が終わってから作り直す。
+            EditorApplication.delayCall += RunQueuedScan;
+        }
+
+        private void RunQueuedScan()
+        {
+            _scanQueued = false;
+            if (this == null || _avatarArea == null) return;
+
+            var before = _avatars.ToList();
+            var current = _avatar;
+            ScanAvatars();
+
+            if (!before.SequenceEqual(_avatars) || current != _avatar) BuildAvatarArea();
+            if (current != _avatar)
             {
-                _scanQueued = false;
-                if (this == null || _avatarArea == null) return;
+                BuildPanel();
+                RefreshFooter();
+            }
+            else if (_avatar != null && _selected != null && _selected.RefreshOnHierarchyChange &&
+                     HierarchyHash() != _panelHierarchyHash)
+            {
+                // ツール自身のスライダーなどで通知されても、構成が同じなら入力を保つ。
+                BuildPanel();
+            }
 
-                var before = _avatars.ToList();
-                var current = _avatar;
-                ScanAvatars();
-
-                // ツール自身の操作でも hierarchyChanged は起きるので、アバターの増減があったときだけ描き直す
-                if (!before.SequenceEqual(_avatars) || current != _avatar) BuildAvatarArea();
-                if (current != _avatar)
-                {
-                    BuildPanel();
-                    RefreshFooter();
-                }
-
-                // アクセや服を足したときも、アップロードを止める設定がないか見直す
-                RefreshUploadCheck();
-            };
+            // アクセや服を足したときも、アップロードを止める設定がないか見直す
+            RefreshUploadCheck();
         }
 
         // ---------------------------------------------------------------- 元に戻す

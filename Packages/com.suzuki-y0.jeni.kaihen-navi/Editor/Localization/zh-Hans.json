@@ -422,5 +422,17 @@
   "pick.rescan": "重新读取",
   "pick.scanning": "正在查找道具…",
   "pick.noOwnedResults": "未找到道具。请换个名称搜索，或尝试读取已有道具。",
-  "pick.scanFailed": "无法读取道具，请重试。"
+  "pick.scanFailed": "无法读取道具，请重试。",
+  "kono.connected": "已连接 KonoAsset（{0} 件商品）",
+  "kono.notFound": "未找到 KonoAsset",
+  "kono.chooseFolder": "选择文件夹",
+  "kono.reload": "重新读取",
+  "kono.selectProduct": "选择 KonoAsset 商品",
+  "kono.unlink": "取消与 KonoAsset 的关联",
+  "kono.searchProducts": "按商品名或作者搜索",
+  "kono.noProducts": "未找到商品，请尝试其他名称。",
+  "kono.productCredit": "{0} ／ {1}",
+  "kono.invalidFolder": "请选择存放 KonoAsset 数据的文件夹，其中应包含 metadata 文件夹。",
+  "kono.unsupportedVersion": "[KaihenNavi] KonoAsset 文件的数据格式不受支持，已跳过。支持的格式为 version 3。",
+  "kono.more": "…"
 }

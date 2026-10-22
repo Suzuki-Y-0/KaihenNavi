@@ -422,5 +422,17 @@
   "pick.rescan": "Scan again",
   "pick.scanning": "Looking for items…",
   "pick.noOwnedResults": "No items found. Try another name or scan for items.",
-  "pick.scanFailed": "Could not scan for items. Please try again."
+  "pick.scanFailed": "Could not scan for items. Please try again.",
+  "kono.connected": "Connected to KonoAsset ({0} products)",
+  "kono.notFound": "KonoAsset was not found",
+  "kono.chooseFolder": "Choose folder",
+  "kono.reload": "Reload",
+  "kono.selectProduct": "Choose a KonoAsset product",
+  "kono.unlink": "Unlink from KonoAsset",
+  "kono.searchProducts": "Search by product or creator",
+  "kono.noProducts": "No products found. Try another name.",
+  "kono.productCredit": "{0} / {1}",
+  "kono.invalidFolder": "Choose the KonoAsset data folder containing the metadata folder.",
+  "kono.unsupportedVersion": "[KaihenNavi] A KonoAsset file uses an unsupported data format and will be skipped. Supported format: version 3.",
+  "kono.more": "…"
 }

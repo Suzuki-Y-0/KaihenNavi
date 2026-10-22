@@ -411,5 +411,6 @@
   "check.attention": "{0} model(s) need to be fixed before uploading (accessory or outfit import settings).",
   "check.kind.normalsUnknown": "Could not check the blendshape normals setting (cannot be fixed automatically; please check the original file's settings)",
   "mine.savedManually": "Saved at {0}. The original avatar is not changed.",
-  "check.folder": "Folder: {0}"
+  "check.folder": "Folder: {0}",
+  "pick.fromPackage": "From {0}"
 }

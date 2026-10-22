@@ -81,23 +81,62 @@ namespace Jeni.KaihenNavi
             return result;
         }
 
+        // FindAssets で種類を絞った結果から、参照元にできるパスだけを残す（候補同士の参照は除外）。
+        internal static string[] ReferenceRoots(IEnumerable<string> paths, HashSet<string> candidates)
+        {
+            return paths.Where(p => WorkFolders.IsToolPath(p) && !candidates.Contains(p))
+                .Distinct().OrderBy(p => p, StringComparer.Ordinal).ToArray();
+        }
+
         internal static HashSet<string> Referenced(HashSet<string> candidates)
         {
             var references = new HashSet<string>();
-            // 非表示・別アバター・Prefab 編集中も含む。シーンにまだ保存していない参照も見る。
-            foreach (var renderer in Resources.FindObjectsOfTypeAll<Renderer>())
-                foreach (var material in renderer.sharedMaterials)
+            if (candidates.Count == 0) return references;
+            try
+            {
+                var title = L10n.Tr("feature.innerColor.title");
+                var message = L10n.Tr("innerColor.checkingReferences");
+                EditorUtility.DisplayProgressBar(title, message, 0);
+                // 非表示・別アバター・Prefab 編集中も含む。保存済みアセットの Renderer は除外し、
+                // 開いているシーン（Prefab 編集用のシーンを含む）の未保存の参照を保護する。
+                var renderers = Resources.FindObjectsOfTypeAll<Renderer>();
+                for (var i = 0; i < renderers.Length; i++)
                 {
-                    if (material == null) continue;
-                    references.Add(AssetDatabase.GetAssetPath(material));
-                    foreach (var property in material.GetTexturePropertyNames())
-                        references.Add(AssetDatabase.GetAssetPath(material.GetTexture(property)));
+                    if (i % 32 == 0)
+                        EditorUtility.DisplayProgressBar(title, message, 0.2f * i / Math.Max(1, renderers.Length));
+                    var renderer = renderers[i];
+                    if (EditorUtility.IsPersistent(renderer) || !renderer.gameObject.scene.IsValid() ||
+                        !renderer.gameObject.scene.isLoaded) continue;
+                    foreach (var material in renderer.sharedMaterials)
+                    {
+                        if (material == null) continue;
+                        references.Add(AssetDatabase.GetAssetPath(material));
+                        foreach (var property in material.GetTexturePropertyNames())
+                            references.Add(AssetDatabase.GetAssetPath(material.GetTexture(property)));
+                    }
                 }
-            // 未ロードの Prefab、別バージョン、自動バックアップなどの参照も保護する。
-            var outside = AssetDatabase.GetAllAssetPaths().Where(p => !candidates.Contains(p) &&
-                !AssetDatabase.IsValidFolder(p)).ToArray();
-            foreach (var path in AssetDatabase.GetDependencies(outside, true)) references.Add(path);
-            return references;
+                // 購入アセットは直接変更しないため、ツール外のアセットがツール製のマスクやコピーを
+                // 参照することはない。全プロジェクトを走査せず、ツール内の参照元だけを調べる。
+                // 改変アバター・ベース・別バージョン・自動バックアップと、直接参照し得る .mat が対象。
+                EditorUtility.DisplayProgressBar(title, message, 0.2f);
+                var roots = AssetDatabase.IsValidFolder(WorkFolders.Root)
+                    ? ReferenceRoots(AssetDatabase.FindAssets("t:Prefab t:ScriptableObject t:Material", new[] { WorkFolders.Root })
+                        .Select(AssetDatabase.GUIDToAssetPath), candidates)
+                    : new string[0];
+                const int batchSize = 32;
+                for (var i = 0; i < roots.Length; i += batchSize)
+                {
+                    EditorUtility.DisplayProgressBar(title, message, 0.2f + 0.8f * i / roots.Length);
+                    var batch = roots.Skip(i).Take(batchSize).ToArray();
+                    foreach (var path in AssetDatabase.GetDependencies(batch, true)) references.Add(path);
+                }
+                EditorUtility.DisplayProgressBar(title, message, 1);
+                return references;
+            }
+            finally
+            {
+                EditorUtility.ClearProgressBar();
+            }
         }
 
         internal static void Cleanup(HashSet<string> candidates, InnerColorAssetUndo journal)

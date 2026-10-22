@@ -276,6 +276,14 @@ Assets/KaihenNavi/
 - 改変アバター一覧に Thumbnail.png があれば表示（Unity 確認済み）
 - 説明書 Docs/manual-ja.md（Codex が執筆）。画像の場所は <!-- 画像 --> で示してある
 
+## 4.12 10-22 夕方の追加（Codex 実装・Claude レビューと Unity 確認）
+
+- 文言: 英中韓を見直し、対訳表 Docs/glossary.md（G2）
+- 髪の内側の色を変えたい（InnerColorFeature、製品版）: 髪メッシュ（lilToon）を選び、内側を「外から見えるか」（髪と体へ 64 方向のレイ。openness）で判定してマスク画像を作り、lilToon の 2nd カラーで色を乗せる。最初の「頭の中心からの距離」方式は長い髪が全部内側になったので作り直した。Unity 確認済み（Cazalis で外側は銀のまま、内側の層だけピンク）。プレビュー／元に戻すを繰り返してもファイルが増えないこと、元に戻すでツールの生成物（未参照のもの）が片付くことも確認。元に戻すの参照調査はツールのフォルダとシーンに限定（G1d、Unity での待ち時間は未確認）
+- KonoAsset 連携（KonoAssetLink、読み取り専用）: preference.json / Documents/KonoAsset から metadata（version 3）と data/<id>/ の unitypackage 名で索引（Library/KaihenNavi にキャッシュ）。取り込んだ unitypackage 名で自動対応、今あるフォルダは浅い順に商品名と照合（Items・Prefab・Clothing などは除外）、手動の選択も可。候補にサムネイルと「商品名 ／ 作者」、対応アバターで並べ替え。Unity 確認済み（360 商品、MONOLITH・高速移動セット・カザリスが自動対応、サムネイル表示）
+- 調査メモ Docs/research-asset-managers.md（KonoAsset・BLM）。BLM は今回は使わない
+- 注意: computer use で open_application("Unity") を使うと Unity Hub が前に出てユーザーの邪魔になる。Unity のウィンドウを直接クリックする
+
 ## 5. 設計の要点
 
 - **元アセットは絶対に書き換えない**: マテリアルは初回変更時に `Assets/KaihenNavi/<アバター名>/Materials/` へ複製し、アバター内の参照をすべて差し替える（`MaterialCopier`）

@@ -464,5 +464,17 @@
   "innerColor.restored": "Restored the previous 2nd color settings.",
   "innerColor.uvHint": "Results depend on the hair. Hair sharing the same texture area also shares the color. Animated textures may move the colored area.",
   "undo.innerColor": "Change inner hair color",
-  "innerColor.measuring": "Finding hidden areas of the hair. The first calculation may take a little time."
+  "innerColor.measuring": "Finding hidden areas of the hair. The first calculation may take a little time.",
+  "kono.connected": "Connected to KonoAsset ({0} products)",
+  "kono.notFound": "KonoAsset was not found",
+  "kono.chooseFolder": "Choose folder",
+  "kono.reload": "Reload",
+  "kono.selectProduct": "Choose a KonoAsset product",
+  "kono.unlink": "Unlink from KonoAsset",
+  "kono.searchProducts": "Search by product or creator",
+  "kono.noProducts": "No products found. Try another name.",
+  "kono.productCredit": "{0} / {1}",
+  "kono.invalidFolder": "Choose the KonoAsset data folder containing the metadata folder.",
+  "kono.unsupportedVersion": "[KaihenNavi] A KonoAsset file uses an unsupported data format and will be skipped. Supported format: version 3.",
+  "kono.more": "…"
 }

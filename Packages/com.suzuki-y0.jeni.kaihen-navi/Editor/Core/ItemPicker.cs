@@ -143,6 +143,7 @@ namespace Jeni.KaihenNavi
             if (avatar == null) return result;
 
             var keywords = Keywords(avatar);
+            var konoAvailable = KonoAssetLink.IsAvailable;
             var ledgerKind = kind == ItemKind.Outfit ? LedgerItemKind.Outfit
                 : kind == ItemKind.Accessory ? LedgerItemKind.Accessory : LedgerItemKind.Other;
             var ledgerPaths = ItemLedger.All().Where(p => p != null && p.prefabs != null)
@@ -153,7 +154,8 @@ namespace Jeni.KaihenNavi
                 .Where(p => keywords.Any(k => p.ToLowerInvariant().Contains(k)));
             var paths = matchingPaths.Concat(ledgerPaths).Distinct()
                 .Where(p => !p.StartsWith(WorkFolders.Root + "/", StringComparison.Ordinal))
-                .OrderByDescending(p => keywords.Any(k => p.ToLowerInvariant().Contains(k)))
+                .OrderByDescending(p => konoAvailable && KonoAssetLink.SupportsAvatar(ItemLedger.KonoItem(ItemLedger.RecordOf(p)), keywords))
+                .ThenByDescending(p => keywords.Any(k => p.ToLowerInvariant().Contains(k)))
                 .ThenBy(p => p, StringComparer.Ordinal);
 
             foreach (var path in paths)
@@ -176,6 +178,20 @@ namespace Jeni.KaihenNavi
         {
             var root = new VisualElement();
             root.Add(Ui.Heading(L10n.Tr("pick.owned")));
+            var connection = Ui.Box("kn-row");
+            root.Add(connection);
+            Action refreshConnection = () =>
+            {
+                connection.Clear();
+                connection.Add(Ui.Text(KonoAssetLink.IsAvailable ? L10n.Tr("kono.connected", KonoAssetLink.Count)
+                    : L10n.Tr("kono.notFound"), "kn-hint"));
+                connection.Add(Ui.Button(L10n.Tr("kono.chooseFolder"), KonoAssetLink.ChooseFolder,
+                    "kn-button--small", "kn-button--ghost"));
+                if (KonoAssetLink.IsAvailable)
+                    connection.Add(Ui.Button(L10n.Tr("kono.reload"), KonoAssetLink.Reload,
+                        "kn-button--small", "kn-button--ghost"));
+            };
+            refreshConnection();
             // アクセを足すと画面が作り直されるので、入力した言葉は種類ごとに覚えておく
             string remembered;
             var field = new TextField { value = OwnedQueries.TryGetValue(kind, out remembered) ? remembered : "" };
@@ -197,12 +213,14 @@ namespace Jeni.KaihenNavi
                 foreach (var package in ItemLedger.All())
                 {
                     if (package == null || package.prefabs == null) continue;
+                    var product = ItemLedger.KonoItem(package);
                     foreach (var entry in package.prefabs)
                     {
                         if (entry == null || entry.kind != ledgerKind || string.IsNullOrEmpty(entry.path)) continue;
                         // パスには Prefab 名と途中のフォルダ名が含まれる。
                         if (query.Length > 0 && !ContainsName(entry.path, query) &&
-                            !ContainsName(package.packageName, query) && !ContainsName(package.commonFolder, query)) continue;
+                            !ContainsName(package.packageName, query) && !ContainsName(package.commonFolder, query) &&
+                            !(product != null && (ContainsName(product.description.name, query) || ContainsName(product.description.creator, query)))) continue;
                         if (!seen.Add(entry.path)) continue;
                         var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(entry.path);
                         if (prefab == null) continue;
@@ -245,27 +263,54 @@ namespace Jeni.KaihenNavi
         public static VisualElement SuggestionList(List<GameObject> items, Action<GameObject> onPicked)
         {
             var list = Ui.Box("kn-list", "kn-suggest");
-            foreach (var item in items)
+            Action build = () =>
             {
-                var prefab = item;
-                var row = new Button(() => onPicked(prefab));
-                row.AddToClassList("kn-list__row");
-                row.AddToClassList("kn-suggest__row");
+                list.Clear();
+                foreach (var item in items)
+                {
+                    var prefab = item;
+                    var package = ItemLedger.RecordOf(AssetDatabase.GetAssetPath(prefab));
+                    var product = ItemLedger.KonoItem(package);
+                    var container = Ui.Box("kn-kono-row");
+                    var row = new Button(() => onPicked(prefab));
+                    row.AddToClassList("kn-list__row");
+                    row.AddToClassList("kn-suggest__row");
+                    row.style.flexGrow = 1;
+                    var thumb = Ui.Box("kn-suggest__thumb");
+                    var texture = KonoAssetLink.Thumbnail(product) ?? AssetPreview.GetAssetPreview(prefab) ?? AssetPreview.GetMiniThumbnail(prefab);
+                    if (texture != null) thumb.style.backgroundImage = new StyleBackground(texture);
+                    row.Add(thumb);
 
-                var thumb = Ui.Box("kn-suggest__thumb");
-                var texture = AssetPreview.GetAssetPreview(prefab) ?? AssetPreview.GetMiniThumbnail(prefab);
-                if (texture != null) thumb.style.backgroundImage = new StyleBackground(texture);
-                row.Add(thumb);
-
-                var texts = Ui.Box("kn-list__texts");
-                texts.Add(Ui.Text(prefab.name, "kn-list__title"));
-                texts.Add(Ui.Text(ShortFolder(prefab), "kn-list__sub"));
-                var packageName = ItemLedger.PackageOf(AssetDatabase.GetAssetPath(prefab));
-                if (!string.IsNullOrEmpty(packageName))
-                    texts.Add(Ui.Text(L10n.Tr("pick.fromPackage", packageName), "kn-list__sub"));
-                row.Add(texts);
-                list.Add(row);
-            }
+                    var texts = Ui.Box("kn-list__texts");
+                    texts.Add(Ui.Text(prefab.name, "kn-list__title"));
+                    if (product != null)
+                        texts.Add(Ui.Text(L10n.Tr("kono.productCredit", product.description.name ?? "", product.description.creator ?? ""), "kn-list__sub"));
+                    texts.Add(Ui.Text(ShortFolder(prefab), "kn-list__sub"));
+                    if (product == null && package != null && !string.IsNullOrEmpty(package.packageName))
+                        texts.Add(Ui.Text(L10n.Tr("pick.fromPackage", package.packageName), "kn-list__sub"));
+                    row.Add(texts);
+                    container.Add(row);
+                    if (package != null || KonoAssetLink.IsAvailable)
+                    {
+                        // 行を選ぶボタンとメニューを兄弟にし、メニュー操作で服を着せない。
+                        var menuButton = Ui.Button(L10n.Tr("kono.more"), () =>
+                        {
+                            var menu = new GenericMenu();
+                            if (KonoAssetLink.IsAvailable)
+                                menu.AddItem(new GUIContent(L10n.Tr("kono.selectProduct")), false, () =>
+                                    KonoAssetProductPicker.Open(selected => ItemLedger.SetKonoItemForPath(AssetDatabase.GetAssetPath(prefab), selected)));
+                            else menu.AddDisabledItem(new GUIContent(L10n.Tr("kono.selectProduct")));
+                            if (product != null || (package != null && !string.IsNullOrEmpty(package.konoAssetId)))
+                                menu.AddItem(new GUIContent(L10n.Tr("kono.unlink")), false, () => ItemLedger.SetKonoItem(package, null));
+                            menu.ShowAsContext();
+                        }, "kn-button--small", "kn-button--ghost");
+                        menuButton.tooltip = L10n.Tr("kono.selectProduct");
+                        container.Add(menuButton);
+                    }
+                    list.Add(container);
+                }
+            };
+            build();
 
             return list;
         }

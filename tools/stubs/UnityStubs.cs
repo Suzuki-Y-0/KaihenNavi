@@ -546,8 +546,24 @@ namespace UnityEditor
         public static void SetString(string k, string v) { }
     }
 
+    [AttributeUsage(AttributeTargets.Class)]
+    public class InitializeOnLoadAttribute : Attribute { }
+
+    public class AssetPostprocessor { }
+
+    public static class SessionState
+    {
+        public static string GetString(string key, string fallback) { return fallback; }
+        public static void SetString(string key, string value) { }
+        public static void EraseString(string key) { }
+    }
+
     public static class AssetDatabase
     {
+        public static Action<string> importPackageStarted;
+        public static Action<string> importPackageCompleted;
+        public static Action<string> importPackageCancelled;
+        public static Action<string, string> importPackageFailed;
         public static bool Contains(Object o) { return false; }
         public static string[] FindAssets(string filter) { return new string[0]; }
         public static string[] FindAssets(string filter, string[] folders) { return new string[0]; }

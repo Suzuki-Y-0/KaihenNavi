@@ -414,5 +414,6 @@
   "check.folder": "Folder: {0}",
   "toggle.clothes": "Clothes & accessories",
   "toggle.others": "Other (hair, body, etc.): {0}",
-  "toggle.inMenu": "Already in the menu"
+  "toggle.inMenu": "Already in the menu",
+  "pick.fromPackage": "From {0}"
 }

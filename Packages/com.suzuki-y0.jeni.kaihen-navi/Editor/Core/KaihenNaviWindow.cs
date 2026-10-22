@@ -67,6 +67,8 @@ namespace Jeni.KaihenNavi
         {
             _features = FeatureCatalog.Create();
             L10n.Changed += RebuildAll;
+            KonoAssetLink.Changed += QueueKonoRefresh;
+            ItemLedger.Changed += QueueKonoRefresh;
             Undo.undoRedoPerformed += OnUndoRedo;
             EditorApplication.hierarchyChanged += QueueScan;
             EditorApplication.playModeStateChanged += OnPlayModeChanged;
@@ -77,6 +79,9 @@ namespace Jeni.KaihenNavi
         private void OnDisable()
         {
             L10n.Changed -= RebuildAll;
+            KonoAssetLink.Changed -= QueueKonoRefresh;
+            ItemLedger.Changed -= QueueKonoRefresh;
+            EditorApplication.delayCall -= RefreshKono;
             Undo.undoRedoPerformed -= OnUndoRedo;
             EditorApplication.hierarchyChanged -= QueueScan;
             EditorApplication.delayCall -= RunQueuedScan;
@@ -88,6 +93,14 @@ namespace Jeni.KaihenNavi
             if (_selected != null) _selected.OnClosed();
             _backup.EndSession();
         }
+
+        private void QueueKonoRefresh()
+        {
+            EditorApplication.delayCall -= RefreshKono;
+            EditorApplication.delayCall += RefreshKono;
+        }
+
+        private void RefreshKono() { RebuildAll(); }
 
         private void CreateGUI()
         {

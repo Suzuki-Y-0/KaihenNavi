@@ -39,6 +39,7 @@ namespace Jeni.KaihenNavi
         {
             new ToggleMenuBackup(),
             new MenuTidyBackup(),
+            new InnerColorBackup(),
 #if KAIHENNAVI_MA
             new BodyScaleBackup(),
 #endif

@@ -89,7 +89,7 @@ namespace UnityEngine
         public void BakeMesh(Mesh m, bool useScale) { }
     }
 
-    public class Mesh : Object { public bool isReadable; public int blendShapeCount; public Vector3[] vertices; public string GetBlendShapeName(int i) { return ""; } }
+    public class Mesh : Object { public Vector2[] uv; public int subMeshCount; public int[] GetTriangles(int submesh) { return new int[0]; } public bool isReadable; public int blendShapeCount; public Vector3[] vertices; public string GetBlendShapeName(int i) { return ""; } }
     public class Texture : Object { public TextureWrapMode wrapMode; }
     public enum TextureFormat { RGBA32, RGB24 }
     public enum TextureWrapMode { Repeat, Clamp }
@@ -141,6 +141,14 @@ namespace UnityEngine
         public void SetColor(string n, Color c) { }
         public float GetFloat(string n) { return 0f; }
         public void SetFloat(string n, float v) { }
+        public Texture GetTexture(string n) { return null; }
+        public void SetTexture(string n, Texture t) { }
+        public void EnableKeyword(string keyword) { }
+        public void DisableKeyword(string keyword) { }
+        public Vector2 GetTextureScale(string n) { return default(Vector2); }
+        public Vector2 GetTextureOffset(string n) { return default(Vector2); }
+        public void SetTextureScale(string n, Vector2 v) { }
+        public void SetTextureOffset(string n, Vector2 v) { }
     }
 
     public class ScriptableObject : Object
@@ -211,6 +219,7 @@ namespace UnityEngine
     public struct Quaternion
     {
         public static Quaternion identity;
+        public static Quaternion Inverse(Quaternion q) { return q; }
         public static Quaternion AngleAxis(float a, Vector3 axis) { return default(Quaternion); }
         public static Quaternion LookRotation(Vector3 forward) { return default(Quaternion); }
         public static Quaternion LookRotation(Vector3 forward, Vector3 up) { return default(Quaternion); }
@@ -487,6 +496,12 @@ namespace UnityEngine.UIElements
 
 namespace UnityEditor.UIElements
 {
+    public class ColorField : UnityEngine.UIElements.BaseField<UnityEngine.Color>
+    {
+        public ColorField(string label) { }
+        public bool showAlpha, hdr;
+    }
+
     public class ObjectField : UnityEngine.UIElements.BaseField<UnityEngine.Object>
     {
         public ObjectField(string label) { }
@@ -518,6 +533,16 @@ namespace UnityEditor
         public string assetPath;
         public static AssetImporter GetAtPath(string path) { return null; }
         public void SaveAndReimport() { }
+    }
+
+    public enum TextureImporterType { Default }
+    public enum TextureImporterCompression { Uncompressed }
+    public class TextureImporter : AssetImporter
+    {
+        public TextureImporterType textureType;
+        public bool isReadable, sRGBTexture, mipmapEnabled;
+        public TextureWrapMode wrapMode;
+        public TextureImporterCompression textureCompression;
     }
 
     public enum ModelImporterNormals { Import, Calculate, None }
@@ -637,6 +662,7 @@ namespace UnityEditor
 
     public static class Undo
     {
+        public static void RevertAllDownToGroup(int group) { }
         public static void SetTransformParent(Transform t, Transform parent, string name) { }
         public static event Action undoRedoPerformed;
         public static void RecordObject(Object o, string name) { }

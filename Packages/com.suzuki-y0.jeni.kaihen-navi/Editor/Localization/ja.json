@@ -442,9 +442,9 @@
   "innerColor.mode.layers": "内側の層",
   "innerColor.mode.lower": "下のほう",
   "innerColor.mode.rear": "後ろの内側",
-  "innerColor.thickness": "内側の厚み",
+  "innerColor.thickness": "内側にする範囲",
   "innerColor.height": "高さ",
-  "innerColor.thicknessHint": "小さくすると広く、大きくすると奥のほうだけに色がつきます。",
+  "innerColor.thicknessHint": "外から見えにくいところに色をつけます。大きくすると、色をつける範囲が広がります。",
   "innerColor.heightHint": "大きくすると、毛先から頭の中心に向かって色の範囲が広がります。",
   "innerColor.quality": "画像の細かさ",
   "innerColor.size512": "標準（512）",
@@ -463,5 +463,6 @@
   "innerColor.failed": "色を反映できませんでした：{0}",
   "innerColor.restored": "2nd カラーを、変更する前の設定に戻しました。",
   "innerColor.uvHint": "髪の作りによって仕上がりは変わります。同じ画像の場所を使う髪には、同じ色がつきます。画像が動く髪では色の場所も動くことがあります。",
-  "undo.innerColor": "髪の内側の色を変える"
+  "undo.innerColor": "髪の内側の色を変える",
+  "innerColor.measuring": "髪の隠れているところを調べています。最初は少し時間がかかります。"
 }

@@ -442,9 +442,9 @@
   "innerColor.mode.layers": "Inner layers",
   "innerColor.mode.lower": "Lower ends",
   "innerColor.mode.rear": "Inner back layers",
-  "innerColor.thickness": "Inner depth",
+  "innerColor.thickness": "Inner color range",
   "innerColor.height": "Height",
-  "innerColor.thicknessHint": "Lower values color more hair; higher values reach only the deeper layers.",
+  "innerColor.thicknessHint": "Colors areas hidden from outside. Higher values expand the colored area.",
   "innerColor.heightHint": "Higher values extend the color from the tips toward the center of the head.",
   "innerColor.quality": "Mask detail",
   "innerColor.size512": "Standard (512)",
@@ -463,5 +463,6 @@
   "innerColor.failed": "Could not apply the color: {0}",
   "innerColor.restored": "Restored the previous 2nd color settings.",
   "innerColor.uvHint": "Results depend on the hair. Hair sharing the same texture area also shares the color. Animated textures may move the colored area.",
-  "undo.innerColor": "Change inner hair color"
+  "undo.innerColor": "Change inner hair color",
+  "innerColor.measuring": "Finding hidden areas of the hair. The first calculation may take a little time."
 }

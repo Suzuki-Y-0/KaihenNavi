@@ -31,6 +31,8 @@ namespace Jeni.KaihenNavi
         public override Color Accent { get { return Ui.Hex("#B07CD8"); } }
         public override bool InTrial { get { return true; } }
 
+        public override bool RefreshOnHierarchyChange { get { return true; } }
+
         public override VisualElement Build(FeatureContext ctx)
         {
             var root = new VisualElement();
@@ -46,6 +48,8 @@ namespace Jeni.KaihenNavi
                 root.Add(Ui.Text(L10n.Tr("outfit.suggest"), "kn-hint"));
                 root.Add(ItemPicker.SuggestionList(suggestions, prefab => Wear(ctx, prefab)));
             }
+
+            root.Add(ItemPicker.OwnedItems(ItemKind.Outfit, prefab => Wear(ctx, prefab)));
 
             // 着ている服（このツールや Setup Outfit で着せたもの）
             var worn = Worn(ctx.Avatar);

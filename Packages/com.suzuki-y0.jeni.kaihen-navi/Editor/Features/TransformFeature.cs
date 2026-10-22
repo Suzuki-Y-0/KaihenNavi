@@ -51,6 +51,8 @@ namespace Jeni.KaihenNavi
         public override Color Accent { get { return Ui.Hex("#6FA8DC"); } }
         public override bool InTrial { get { return true; } }
 
+        public override bool RefreshOnHierarchyChange { get { return true; } }
+
         public override VisualElement Build(FeatureContext ctx)
         {
             var root = new VisualElement();
@@ -239,6 +241,11 @@ namespace Jeni.KaihenNavi
                     }));
                 }
 
+                box.Add(ItemPicker.OwnedItems(ItemKind.Accessory, prefab =>
+                {
+                    _pending = prefab;
+                    ctx.Rebuild();
+                }));
                 return box;
             }
 

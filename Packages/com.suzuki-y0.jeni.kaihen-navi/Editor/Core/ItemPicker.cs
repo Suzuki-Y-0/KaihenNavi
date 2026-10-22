@@ -135,6 +135,7 @@ namespace Jeni.KaihenNavi
         /// <summary>
         /// このアバター用らしい候補。Prefab の場所や名前に、元のアバターの名前が入っているものを集める
         /// （BOOTH の服やアクセは「アバター名」入りのフォルダに対応版が入っていることが多い）。
+        /// 台帳に記録された同じ種類のものも加え、アバター名が合うものから先に並べる。
         /// </summary>
         public static List<GameObject> Suggestions(VRCAvatarDescriptor avatar, ItemKind kind)
         {
@@ -142,15 +143,21 @@ namespace Jeni.KaihenNavi
             if (avatar == null) return result;
 
             var keywords = Keywords(avatar);
-            if (keywords.Count == 0) return result;
+            var ledgerKind = kind == ItemKind.Outfit ? LedgerItemKind.Outfit
+                : kind == ItemKind.Accessory ? LedgerItemKind.Accessory : LedgerItemKind.Other;
+            var ledgerPaths = ItemLedger.All().Where(p => p != null && p.prefabs != null)
+                .SelectMany(p => p.prefabs).Where(p => p != null && p.kind == ledgerKind)
+                .Select(p => p.path).Where(p => !string.IsNullOrEmpty(p)).ToList();
+            var matchingPaths = AssetDatabase.FindAssets("t:Prefab", new[] { "Assets" })
+                .Select(AssetDatabase.GUIDToAssetPath)
+                .Where(p => keywords.Any(k => p.ToLowerInvariant().Contains(k)));
+            var paths = matchingPaths.Concat(ledgerPaths).Distinct()
+                .Where(p => !p.StartsWith(WorkFolders.Root + "/", StringComparison.Ordinal))
+                .OrderByDescending(p => keywords.Any(k => p.ToLowerInvariant().Contains(k)))
+                .ThenBy(p => p, StringComparer.Ordinal);
 
-            foreach (var guid in AssetDatabase.FindAssets("t:Prefab", new[] { "Assets" }))
+            foreach (var path in paths)
             {
-                var path = AssetDatabase.GUIDToAssetPath(guid);
-                if (path.StartsWith(WorkFolders.Root + "/")) continue;
-                var lower = path.ToLowerInvariant();
-                if (!keywords.Any(k => lower.Contains(k))) continue;
-
                 var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(path);
                 if (prefab == null || KindOf(prefab) != kind) continue;
                 if (IsSameAsAvatar(prefab, avatar)) continue;
@@ -159,8 +166,79 @@ namespace Jeni.KaihenNavi
                 if (result.Count >= MaxSuggestions) break;
             }
 
-            result.Sort((a, b) => string.CompareOrdinal(AssetDatabase.GetAssetPath(a), AssetDatabase.GetAssetPath(b)));
             return result;
+        }
+
+        private static readonly Dictionary<ItemKind, string> OwnedQueries = new Dictionary<ItemKind, string>();
+
+        /// <summary>台帳から名前で探す共通 UI。入力中は台帳のファイルや全 Prefab を読み直さない。</summary>
+        public static VisualElement OwnedItems(ItemKind kind, Action<GameObject> onPicked)
+        {
+            var root = new VisualElement();
+            root.Add(Ui.Heading(L10n.Tr("pick.owned")));
+            // アクセを足すと画面が作り直されるので、入力した言葉は種類ごとに覚えておく
+            string remembered;
+            var field = new TextField { value = OwnedQueries.TryGetValue(kind, out remembered) ? remembered : "" };
+            field.label = L10n.Tr("pick.searchName");
+            root.Add(field);
+            var controls = new VisualElement();
+            root.Add(controls);
+            var results = new VisualElement();
+            root.Add(results);
+            var ledgerKind = kind == ItemKind.Outfit ? LedgerItemKind.Outfit
+                : kind == ItemKind.Accessory ? LedgerItemKind.Accessory : LedgerItemKind.Other;
+
+            Action refresh = () =>
+            {
+                results.Clear();
+                var query = (field.value ?? "").Trim();
+                var seen = new HashSet<string>(StringComparer.Ordinal);
+                var items = new List<GameObject>();
+                foreach (var package in ItemLedger.All())
+                {
+                    if (package == null || package.prefabs == null) continue;
+                    foreach (var entry in package.prefabs)
+                    {
+                        if (entry == null || entry.kind != ledgerKind || string.IsNullOrEmpty(entry.path)) continue;
+                        // パスには Prefab 名と途中のフォルダ名が含まれる。
+                        if (query.Length > 0 && !ContainsName(entry.path, query) &&
+                            !ContainsName(package.packageName, query) && !ContainsName(package.commonFolder, query)) continue;
+                        if (!seen.Add(entry.path)) continue;
+                        var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(entry.path);
+                        if (prefab == null) continue;
+                        items.Add(prefab);
+                        if (items.Count >= 30) break;
+                    }
+                    if (items.Count >= 30) break;
+                }
+                if (items.Count > 0) results.Add(SuggestionList(items, onPicked));
+                else results.Add(Ui.Text(L10n.Tr("pick.noOwnedResults"), "kn-hint"));
+            };
+            Action rebuildControls = null;
+            rebuildControls = () =>
+            {
+                controls.Clear();
+                var empty = !ItemLedger.All().Any(p => p != null && p.prefabs != null && p.prefabs.Count > 0);
+                controls.Add(Ui.Button(L10n.Tr(empty ? "pick.scanExisting" : "pick.rescan"), () =>
+                {
+                    ItemLedger.ScanExisting();
+                    rebuildControls();
+                    refresh();
+                }, "kn-button--small", "kn-button--ghost"));
+            };
+            field.RegisterValueChangedCallback(e =>
+            {
+                OwnedQueries[kind] = e.newValue ?? "";
+                refresh();
+            });
+            rebuildControls();
+            refresh();
+            return root;
+        }
+
+        private static bool ContainsName(string value, string query)
+        {
+            return value != null && value.IndexOf(query, StringComparison.OrdinalIgnoreCase) >= 0;
         }
 
         /// <summary>候補を並べる。押すと onPicked が呼ばれる。</summary>
@@ -182,6 +260,9 @@ namespace Jeni.KaihenNavi
                 var texts = Ui.Box("kn-list__texts");
                 texts.Add(Ui.Text(prefab.name, "kn-list__title"));
                 texts.Add(Ui.Text(ShortFolder(prefab), "kn-list__sub"));
+                var packageName = ItemLedger.PackageOf(AssetDatabase.GetAssetPath(prefab));
+                if (!string.IsNullOrEmpty(packageName))
+                    texts.Add(Ui.Text(L10n.Tr("pick.fromPackage", packageName), "kn-list__sub"));
                 row.Add(texts);
                 list.Add(row);
             }

@@ -265,6 +265,17 @@ Assets/KaihenNavi/
 - **頭・手・足は骨ごと大きくする（10-21 変更）**: Scale Adjuster だと子の大きさが変わらず、頭だけ大きくなって髪・耳・アクセが元の大きさのまま位置だけずれる（ユーザー報告「不思議な挙動」）。手も手の甲だけ太くなり指は変わらなかった。末端の部位は Transform の localScale（ベース × 倍率）で変え、髪・指・靴・付けたアクセも一緒に大きくする。前の版の Scale Adjuster が残っていれば外す。バックアップにも頭・手・足の localScale を含めた（古いバックアップではベースの大きさに戻す）。Unity で頭 131%・手 131% → 元に戻すを確認
 - **反映の速さ（10-21）**: スライダーの 1 刻みごとに全メッシュを焼いて身長を 2 回測っていた。視点は目の骨の移動量だけでずらし、身長の表示とシルエットは動かし終わって 0.15 秒後に 1 回だけ測るようにした。MA の Scale Adjuster のシーン上のプレビュー（NDMF）の遅れは MA 側なので、こちらでは変えられない
 
+## 4.11 10-22 の追加（Codex＝GPT-6.1-Sol に実装を任せ、Claude がレビュー・Unity 確認）
+
+- 進め方: Codex CLI（クラウドの作業環境、ChatGPT アカウントでログイン）に、タスクごとの指示書と共通ルールを渡し、git worktree で並行に実装させる。Claude が差分を読み、直し、check.sh・Unity で確認してマージ。ユーザーの指示で、Codex の 5 時間枠が上限に達したら使用をやめる（使用率は ~/.codex/sessions の rate_limits で見る）
+- A 脱ぎ着の候補の分け方（ToggleFeature）: 「服・アクセ」と、折りたたみの「そのほか（髪・体など）」。素体・顔の参照と、メッシュ名（PartGuesser）で判定。名前に服の言葉があれば服を優先（Cloth_HairRibbon）。Unity 確認済み（Cazalis: Body・Body_Base・Hair_* の 10 個が「そのほか」）
+- B 候補の自動更新: FeatureBase.RefreshOnHierarchyChange（服・位置と大きさ・脱ぎ着・肌）。アバター内の構成ハッシュが変わったときだけパネルを作り直す。肌の「いつ隠すか」は服そのもので覚える。Unity では未確認（アクセを足して候補が増えるか）
+- C アイテム台帳（Core/ItemLedger.cs）: unitypackage の取り込み（importPackageStarted〜Completed）で入ったファイルを Assets/KaihenNavi/Ledger/items.json に記録。服・アクセの候補にも加え、「◯◯ から」と表示。実際の unitypackage 取り込みでは未確認
+- E 台帳の続き: 「今入っているアイテムを読み込む」（今ある Prefab を商品フォルダごとに登録。置き場フォルダは 5 段まで掘る）、服・アクセの画面に「持っているアイテムから探す」（名前・商品名・フォルダで絞り込み）。Unity 確認済み（MCP Project で 8 グループ、「V2」で MONOLITH_Shinano_V2 が出た）
+- D ピンク色の判定: Poiyomi・UTS・Sunao の判定用プロパティを公式ソースで確認して直し（根拠 URL はコード内）、当たった数が最多のシェーダーを選ぶ。実際の壊れた Poiyomi などでは未確認
+- 改変アバター一覧に Thumbnail.png があれば表示（Unity 確認済み）
+- 説明書 Docs/manual-ja.md（Codex が執筆）。画像の場所は <!-- 画像 --> で示してある
+
 ## 5. 設計の要点
 
 - **元アセットは絶対に書き換えない**: マテリアルは初回変更時に `Assets/KaihenNavi/<アバター名>/Materials/` へ複製し、アバター内の参照をすべて差し替える（`MaterialCopier`）

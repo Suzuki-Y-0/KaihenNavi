@@ -10,6 +10,7 @@ namespace Jeni.KaihenNavi
     ///
     /// Assets/KaihenNavi/
     ///   README.md                    この形の説明
+    ///   Ledger/items.json           取り込んだ商品の台帳（取り込み元とファイルの場所）
     ///   Bases/
     ///     元アバター名/              元アバター 1 体につき 1 フォルダ（初めて改変アバターを作るときに自動で作る）
     ///       元アバター名 Base.prefab 改変のベース（元アバターのプレハブバリアント）。
@@ -127,6 +128,8 @@ namespace Jeni.KaihenNavi
                 "This folder is managed by KaihenNavi (かいへんナビ). Each edited avatar has its own folder.\n" +
                 "かいへんナビが管理するフォルダです。改変アバター 1 体につき 1 フォルダを使います。\n\n" +
                 "```\n" +
+                "Ledger/\n" +
+                "  items.json      Imported packages and file locations / 取り込んだ商品とファイルの場所\n" +
                 "Bases/<original>/\n" +
                 "  <original> Base.prefab  Shared base (Prefab Variant of the original) / 改変のベース（共通の設定はここ）\n" +
                 "  avatar.json             kind = \"base\"\n" +

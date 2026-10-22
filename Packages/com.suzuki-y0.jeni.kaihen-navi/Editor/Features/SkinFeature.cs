@@ -31,13 +31,15 @@ namespace Jeni.KaihenNavi
 
         private static int _mode;          // 0 = シェイプキー, 1 = Mesh Cutter
         private static string _meshPath;   // 選んだ肌のメッシュ（アバターからの階層パス）
-        private static int _targetIndex;   // 0 = いつも, 1.. = 着ている服
+        private static GameObject _targetOutfit; // null = いつも。服の増減・並べ替え後も同じ服を選ぶ
         private static bool _showAll;
 
         public override string Id { get { return "skin"; } }
         public override int Number { get { return 3; } }
         public override Color Accent { get { return Ui.Hex("#E8A87C"); } }
         public override bool InTrial { get { return false; } }
+
+        public override bool RefreshOnHierarchyChange { get { return true; } }
 
         public override VisualElement Build(FeatureContext ctx)
         {
@@ -132,15 +134,17 @@ namespace Jeni.KaihenNavi
 
             // いつ隠すか（服を選ぶと、その服を着ているときだけ）
             var outfits = WornOutfits(ctx.Avatar);
-            if (_targetIndex > outfits.Count) _targetIndex = 0;
+            if (_targetOutfit == null || !outfits.Contains(_targetOutfit)) _targetOutfit = null;
+            var targetIndex = _targetOutfit == null ? 0 : outfits.IndexOf(_targetOutfit) + 1;
             root.Add(Ui.Heading(L10n.Tr("skin.when")));
             var choices = new List<string> { L10n.Tr("skin.always") };
             choices.AddRange(outfits.Select(o => L10n.Tr("skin.onlyWith", o.name)));
-            var popup = new PopupField<string>(choices, _targetIndex);
+            var popup = new PopupField<string>(choices, targetIndex);
             popup.AddToClassList("kn-grow");
             popup.RegisterValueChangedCallback(e =>
             {
-                _targetIndex = Mathf.Max(0, choices.IndexOf(e.newValue));
+                var index = choices.IndexOf(e.newValue);
+                _targetOutfit = index <= 0 ? null : outfits[index - 1];
                 ctx.Rebuild();
             });
             root.Add(popup);
@@ -152,7 +156,7 @@ namespace Jeni.KaihenNavi
             }
             else
             {
-                var target = _targetIndex == 0 ? null : outfits[_targetIndex - 1];
+                var target = _targetOutfit;
                 var list = Ui.Box("kn-list");
                 foreach (var index in shapes)
                 {

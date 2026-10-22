@@ -415,5 +415,12 @@
   "toggle.clothes": "옷·액세서리",
   "toggle.others": "그 밖의 항목(머리카락·몸 등) {0}개",
   "toggle.inMenu": "메뉴에 추가됨",
-  "pick.fromPackage": "{0}에서 가져옴"
+  "pick.fromPackage": "{0}에서 가져옴",
+  "pick.owned": "가지고 있는 아이템 찾기",
+  "pick.searchName": "이름으로 찾기",
+  "pick.scanExisting": "이미 들어 있는 아이템 불러오기",
+  "pick.rescan": "다시 불러오기",
+  "pick.scanning": "아이템을 찾고 있어요…",
+  "pick.noOwnedResults": "아이템을 찾지 못했어요. 다른 이름으로 찾거나 아이템을 불러와 주세요.",
+  "pick.scanFailed": "아이템을 불러오지 못했어요. 다시 시도해 주세요."
 }

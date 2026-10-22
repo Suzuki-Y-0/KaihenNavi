@@ -49,6 +49,8 @@ namespace Jeni.KaihenNavi
                 root.Add(ItemPicker.SuggestionList(suggestions, prefab => Wear(ctx, prefab)));
             }
 
+            root.Add(ItemPicker.OwnedItems(ItemKind.Outfit, prefab => Wear(ctx, prefab)));
+
             // 着ている服（このツールや Setup Outfit で着せたもの）
             var worn = Worn(ctx.Avatar);
             if (worn.Count > 0)

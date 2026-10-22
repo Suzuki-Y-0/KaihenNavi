@@ -442,9 +442,9 @@
   "innerColor.mode.layers": "内侧层",
   "innerColor.mode.lower": "下方发梢",
   "innerColor.mode.rear": "后部内侧",
-  "innerColor.thickness": "内侧深度",
+  "innerColor.thickness": "内侧上色范围",
   "innerColor.height": "高度",
-  "innerColor.thicknessHint": "数值越小，上色范围越广；数值越大，只为更深的内层上色。",
+  "innerColor.thicknessHint": "为从外面不容易看到的地方上色。数值越大，上色范围越广。",
   "innerColor.heightHint": "数值越大，上色范围从发梢向头部中心扩大。",
   "innerColor.quality": "图片精细度",
   "innerColor.size512": "标准（512）",
@@ -463,5 +463,6 @@
   "innerColor.failed": "无法应用颜色：{0}",
   "innerColor.restored": "已恢复原来的第二层颜色设置。",
   "innerColor.uvHint": "效果取决于头发的结构。共用同一贴图区域的头发会一起上色。动态贴图可能使上色位置移动。",
-  "undo.innerColor": "改变头发内侧颜色"
+  "undo.innerColor": "改变头发内侧颜色",
+  "innerColor.measuring": "正在查找头发被遮住的地方。首次计算可能需要一些时间。"
 }

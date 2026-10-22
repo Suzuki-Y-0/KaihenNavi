@@ -15,40 +15,127 @@ namespace Jeni.KaihenNavi
             if (!condition) throw new Exception(message);
         }
         private static bool Near(float a, float b) { return Math.Abs(a - b) < 0.00001f; }
-        private static List<float[]> Classify(List<Vector3[]> points, List<int[]> used, int mode, float depth, float height)
+        private static List<float[]> Classify(List<Vector3[]> points, List<int[]> used, List<float[]> openness,
+            int mode, float range, float height)
         {
             var result = new List<float[]>();
-            InnerColorMask.Classify(points, used, mode, depth, height, (i, values) => result.Add(values));
+            InnerColorMask.Classify(points, used, openness, mode, range, height, (i, values) => result.Add(values));
             return result;
+        }
+        private static InnerColorOpenness.Geometry Geometry(int id)
+        {
+            return new InnerColorOpenness.Geometry
+            {
+                rendererId = id,
+                positions = new[] { new Vector3(0, 0, 0), new Vector3(1, 0, 0), new Vector3(0, 1, 0) },
+                normals = new[] { new Vector3(0, 0, 1), new Vector3(0, 0, 1), new Vector3(0, 0, 1) },
+                uv = new Vector2[3], triangles = new[] { new[] { 0, 1, 2 } }, used = new[] { 0, 1, 2 },
+            };
         }
         public static void Main()
         {
-            // 別レンダラー・別マテリアルの外側の層も比較に含む。対象外の頂点は混ぜない。
             var points = new List<Vector3[]>
             {
                 new[] { new Vector3(0, 0, 2), new Vector3(0, 0, 100) },
-                new[] { new Vector3(0, 0, 1.5f), new Vector3(0, 0, 1.95f) },
+                new[] { new Vector3(0, -1, 1.5f), new Vector3(0, -2, 1.95f) },
+                new[] { new Vector3(0, 0, -2), new Vector3(0, -1, -1.5f), new Vector3(1, 0, -0.05f) },
             };
-            var used = new List<int[]> { new[] { 0 }, new[] { 0, 1 } };
-            var layers = Classify(points, used, 0, 0.08f, 0.5f);
-            Check(Near(layers[0][0], 0) && Near(layers[0][1], 0), "Outer/unused vertices must be black");
-            Check(Near(layers[1][0], 1) && Near(layers[1][1], 0), "Only deeper inner layer must be white");
-            var deep = Classify(points, used, 0, 0.3f, 0.5f);
-            Check(deep[1][0] < layers[1][0], "Depth threshold must narrow the colored region");
+            var used = new List<int[]> { new[] { 0 }, new[] { 0, 1 }, new[] { 0, 1, 2 } };
+            var openness = new List<float[]> { new[] { 0.6f, 0f }, new[] { 0.05f, 0.3f }, new[] { 0.6f, 0.05f, 0.05f } };
+            var layers = Classify(points, used, openness, 0, 0.08f, 0.5f);
+            Check(Near(layers[0][0], 0) && Near(layers[0][1], 0), "Visible/unused vertices must be black");
+            Check(Near(layers[1][0], 1) && Near(layers[1][1], 0), "Hidden vertices must be white, moderately open ones excluded by default");
+            var wide = Classify(points, used, openness, 0, 0.4f, 0.5f);
+            Check(wide[1][1] > layers[1][1] && Near(wide[1][1], 1), "Larger range must expand the colored region");
+            Check(Near(wide[0][0], 0), "An exposed surface must stay uncolored even at maximum range");
+            var rear = Classify(points, used, openness, 2, 0.08f, 0.5f);
+            Check(Near(rear[1][0], 0), "Rear mode must exclude front hidden vertices");
+            Check(Near(rear[2][0], 0) && Near(rear[2][1], 1), "Rear mode must keep hidden rear vertices only");
+            Check(rear[2][2] > 0 && rear[2][2] < layers[2][2], "Rear weighting must feather at the side");
+            points[1][0] = new Vector3(3, -10, 2);
+            Check(Near(Classify(points, used, openness, 0, 0.08f, 0.5f)[1][0], layers[1][0]),
+                "Long diagonal hair must depend on openness, not distance from the head");
+            Check(Near(InnerColorMask.FromOpenness(0.08f, 0.01f), 0.5f), "Minimum range must center its feather at 0.08 openness");
+            Check(Near(InnerColorMask.FromOpenness(0.4f, 0.4f), 0.5f), "Maximum range must center its feather at 0.4 openness");
+            for (var step = 0; step < 100; step++)
+            {
+                var o = step / 100f;
+                var value = InnerColorMask.FromOpenness(o, 0.08f);
+                Check(value >= 0 && value <= 1 && value >= InnerColorMask.FromOpenness(o + 0.01f, 0.08f), "Increasing openness must reduce bounded color values");
+                Check(value <= InnerColorMask.FromOpenness(o, 0.2f), "Increasing range must never shrink color");
+            }
+            Check(InnerColorMask.FromOpenness(0.13f, 0.08f) > InnerColorMask.FromOpenness(0.14f, 0.08f) &&
+                InnerColorMask.FromOpenness(0.14f, 0.08f) > 0, "The openness boundary must be smooth");
 
-            // 球面の左右の区切り（atan2 の ±PI）をまたいでも内側を見つける。
-            points.Add(new[] { new Vector3(0.00001f, 0, -2), new Vector3(-0.00001f, 0, -1.5f) });
-            used.Add(new[] { 0, 1 });
-            var rear = Classify(points, used, 2, 0.08f, 0.5f);
-            Check(Near(rear[1][0], 0), "Rear mode must exclude front inner layers");
-            Check(Near(rear[2][0], 0) && Near(rear[2][1], 1), "Rear seam must keep inner layer");
-
+            // mode 1 はレイのデータを渡さず従来の高さ計算だけで動く。
             points = new List<Vector3[]> { new[] { new Vector3(0, -2, 1), new Vector3(0, -0.5f, 1), new Vector3(0, 0.1f, 1) } };
             used = new List<int[]> { new[] { 0, 1, 2 } };
-            var low = Classify(points, used, 1, 0.08f, 0.5f)[0];
-            var high = Classify(points, used, 1, 0.08f, 1)[0];
+            var low = Classify(points, used, null, 1, 0.08f, 0.5f)[0];
+            var high = Classify(points, used, null, 1, 0.08f, 1)[0];
             Check(Near(low[0], 1) && Near(low[1], 0) && Near(low[2], 0), "Lower mode must color only tips below cutoff");
             Check(Near(high[1], 1) && Near(high[2], 0), "Height must expand only below head center");
+
+            var geometry = new List<InnerColorOpenness.Geometry> { Geometry(1), Geometry(2) };
+            geometry[1].used = new int[0]; // 選んでいない髪・体もキーに含める。
+            var key = InnerColorOpenness.CacheKey(10, geometry);
+            Check(key == InnerColorOpenness.CacheKey(10, geometry), "Equal inputs must give equal cache keys");
+            Check(key != InnerColorOpenness.CacheKey(11, geometry), "Changing avatar must invalidate cache");
+            geometry[0].rendererId++;
+            Check(key != InnerColorOpenness.CacheKey(10, geometry), "Changing selected renderer must invalidate cache");
+            geometry[0].rendererId--;
+            geometry[0].used = new[] { 0 };
+            Check(key != InnerColorOpenness.CacheKey(10, geometry), "Changing selected vertices must invalidate cache");
+            geometry[0].used = new[] { 0, 1, 2 };
+            geometry[1].positions[0] = new Vector3(0.00001f, 0, 0);
+            Check(key != InnerColorOpenness.CacheKey(10, geometry), "Body/unselected hair pose or BlendShape changes must invalidate cache even below sample rounding");
+            geometry[1].positions[0] = new Vector3(0, 0, 0);
+            geometry[0].normals[0] = new Vector3(1, 0, 0);
+            Check(key != InnerColorOpenness.CacheKey(10, geometry), "Changing normals must invalidate cache");
+            geometry[0].normals[0] = new Vector3(0, 0, 1);
+            geometry[1].triangles[0] = new[] { 0, 2, 1 };
+            Check(key != InnerColorOpenness.CacheKey(10, geometry), "Changing occluder topology must invalidate cache");
+            geometry[1].triangles[0] = new[] { 0, 1, 2 };
+            geometry[0].uv[0] = new Vector2(0.5f, 0.5f);
+            Check(key == InnerColorOpenness.CacheKey(10, geometry), "UV-only edits must reuse openness");
+            geometry.RemoveAt(1);
+            var changedKey = InnerColorOpenness.CacheKey(10, geometry);
+            Check(key != changedKey, "Adding/removing body or unselected hair must invalidate cache");
+            var cache = new InnerColorOpenness.Cache();
+            var calls = 0;
+            Func<List<float[]>> measure = () => { calls++; return new List<float[]> { new[] { 0.1f } }; };
+            var first = cache.Get(key, measure);
+            Check(ReferenceEquals(first, cache.Get(key, measure)) && calls == 1, "Repeated slider/color/mode/quality edits must reuse the measured array");
+            cache.Get(changedKey, measure);
+            Check(calls == 2, "Changed key must measure again");
+            var failed = false;
+            try { cache.Get(key, () => { throw new InvalidOperationException(); }); }
+            catch (InvalidOperationException) { failed = true; }
+            Check(failed && ReferenceEquals(cache.Get(changedKey, measure), cache.Get(changedKey, measure)) && calls == 2,
+                "Failed measurements must not replace a complete cache entry");
+            cache.Clear(); cache.Get(changedKey, measure);
+            Check(calls == 3, "Clearing cache must release old measurement");
+
+            var normal = new Vector3(0, 0, 1);
+            var sample = InnerColorOpenness.SampleKey(new Vector3(0, 0, 0), normal);
+            Check(sample == InnerColorOpenness.SampleKey(new Vector3(0.0005f, 0, 0), normal), "Nearby vertices must share a sample");
+            Check(sample != InnerColorOpenness.SampleKey(new Vector3(0.003f, 0, 0), normal), "Distant vertices must not share a sample");
+            Check(sample != InnerColorOpenness.SampleKey(new Vector3(0, 0, 0), new Vector3(1, 0, 0)), "Different surface directions must keep distinct samples");
+            Check(sample == InnerColorOpenness.SampleKey(new Vector3(0, 0, 0), new Vector3(0, 0, -1)), "Reversed normals must share a two-sided sample");
+            var directions = InnerColorOpenness.Directions();
+            Check(directions.Length == 64, "Use 64 fixed directions");
+            var sumX = 0f; var sumY = 0f; var sumZ = 0f;
+            for (var i = 0; i < directions.Length; i++)
+            {
+                var d = directions[i]; var repeated = InnerColorOpenness.Directions()[i];
+                Check(Near(d.x * d.x + d.y * d.y + d.z * d.z, 1), "Ray directions must be unit length");
+                Check(Near(d.x, repeated.x) && Near(d.y, repeated.y) && Near(d.z, repeated.z), "Ray sequence must be deterministic");
+                sumX += d.x; sumY += d.y; sumZ += d.z;
+            }
+            Check(Math.Abs(sumX) < 0.1f && Math.Abs(sumY) < 0.1f && Math.Abs(sumZ) < 0.1f, "Directions must cover the sphere evenly");
+            foreach (var name in new[] { "Hair_ACC", "HairRibbon", "hair_pin", "HAIR_CLIP", "HairEarring", "髪飾り", "髪リボン", "髪ピン", "Cloth_Hair" })
+                Check(InnerColorFeature.DefaultExcluded(name), "Accessories must be initially unchecked: " + name);
+            foreach (var name in new[] { "Hair", "HairBack", "LongHair", "前髪", "後ろ髪" })
+                Check(!InnerColorFeature.DefaultExcluded(name), "Ordinary hair must be initially selected: " + name);
 
             const int size = 32;
             var uv = new[] { new Vector2(0, 0), new Vector2(1, 0), new Vector2(0, 1) };

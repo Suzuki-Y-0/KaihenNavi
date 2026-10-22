@@ -48,6 +48,8 @@ namespace Jeni.KaihenNavi
 
         private VRCAvatarDescriptor _avatar;
         private readonly HashSet<SkinnedMeshRenderer> _excluded = new HashSet<SkinnedMeshRenderer>();
+        private readonly HashSet<SkinnedMeshRenderer> _selectionInitialized = new HashSet<SkinnedMeshRenderer>();
+        private readonly InnerColorOpenness.Cache _openness = new InnerColorOpenness.Cache();
         private Color _color = Colors[0];
         private int _mode;
         private int _size = 512;
@@ -71,6 +73,8 @@ namespace Jeni.KaihenNavi
             {
                 _avatar = ctx.Avatar;
                 _excluded.Clear();
+                _selectionInitialized.Clear();
+                _openness.Clear();
             }
             var state = InnerColorState.Load(ctx.Avatar);
             _preview = state != null && state.data.entries.Count > 0;
@@ -81,6 +85,7 @@ namespace Jeni.KaihenNavi
             foreach (var renderer in targets)
             {
                 var r = renderer;
+                if (_selectionInitialized.Add(r) && DefaultExcluded(r.name)) _excluded.Add(r);
                 var hair = HairSlots(ctx.Avatar, r).Select(i => r.sharedMaterials[i]).ToList();
                 var supported = hair.Any(Supported);
                 var row = Ui.Box("kn-list__row");
@@ -163,6 +168,7 @@ namespace Jeni.KaihenNavi
         private sealed class Surface
         {
             public SkinnedMeshRenderer renderer;
+            public InnerColorOpenness.Geometry geometry;
             public Vector3[] positions;
             public Vector2[] uv;
             public readonly Dictionary<int, int[]> triangles = new Dictionary<int, int[]>();
@@ -170,40 +176,74 @@ namespace Jeni.KaihenNavi
             public float[] values;
         }
 
+        internal static bool DefaultExcluded(string name)
+        {
+            if (string.IsNullOrEmpty(name)) return false;
+            var lower = name.ToLowerInvariant();
+            return PartGuesser.LooksLikeCloth(name) || new[]
+            {
+                "acc", "ribbon", "pin", "clip", "earring", "飾", "リボン", "ピン",
+            }.Any(lower.Contains);
+        }
+
+        private static List<SkinnedMeshRenderer> Occluders(VRCAvatarDescriptor avatar, List<SkinnedMeshRenderer> hair)
+        {
+            var all = avatar.GetComponentsInChildren<SkinnedMeshRenderer>(true).Where(r => r.sharedMesh != null).ToList();
+            var body = AvatarFinder.FindBody(avatar);
+            var result = new HashSet<SkinnedMeshRenderer>(hair); // チェックを外した髪・髪飾りも遮る。
+            if (body != null && body.sharedMesh != null) result.Add(body);
+            if (avatar.VisemeSkinnedMesh != null && avatar.VisemeSkinnedMesh.sharedMesh != null) result.Add(avatar.VisemeSkinnedMesh);
+            // 顔と体が分かれた商品にも対応。服や髪を避けた中で一番大きなメッシュも素体の候補にする。
+            var largest = all.Where(r => !hair.Contains(r) && !PartGuesser.LooksLikeCloth(r.name))
+                .OrderByDescending(r => r.sharedMesh.vertexCount).FirstOrDefault();
+            if (largest != null) result.Add(largest);
+            foreach (var r in all)
+                if (!PartGuesser.LooksLikeCloth(r.name) && (PartGuesser.Guess(r, null, body) == BodyPart.Skin ||
+                    r.sharedMaterials.Any(m => m != null && PartGuesser.Guess(r, m, body) == BodyPart.Skin))) result.Add(r);
+            return result.OrderBy(r => r.GetInstanceID()).ToList();
+        }
+
         private List<Surface> Bake(VRCAvatarDescriptor avatar)
         {
             var head = AvatarMeasure.Bone(avatar, HumanBodyBones.Head);
             if (head == null) throw new InvalidOperationException(L10n.Tr("innerColor.noHead"));
+            var hair = HairRenderers(avatar);
             var surfaces = new List<Surface>();
-            foreach (var r in HairRenderers(avatar).Where(r => !_excluded.Contains(r)))
+            var baked = new Dictionary<SkinnedMeshRenderer, InnerColorOpenness.Geometry>();
+            foreach (var r in hair.Where(r => !_excluded.Contains(r)))
             {
                 var slots = HairSlots(avatar, r).Where(i => Supported(r.sharedMaterials[i])).ToList();
                 if (slots.Count == 0) continue;
-                var mesh = new Mesh();
-                try
+                var geometry = InnerColorOpenness.Bake(r);
+                baked.Add(r, geometry);
+                var s = new Surface { renderer = r, geometry = geometry, uv = geometry.uv };
+                if (geometry.positions.Length == 0 || s.uv.Length != geometry.positions.Length)
+                    throw new InvalidOperationException(L10n.Tr("innerColor.noUV", r.name));
+                // 下のほう・後頭部の重みだけ、頭の中心とアバターの向きを基準にする。
+                var rotation = Quaternion.Inverse(avatar.transform.rotation);
+                s.positions = geometry.positions.Select(p => rotation * (p - head.position)).ToArray();
+                foreach (var slot in slots)
                 {
-                    // useScale=false: 頂点は renderer のローカル座標。TransformPoint でスケールを一度だけ適用。
-                    r.BakeMesh(mesh, false);
-                    var s = new Surface { renderer = r, positions = mesh.vertices, uv = mesh.uv };
-                    if (s.positions.Length == 0 || s.uv.Length != s.positions.Length)
-                        throw new InvalidOperationException(L10n.Tr("innerColor.noUV", r.name));
-                    // 頭の中心から測り、向きはアバターを基準にする（Head の骨の軸は商品ごとに異なる）。
-                    var rotation = Quaternion.Inverse(avatar.transform.rotation);
-                    for (var i = 0; i < s.positions.Length; i++)
-                        s.positions[i] = rotation * (r.transform.TransformPoint(s.positions[i]) - head.position);
-                    foreach (var slot in slots)
-                    {
-                        if (slot >= mesh.subMeshCount) continue;
-                        s.triangles.Add(slot, mesh.GetTriangles(slot));
-                        s.materials.Add(slot, r.sharedMaterials[slot]);
-                    }
-                    if (s.triangles.Count > 0) surfaces.Add(s);
+                    if (slot >= geometry.triangles.Length) continue;
+                    s.triangles.Add(slot, geometry.triangles[slot]);
+                    s.materials.Add(slot, r.sharedMaterials[slot]);
                 }
-                finally { Object.DestroyImmediate(mesh); }
+                geometry.used = s.triangles.Values.SelectMany(t => t).Distinct().OrderBy(i => i).ToArray();
+                if (s.triangles.Count > 0) surfaces.Add(s);
             }
             if (surfaces.Count == 0) return surfaces;
+            List<float[]> openness = null;
+            if (_mode != 1)
+            {
+                foreach (var r in Occluders(avatar, hair))
+                    if (!baked.ContainsKey(r)) baked.Add(r, InnerColorOpenness.Bake(r));
+                var geometry = baked.OrderBy(p => p.Key.GetInstanceID()).Select(p => p.Value).ToList();
+                var measured = _openness.Get(InnerColorOpenness.CacheKey(avatar.GetInstanceID(), geometry),
+                    () => InnerColorOpenness.Measure(geometry));
+                openness = surfaces.Select(s => measured[geometry.IndexOf(s.geometry)]).ToList();
+            }
             InnerColorMask.Classify(surfaces.Select(s => s.positions).ToList(),
-                surfaces.Select(s => s.triangles.Values.SelectMany(t => t).Distinct().ToArray()).ToList(),
+                surfaces.Select(s => s.geometry.used).ToList(), openness,
                 _mode, _thickness, _height, (i, values) => surfaces[i].values = values);
             return surfaces;
         }

@@ -442,9 +442,9 @@
   "innerColor.mode.layers": "안쪽 층",
   "innerColor.mode.lower": "아래쪽",
   "innerColor.mode.rear": "뒤쪽 안쪽",
-  "innerColor.thickness": "안쪽 깊이",
+  "innerColor.thickness": "안쪽으로 칠할 범위",
   "innerColor.height": "높이",
-  "innerColor.thicknessHint": "값이 작으면 넓게, 크면 더 깊은 안쪽에만 색이 들어가요.",
+  "innerColor.thicknessHint": "밖에서 잘 보이지 않는 곳에 색을 넣어요. 값이 클수록 색을 넣는 범위가 넓어져요.",
   "innerColor.heightHint": "값이 클수록 머리끝에서 머리 중심 쪽으로 색이 넓어져요.",
   "innerColor.quality": "이미지 세밀함",
   "innerColor.size512": "보통 (512)",
@@ -463,5 +463,6 @@
   "innerColor.failed": "색을 적용하지 못했어요: {0}",
   "innerColor.restored": "두 번째 색상을 바꾸기 전 설정으로 되돌렸어요.",
   "innerColor.uvHint": "머리카락 구조에 따라 결과가 달라요. 같은 이미지 위치를 쓰는 머리카락은 함께 색이 바뀌어요. 움직이는 이미지에서는 색 위치도 움직일 수 있어요.",
-  "undo.innerColor": "머리 안쪽 색 바꾸기"
+  "undo.innerColor": "머리 안쪽 색 바꾸기",
+  "innerColor.measuring": "머리카락의 가려진 부분을 찾고 있어요. 처음에는 시간이 조금 걸릴 수 있어요."
 }

@@ -11,37 +11,26 @@ namespace Jeni.KaihenNavi
     /// <summary>焼いた髪の位置 → 頂点の内側度 → UV マスク。元の Mesh/Texture は変更しない。</summary>
     internal static class InnerColorMask
     {
-        private const int LongitudeBins = 72;
-        private const int LatitudeBins = 36;
-
-        private static int Longitude(Vector3 p)
-        {
-            return Math.Min(LongitudeBins - 1, (int)((Math.Atan2(p.x, p.z) + Math.PI) / (2 * Math.PI) * LongitudeBins));
-        }
-        private static int Latitude(Vector3 p, double radius)
-        {
-            return Math.Min(LatitudeBins - 1, (int)(Math.Acos(Math.Max(-1, Math.Min(1, p.y / radius))) / Math.PI * LatitudeBins));
-        }
         private static double Radius(Vector3 p) { return Math.Sqrt(p.x * p.x + p.y * p.y + p.z * p.z); }
         private static float Clamp01(float value) { return Math.Max(0, Math.Min(1, value)); }
         private static float Smooth(float value) { var t = Clamp01(value); return t * t * (3 - 2 * t); }
 
-        /// <param name="used">髪の対象枠の頂点だけ。他の枠の頂点を外側の層の判定に混ぜない。</param>
-        internal static void Classify(List<Vector3[]> positions, List<int[]> used, int mode, float thickness, float height,
-            Action<int, float[]> receive)
+        // UI の 1〜40 を、開け具合のしきい値 0.08〜0.40 に対応させる。
+        // 大きくするほど外から見えやすい場所まで含む。64 本のレイでも境目が段にならないようにする。
+        internal static float FromOpenness(float openness, float range)
         {
-            var outside = new double[LongitudeBins * LatitudeBins];
+            var threshold = 0.08f + Clamp01((range - 0.01f) / 0.39f) * 0.32f;
+            return Smooth((threshold - Clamp01(openness)) / 0.06f + 0.5f);
+        }
+
+        /// <param name="used">色を変える枠で使う頂点。他の枠には色をつけない。</param>
+        /// <param name="openness">ワールド座標の髪・体に対して測定済みの開け具合。mode 1 では不要。</param>
+        internal static void Classify(List<Vector3[]> positions, List<int[]> used, List<float[]> openness,
+            int mode, float range, float height, Action<int, float[]> receive)
+        {
             var lowest = 0f;
             for (var s = 0; s < positions.Count; s++)
-                foreach (var i in used[s])
-                {
-                    var p = positions[s][i];
-                    lowest = Math.Min(lowest, p.y);
-                    var radius = Radius(p);
-                    if (radius < 0.000001) continue;
-                    var bin = Latitude(p, radius) * LongitudeBins + Longitude(p);
-                    outside[bin] = Math.Max(outside[bin], radius);
-                }
+                foreach (var i in used[s]) lowest = Math.Min(lowest, positions[s][i].y);
             var cutoff = lowest * (1 - Clamp01(height));
             var heightFeather = Math.Max(0.00001f, -lowest * 0.05f);
             for (var s = 0; s < positions.Count; s++)
@@ -56,22 +45,13 @@ namespace Jeni.KaihenNavi
                         values[i] = p.y >= 0 ? 0 : Smooth((cutoff - p.y) / heightFeather);
                         continue;
                     }
-                    var radius = Radius(p);
-                    if (radius < 0.000001) continue;
-                    var x = Longitude(p);
-                    var y = Latitude(p, radius);
-                    var outer = outside[y * LongitudeBins + x];
-                    // 境界付近の頂点は隣の区切りも見る（左右の継ぎ目は循環する）。
-                    for (var dy = -1; dy <= 1; dy++)
-                    {
-                        if (y + dy < 0 || y + dy >= LatitudeBins) continue;
-                        for (var dx = -1; dx <= 1; dx++)
-                            outer = Math.Max(outer, outside[(y + dy) * LongitudeBins + (x + dx + LongitudeBins) % LongitudeBins]);
-                    }
-                    var depth = outer > 0 ? (float)((outer - radius) / outer) : 0;
-                    values[i] = Smooth((depth - thickness) / 0.03f);
+                    values[i] = FromOpenness(openness[s][i], range);
                     // アバター前方は +Z。後頭部側のみ、中心の近くはなだらかにする。
-                    if (mode == 2) values[i] *= p.z >= 0 ? 0 : Smooth((float)(-p.z / radius) / 0.15f);
+                    if (mode == 2)
+                    {
+                        var radius = Radius(p);
+                        values[i] *= p.z >= 0 || radius < 0.000001 ? 0 : Smooth((float)(-p.z / radius) / 0.15f);
+                    }
                 }
                 receive(s, values);
             }

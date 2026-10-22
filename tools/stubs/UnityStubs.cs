@@ -46,6 +46,7 @@ namespace UnityEngine
         public bool activeSelf;
         public bool activeInHierarchy;
         public string tag;
+        public int layer;
         public void SetActive(bool value) { }
         public T AddComponent<T>() where T : Component { return null; }
         public T GetComponent<T>() { return default(T); }
@@ -55,6 +56,7 @@ namespace UnityEngine
 
     public class Transform : Component, System.Collections.IEnumerable
     {
+        public Matrix4x4 localToWorldMatrix;
         public Transform parent;
         public Transform root;
         public Vector3 lossyScale;
@@ -89,7 +91,25 @@ namespace UnityEngine
         public void BakeMesh(Mesh m, bool useScale) { }
     }
 
-    public class Mesh : Object { public Vector2[] uv; public int subMeshCount; public int[] GetTriangles(int submesh) { return new int[0]; } public bool isReadable; public int blendShapeCount; public Vector3[] vertices; public string GetBlendShapeName(int i) { return ""; } }
+    public class Mesh : Object { public Vector2[] uv; public int subMeshCount; public int[] GetTriangles(int submesh) { return new int[0]; } public bool isReadable; public int blendShapeCount; public Vector3[] vertices; public Vector3[] normals; public int[] triangles; public int vertexCount { get { return vertices == null ? 0 : vertices.Length; } } public UnityEngine.Rendering.IndexFormat indexFormat; public void RecalculateNormals() { } public void RecalculateBounds() { } public string GetBlendShapeName(int i) { return ""; } }
+    public class Collider : Component { }
+    public class MeshCollider : Collider { public Mesh sharedMesh; }
+    public struct RaycastHit { public Collider collider; }
+    public enum QueryTriggerInteraction { UseGlobal, Ignore, Collide }
+    public static class Physics
+    {
+        public static bool queriesHitBackfaces;
+        public static void SyncTransforms() { }
+        public static bool Raycast(Vector3 origin, Vector3 direction, out RaycastHit hit, float distance, int layerMask, QueryTriggerInteraction triggers)
+        { hit = default(RaycastHit); return false; }
+        public static int RaycastNonAlloc(Vector3 origin, Vector3 direction, RaycastHit[] hits, float distance, int layerMask, QueryTriggerInteraction triggers) { return 0; }
+    }
+    public struct Matrix4x4
+    {
+        public Matrix4x4 inverse { get { return this; } }
+        public Matrix4x4 transpose { get { return this; } }
+        public Vector3 MultiplyVector(Vector3 v) { return v; }
+    }
     public class Texture : Object { public TextureWrapMode wrapMode; }
     public enum TextureFormat { RGBA32, RGB24 }
     public enum TextureWrapMode { Repeat, Clamp }
@@ -783,3 +803,5 @@ namespace UnityEngine.TextCore.Text
         public static FontAsset CreateFontAsset(string familyName, string styleName, int pointSize) { return null; }
     }
 }
+
+namespace UnityEngine.Rendering { public enum IndexFormat { UInt16, UInt32 } }

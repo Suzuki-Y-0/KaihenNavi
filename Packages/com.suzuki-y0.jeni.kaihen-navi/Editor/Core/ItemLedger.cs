@@ -309,12 +309,14 @@ namespace Jeni.KaihenNavi
                     EditorUtility.DisplayProgressBar(L10n.Tr("pick.owned"),
                         L10n.Tr("pick.scanning") + " (" + (i + 1) + "/" + paths.Count + ")", (float)i / paths.Count);
                     if (imported.Contains(path)) continue;
-                    var folder = folders[path];
+                    // KonoAsset に同じ名前の商品があれば、そのフォルダを商品のまとまりにする（置き場や分類のフォルダより確か）
+                    KonoAssetItem konoItem;
+                    var folder = KonoFolderOf(path, out konoItem) ?? folders[path];
                     LedgerPackage package;
                     if (!scanned.TryGetValue(folder, out package))
                     {
                         package = new LedgerPackage { packageName = Path.GetFileName(folder), commonFolder = folder, scanned = true };
-                        var linked = KonoAssetLink.FindByFolderName(package.packageName);
+                        var linked = konoItem ?? KonoAssetLink.FindByFolderName(package.packageName);
                         if (linked != null) package.konoAssetId = linked.id;
                         scanned.Add(folder, package);
                     }
@@ -335,6 +337,39 @@ namespace Jeni.KaihenNavi
                 _recordsByPath = null;
                 EditorUtility.ClearProgressBar();
             }
+        }
+
+        // 置き場や分類によく使われる名前。KonoAsset の商品名と偶然一致しやすいので照合しない
+        private static readonly HashSet<string> GenericFolders = new HashSet<string>(StringComparer.Ordinal)
+        {
+            "assets", "project", "items", "item", "prefab", "prefabs", "clothing", "clothes", "cloth", "outfit", "outfits",
+            "accessories", "accessory", "material", "materials", "texture", "textures", "fbx", "model", "models",
+            "booth", "gimmick", "gimmicks", "avatar", "avatars", "shader", "shaders", "animation", "animations", "editor",
+        };
+
+        /// <summary>
+        /// Prefab の親フォルダを浅い順にたどり、KonoAsset の商品名・unitypackage 名と 1 つだけ一致するフォルダを返す。
+        /// 深い所（アバター名の付いたフォルダなど）は別の商品と一致しやすいので、浅い所を優先する。
+        /// </summary>
+        private static string KonoFolderOf(string assetPath, out KonoAssetItem item)
+        {
+            item = null;
+            if (!KonoAssetLink.IsAvailable) return null;
+            var parts = assetPath.Split('/');
+            var current = parts[0];
+            for (var i = 1; i < parts.Length - 1; i++)
+            {
+                current += "/" + parts[i];
+                var name = parts[i];
+                if (name.StartsWith("_", StringComparison.Ordinal)) continue;
+                if (GenericFolders.Contains(KonoAssetLink.Normalize(name))) continue;
+                var found = KonoAssetLink.FindByFolderName(name);
+                if (found == null) continue;
+                item = found;
+                return current;
+            }
+
+            return null;
         }
 
         private static bool IsScanPath(string path)

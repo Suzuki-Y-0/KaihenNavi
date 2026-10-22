@@ -466,7 +466,7 @@ namespace UnityEngine.UIElements
     public class Button : TextElement { public Button() { } public Button(Action clickEvent) { } }
     public class Foldout : BaseField<bool> { public string text; }
     public class Toggle : BaseField<bool> { public Toggle() { } public Toggle(string label) { } }
-    public class TextField : BaseField<string> { }
+    public class TextField : BaseField<string> { public string label; }
     public class Slider : BaseField<float>
     {
         public Slider(string label, float start, float end) { }
@@ -653,6 +653,8 @@ namespace UnityEditor
 
     public static class EditorUtility
     {
+        public static void DisplayProgressBar(string title, string info, float progress) { }
+        public static void ClearProgressBar() { }
         public static void SetDirty(Object o) { }
         public static void CopySerialized(Object src, Object dst) { }
         public static bool DisplayDialog(string t, string m, string ok) { return true; }

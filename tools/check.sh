@@ -43,4 +43,6 @@ print("== Localization", "OK" if ok else "NG", f"({len(base)} keys)")
 sys.exit(0 if ok else 1)
 EOF
 
+python3 "$here/test_konoasset.py"
+
 echo "All checks passed."

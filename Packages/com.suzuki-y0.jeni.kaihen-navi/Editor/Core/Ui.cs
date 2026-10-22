@@ -99,6 +99,14 @@ namespace Jeni.KaihenNavi
             return box;
         }
 
+        /// <summary>画像をそのまま背景に貼った箱。</summary>
+        public static VisualElement Image(Texture2D texture, params string[] classes)
+        {
+            var box = Box(classes);
+            if (texture != null) box.style.backgroundImage = new StyleBackground(texture);
+            return box;
+        }
+
         private static void SetThumbnail(VisualElement box, UnityEngine.Object asset, int tries)
         {
             if (asset == null) return;

@@ -361,7 +361,7 @@ namespace UnityEngine.UIElements
         public void Add(StyleSheet s) { }
     }
 
-    public abstract class EventBase { }
+    public abstract class EventBase { public object target; }
     public class MouseDownEvent : EventBase { public int clickCount; }
     public class FocusOutEvent : EventBase { }
     public class DragUpdatedEvent : EventBase { }
@@ -464,8 +464,9 @@ namespace UnityEngine.UIElements
     public class TextElement : VisualElement { public string text; }
     public class Label : TextElement { public Label() { } public Label(string text) { } }
     public class Button : TextElement { public Button() { } public Button(Action clickEvent) { } }
+    public class Foldout : BaseField<bool> { public string text; }
     public class Toggle : BaseField<bool> { public Toggle() { } public Toggle(string label) { } }
-    public class TextField : BaseField<string> { }
+    public class TextField : BaseField<string> { public string label; }
     public class Slider : BaseField<float>
     {
         public Slider(string label, float start, float end) { }
@@ -545,8 +546,24 @@ namespace UnityEditor
         public static void SetString(string k, string v) { }
     }
 
+    [AttributeUsage(AttributeTargets.Class)]
+    public class InitializeOnLoadAttribute : Attribute { }
+
+    public class AssetPostprocessor { }
+
+    public static class SessionState
+    {
+        public static string GetString(string key, string fallback) { return fallback; }
+        public static void SetString(string key, string value) { }
+        public static void EraseString(string key) { }
+    }
+
     public static class AssetDatabase
     {
+        public static Action<string> importPackageStarted;
+        public static Action<string> importPackageCompleted;
+        public static Action<string> importPackageCancelled;
+        public static Action<string, string> importPackageFailed;
         public static bool Contains(Object o) { return false; }
         public static string[] FindAssets(string filter) { return new string[0]; }
         public static string[] FindAssets(string filter, string[] folders) { return new string[0]; }
@@ -636,6 +653,8 @@ namespace UnityEditor
 
     public static class EditorUtility
     {
+        public static void DisplayProgressBar(string title, string info, float progress) { }
+        public static void ClearProgressBar() { }
         public static void SetDirty(Object o) { }
         public static void CopySerialized(Object src, Object dst) { }
         public static bool DisplayDialog(string t, string m, string ok) { return true; }

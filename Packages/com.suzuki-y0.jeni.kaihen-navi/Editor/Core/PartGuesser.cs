@@ -47,6 +47,23 @@ namespace Jeni.KaihenNavi
             }),
         };
 
+        /// <summary>名前に服・小物の言葉が入っているか（「Cloth_HairRibbon」のように髪の言葉と両方あるときに服を優先するため）。</summary>
+        public static bool LooksLikeCloth(string name)
+        {
+            if (string.IsNullOrEmpty(name)) return false;
+            var lower = name.ToLowerInvariant();
+            foreach (var rule in Rules)
+            {
+                if (rule.Key != BodyPart.Cloth) continue;
+                foreach (var word in rule.Value)
+                {
+                    if (lower.Contains(word)) return true;
+                }
+            }
+
+            return false;
+        }
+
         public static BodyPart Guess(Renderer renderer, Material material, Renderer body)
         {
             // マテリアル名を優先し、だめならオブジェクト名で判定する

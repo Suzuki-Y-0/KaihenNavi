@@ -29,7 +29,11 @@ namespace Jeni.KaihenNavi
             public int Depth;
             public string Label;
             public bool Picked;
+            public bool IsOther;
+            public bool InMenu = false;
         }
+
+        private static bool _othersExpanded;
 
         // チェックと名前は画面を作り直しても覚えておく
         private static readonly Dictionary<GameObject, bool> Picks = new Dictionary<GameObject, bool>();
@@ -44,6 +48,8 @@ namespace Jeni.KaihenNavi
         public override int Number { get { return 2; } }
         public override Color Accent { get { return Ui.Hex("#6CC08B"); } }
         public override bool InTrial { get { return true; } }
+
+        public override bool RefreshOnHierarchyChange { get { return true; } }
 
         public override VisualElement Build(FeatureContext ctx)
         {
@@ -63,7 +69,7 @@ namespace Jeni.KaihenNavi
 
         // ---------------------------------------------------------------- 候補
 
-        /// <summary>脱ぎ着の候補（素体以外のメッシュと、メッシュを複数まとめた衣装フォルダ）。</summary>
+        /// <summary>脱ぎ着の候補（メッシュと、メッシュを複数まとめた衣装フォルダ）。</summary>
         private static List<Candidate> FindCandidates(VRCAvatarDescriptor avatar)
         {
             var result = new List<Candidate>();
@@ -77,8 +83,14 @@ namespace Jeni.KaihenNavi
             // 小物のまとまり（体の骨やアバター直下に付いている親）にメッシュが 1 つだけなら、その名前を表示名にする
             foreach (var c in result)
             {
-                if (Labels.ContainsKey(c.Target)) continue;
+                // まとまりを切り替えると中の髪・体も消えるので、子のメッシュも判定する。
                 var group = AccessoryRoot(avatar.transform, c.Target.transform, bones);
+                // 服・小物の言葉が名前にあれば服を優先する（Cloth_HairRibbon など）
+                c.IsOther = !PartGuesser.LooksLikeCloth(c.Target.name) &&
+                    (IsHairName(c.Target.name) ||
+                     c.Target.GetComponentsInChildren<Renderer>(true)
+                         .Any(r => IsOtherRenderer(r, body, avatar.VisemeSkinnedMesh)));
+                if (Labels.ContainsKey(c.Target)) continue;
                 if (group == c.Target.transform) continue;
                 var meshes = group.GetComponentsInChildren<Renderer>(true)
                     .Count(r => (r is SkinnedMeshRenderer || r is MeshRenderer) && r != body);
@@ -86,6 +98,52 @@ namespace Jeni.KaihenNavi
             }
 
             return result;
+        }
+
+        private static bool IsHairName(string name)
+        {
+            var lower = name.ToLowerInvariant();
+            return new[] { "hair", "kami", "bang", "fringe", "ponytail", "twintail", "髪", "アホ毛" }
+                .Any(lower.Contains);
+        }
+
+        private static bool IsOtherRenderer(Renderer renderer, Renderer body, Renderer face)
+        {
+            if (!(renderer is SkinnedMeshRenderer) && !(renderer is MeshRenderer)) return false;
+            // 名前や服のマテリアルより、素体・顔への直接の参照を優先する。
+            if (renderer == body || renderer == face) return true;
+            // マテリアル名は服と素体で共有されていることが多いので、メッシュの名前だけで判定する
+            if (PartGuesser.LooksLikeCloth(renderer.name)) return false;
+            return IsOtherPart(PartGuesser.Guess(renderer, null, body));
+        }
+
+        private static bool IsOtherPart(BodyPart part)
+        {
+            return part == BodyPart.Hair || part == BodyPart.Skin ||
+                part == BodyPart.Eye || part == BodyPart.Other;
+        }
+
+        /// <summary>同じ候補を振り分けるだけにして、チェックや名前の変更を共有する。</summary>
+        private static VisualElement BuildGroupedList(List<Candidate> candidates,
+            System.Func<List<Candidate>, VisualElement> buildList)
+        {
+            var groups = new VisualElement();
+            groups.Add(Ui.Heading(L10n.Tr("toggle.clothes")));
+            groups.Add(buildList(candidates.Where(c => !c.IsOther).ToList()));
+            var others = candidates.Where(c => c.IsOther).ToList();
+            var foldout = new Foldout
+            {
+                text = L10n.Tr("toggle.others", others.Count),
+                value = _othersExpanded,
+            };
+            foldout.RegisterValueChangedCallback(e =>
+            {
+                // 子のチェック変更も伝わるため、折りたたみ自身の変更だけを覚える。
+                if (e.target == foldout) _othersExpanded = e.newValue;
+            });
+            foldout.Add(buildList(others));
+            groups.Add(foldout);
+            return groups;
         }
 
         /// <summary>体の骨かアバター直下に付いている、いちばん上の親。</summary>
@@ -107,7 +165,7 @@ namespace Jeni.KaihenNavi
                 var renderer = t.GetComponent<Renderer>();
                 var isMesh = renderer is SkinnedMeshRenderer || renderer is MeshRenderer;
 
-                if (isMesh && renderer != body)
+                if (isMesh)
                 {
                     Add(result, t.gameObject, depth);
                     childDepth = depth + 1;
@@ -183,6 +241,7 @@ namespace Jeni.KaihenNavi
                 }
 
                 var state = c.Target.activeSelf ? L10n.Tr("toggle.stateVisible") : L10n.Tr("toggle.stateHidden");
+                if (c.InMenu) state += "  ・  " + L10n.Tr("toggle.inMenu");
                 // 表示名を変えたものは、元のオブジェクト名も添えて見分けられるようにする
                 if (editableLabel && c.Label != c.Target.name) state += "  ・  " + c.Target.name;
                 texts.Add(Ui.Text(state, "kn-list__sub"));
@@ -236,6 +295,7 @@ namespace Jeni.KaihenNavi
             {
                 var candidate = candidates.FirstOrDefault(c => c.Target == e.Target);
                 if (candidate == null) continue;
+                candidate.InMenu = true;
                 if (!Picks.ContainsKey(e.Target)) candidate.Picked = true;
                 if (!Labels.ContainsKey(e.Target)) candidate.Label = e.Item.name;
             }
@@ -261,7 +321,7 @@ namespace Jeni.KaihenNavi
             };
 
             root.Add(Ui.Heading(L10n.Tr("toggle.pick")));
-            root.Add(BuildList(candidates, true, updateBits));
+            root.Add(BuildGroupedList(candidates, group => BuildList(group, true, updateBits)));
             root.Add(bits);
             root.Add(over);
             updateBits();
@@ -491,6 +551,11 @@ namespace Jeni.KaihenNavi
                 return;
             }
 
+            root.Add(BuildGroupedList(candidates, group => BuildVisibilityList(ctx, group)));
+        }
+
+        private static VisualElement BuildVisibilityList(FeatureContext ctx, List<Candidate> candidates)
+        {
             var list = Ui.Box("kn-list");
             foreach (var candidate in candidates)
             {
@@ -512,7 +577,7 @@ namespace Jeni.KaihenNavi
                 list.Add(row);
             }
 
-            root.Add(list);
+            return list;
         }
 #endif
     }

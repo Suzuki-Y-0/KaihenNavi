@@ -228,14 +228,14 @@ namespace Jeni.KaihenNavi
         private static void GroupFolders(string folder, List<string> paths, int depth, Dictionary<string, string> result)
         {
             var originalFolder = folder;
-            // _Project/Items のような一本道の置き場も、3 段以内で分岐を探す。
+            // _Project/Items/Clothing/作者名/商品名 のような深い置き場もあるので、5 段まで分岐を探す。
             // 分岐が見つからなければ、元の商品フォルダ名を維持する。
             while (true)
             {
                 var direct = paths.Any(p => p.LastIndexOf('/') == folder.Length);
                 var children = paths.Where(p => p.LastIndexOf('/') > folder.Length)
                     .GroupBy(p => p.Substring(0, p.IndexOf('/', folder.Length + 1))).ToList();
-                if (depth >= 3 || direct || children.Count == 0) break;
+                if (depth >= 5 || direct || children.Count == 0) break;
                 if (children.Count >= 2)
                 {
                     foreach (var child in children) GroupFolders(child.Key, child.ToList(), depth + 1, result);

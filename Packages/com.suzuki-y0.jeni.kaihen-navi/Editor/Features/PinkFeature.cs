@@ -27,9 +27,20 @@ namespace Jeni.KaihenNavi
         private static readonly ShaderFamily[] Families =
         {
             new ShaderFamily { Key = "lilToon", Markers = new[] { "_lilToonVersion" }, Url = "https://lilxyzw.github.io/lilToon/ja_JP/" },
-            new ShaderFamily { Key = "Poiyomi", Markers = new[] { "shader_master_label", "_ShaderOptimizerEnabled", "_PoiParallax", "footer_github" }, Url = "https://www.poiyomi.com/" },
-            new ShaderFamily { Key = "UnityChanToonShader", Markers = new[] { "_utsVersion", "_utsTechnique" }, Url = "https://github.com/unity3d-jp/UnityChanToonShaderVer2_Project" },
-            new ShaderFamily { Key = "Sunao", Markers = new[] { "_SunaoShaderType", "_VersionH" }, Url = "https://booth.pm/ja/search/Sunao%20Shader" },
+            // 2026-10-22 確認: Poiyomi Toon.shader (9.3 / 10.0) の Properties、MP_Crystal.mat の保存値。
+            // https://github.com/poiyomi/PoiyomiToonShader/blob/master/_PoiyomiShaders/Shaders/10.0/Toon/Poiyomi%20Toon.shader
+            // https://github.com/poiyomi/PoiyomiToonShader/blob/master/_PoiyomiShaders/Presets/Examples/MP_Crystal.mat
+            // Thry 共通の _ShaderOptimizerEnabled / footer_github / shader_master_label は使わない。
+            new ShaderFamily { Key = "Poiyomi", Markers = new[] { "_PoiParallax", "_PoiInternalParallax" }, Url = "https://www.poiyomi.com/download" },
+            // UTS2 2.0.9: ToonColor_DoubleShadeWithFeather.shader の Properties と同梱 .mat で確認。
+            // https://github.com/unity3d-jp/UnityChanToonShaderVer2_Project/blob/release/legacy/2.0/Assets/Toon/Shader/ToonColor_DoubleShadeWithFeather.shader
+            // 同 repo の Assets/Toon/Materials/CellTouch_ToonShader_Face.mat。_utsVersion は宣言されていない。
+            new ShaderFamily { Key = "UnityChanToonShader", Markers = new[] { "_utsTechnique", "_Is_LightColor_1st_Shade", "_Is_LightColor_2nd_Shade" }, Url = "https://github.com/unity3d-jp/UnityChanToonShaderVer2_Project/tree/release/legacy/2.0" },
+            // Sunao 1.6.2: 公式 https://booth.pm/ja/items/1723985 (zip はログインが必要)。
+            // 作者表記のある同版ソースの公開コピー Sunao_Shader_Opaque.shader の Properties を確認:
+            // https://github.com/xlwnya/VRCShaders/blob/release/Sunao%20Shader/Shader/Sunao_Shader_Opaque.shader
+            // Lighthing はソース通りの綴り。一般的な _VersionH/M/L は判定に使わない。
+            new ShaderFamily { Key = "Sunao", Markers = new[] { "_SunaoShaderType", "_OutLineLighthing", "_RimLitLighthing" }, Url = "https://booth.pm/ja/items/1723985" },
         };
 
         private sealed class Problem
@@ -174,12 +185,29 @@ namespace Jeni.KaihenNavi
                 return null;
             }
 
+            return IdentifySavedProperties(text);
+        }
+
+        private static ShaderFamily IdentifySavedProperties(string text)
+        {
+            // Properties にある保存対象の名前を照合する。バージョンや保存状態によっては残らない。
+            // YAML の「- 名前: 値」だけを見る（素材名や値の文字列中の名前は印にしない）。
+            var properties = new HashSet<string>();
+            foreach (Match match in Regex.Matches(text, @"(?m)^[ \t]*-[ \t]+([A-Za-z_][A-Za-z0-9_]*)[ \t]*:"))
+                properties.Add(match.Groups[1].Value);
+
+            ShaderFamily best = null;
+            var bestCount = 0;
             foreach (var family in Families)
             {
-                if (family.Markers.Any(m => Regex.IsMatch(text, @"\b" + Regex.Escape(m) + @"\b"))) return family;
+                var count = family.Markers.Count(m => properties.Contains(m));
+                // 同じ印が何回書かれていても 1 票。同点なら定義順を保ち、全て 0 なら不明。
+                if (count <= bestCount) continue;
+                best = family;
+                bestCount = count;
             }
 
-            return null;
+            return best;
         }
 
         /// <summary>マテリアルの枠が空のレンダラー（何も割り当てられていない所もピンクになる）。</summary>

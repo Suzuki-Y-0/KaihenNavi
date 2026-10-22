@@ -476,5 +476,6 @@
   "kono.productCredit": "{0} / {1}",
   "kono.invalidFolder": "Choose the KonoAsset data folder containing the metadata folder.",
   "kono.unsupportedVersion": "[KaihenNavi] A KonoAsset file uses an unsupported data format and will be skipped. Supported format: version 3.",
-  "kono.more": "…"
+  "kono.more": "…",
+  "innerColor.checkingReferences": "Checking which files are in use…"
 }

@@ -476,5 +476,6 @@
   "kono.productCredit": "{0} ／ {1}",
   "kono.invalidFolder": "请选择存放 KonoAsset 数据的文件夹，其中应包含 metadata 文件夹。",
   "kono.unsupportedVersion": "[KaihenNavi] KonoAsset 文件的数据格式不受支持，已跳过。支持的格式为 version 3。",
-  "kono.more": "…"
+  "kono.more": "…",
+  "innerColor.checkingReferences": "正在检查哪些文件仍在使用…"
 }

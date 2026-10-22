@@ -178,6 +178,7 @@ namespace Jeni.KaihenNavi
             catch (InvalidOperationException) { rejected = true; }
             Check(rejected, "Unbounded tiling must fail safely");
             Console.WriteLine("InnerColor mask tests passed (" + _checks + " checks).");
+            InnerColorAssetTests.Run();
         }
     }
 }

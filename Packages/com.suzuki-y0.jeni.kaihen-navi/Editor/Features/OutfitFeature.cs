@@ -31,6 +31,8 @@ namespace Jeni.KaihenNavi
         public override Color Accent { get { return Ui.Hex("#B07CD8"); } }
         public override bool InTrial { get { return true; } }
 
+        public override bool RefreshOnHierarchyChange { get { return true; } }
+
         public override VisualElement Build(FeatureContext ctx)
         {
             var root = new VisualElement();

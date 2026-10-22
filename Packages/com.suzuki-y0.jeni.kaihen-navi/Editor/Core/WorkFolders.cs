@@ -1,4 +1,5 @@
 using System.IO;
+using System.Linq;
 using System.Text;
 using UnityEditor;
 using UnityEngine;
@@ -167,12 +168,21 @@ namespace Jeni.KaihenNavi
             return !string.IsNullOrEmpty(path) && path.StartsWith(ForAvatar(avatar) + "/");
         }
 
+        internal static bool IsToolPath(string path)
+        {
+            if (string.IsNullOrEmpty(path)) return false;
+            // パストラバーサルや Root と前方一致する別フォルダを受け付けない。
+            var normalized = path.Replace('\\', '/');
+            return normalized.StartsWith(Root + "/", System.StringComparison.Ordinal) &&
+                !normalized.Split('/').Any(segment => segment == ".." || segment == ".");
+        }
+
         /// <summary>このツールが作ったアセットかどうか。</summary>
         public static bool IsOwned(Object asset)
         {
             if (asset == null) return false;
             var path = AssetDatabase.GetAssetPath(asset);
-            return !string.IsNullOrEmpty(path) && path.StartsWith(Root + "/");
+            return IsToolPath(path);
         }
 
         /// <summary>フォルダを（親も含めて）作る。</summary>

@@ -241,6 +241,11 @@ namespace Jeni.KaihenNavi
                     }));
                 }
 
+                box.Add(ItemPicker.OwnedItems(ItemKind.Accessory, prefab =>
+                {
+                    _pending = prefab;
+                    ctx.Rebuild();
+                }));
                 return box;
             }
 

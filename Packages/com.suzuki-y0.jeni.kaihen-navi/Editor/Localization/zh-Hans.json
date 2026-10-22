@@ -415,5 +415,12 @@
   "toggle.clothes": "衣服与配饰",
   "toggle.others": "其他（头发、身体等）{0} 个",
   "toggle.inMenu": "已加入菜单",
-  "pick.fromPackage": "来自 {0}"
+  "pick.fromPackage": "来自 {0}",
+  "pick.owned": "查找已有物品",
+  "pick.searchName": "按名称查找",
+  "pick.scanExisting": "读取项目中已有的物品",
+  "pick.rescan": "重新读取",
+  "pick.scanning": "正在查找物品…",
+  "pick.noOwnedResults": "未找到物品。请换个名称，或读取已有物品。",
+  "pick.scanFailed": "无法读取物品，请重试。"
 }

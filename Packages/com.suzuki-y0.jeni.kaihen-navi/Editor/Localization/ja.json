@@ -415,5 +415,12 @@
   "toggle.clothes": "服・アクセ",
   "toggle.others": "そのほか（髪・体など）{0} 個",
   "toggle.inMenu": "メニューに追加済み",
-  "pick.fromPackage": "{0} から"
+  "pick.fromPackage": "{0} から",
+  "pick.owned": "持っているアイテムから探す",
+  "pick.searchName": "名前で探す",
+  "pick.scanExisting": "今入っているアイテムを読み込む",
+  "pick.rescan": "読み込み直す",
+  "pick.scanning": "アイテムを調べています…",
+  "pick.noOwnedResults": "見つかりませんでした。名前を変えるか、アイテムを読み込んでみてください。",
+  "pick.scanFailed": "アイテムを読み込めませんでした。もう一度試してください。"
 }

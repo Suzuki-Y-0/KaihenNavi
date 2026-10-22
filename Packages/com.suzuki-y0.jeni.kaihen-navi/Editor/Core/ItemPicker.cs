@@ -169,6 +169,70 @@ namespace Jeni.KaihenNavi
             return result;
         }
 
+        /// <summary>台帳から名前で探す共通 UI。入力中は台帳のファイルや全 Prefab を読み直さない。</summary>
+        public static VisualElement OwnedItems(ItemKind kind, Action<GameObject> onPicked)
+        {
+            var root = new VisualElement();
+            root.Add(Ui.Heading(L10n.Tr("pick.owned")));
+            var field = new TextField();
+            field.label = L10n.Tr("pick.searchName");
+            root.Add(field);
+            var controls = new VisualElement();
+            root.Add(controls);
+            var results = new VisualElement();
+            root.Add(results);
+            var ledgerKind = kind == ItemKind.Outfit ? LedgerItemKind.Outfit
+                : kind == ItemKind.Accessory ? LedgerItemKind.Accessory : LedgerItemKind.Other;
+
+            Action refresh = () =>
+            {
+                results.Clear();
+                var query = (field.value ?? "").Trim();
+                var seen = new HashSet<string>(StringComparer.Ordinal);
+                var items = new List<GameObject>();
+                foreach (var package in ItemLedger.All())
+                {
+                    if (package == null || package.prefabs == null) continue;
+                    foreach (var entry in package.prefabs)
+                    {
+                        if (entry == null || entry.kind != ledgerKind || string.IsNullOrEmpty(entry.path)) continue;
+                        // パスには Prefab 名と途中のフォルダ名が含まれる。
+                        if (query.Length > 0 && !ContainsName(entry.path, query) &&
+                            !ContainsName(package.packageName, query) && !ContainsName(package.commonFolder, query)) continue;
+                        if (!seen.Add(entry.path)) continue;
+                        var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(entry.path);
+                        if (prefab == null) continue;
+                        items.Add(prefab);
+                        if (items.Count >= 30) break;
+                    }
+                    if (items.Count >= 30) break;
+                }
+                if (items.Count > 0) results.Add(SuggestionList(items, onPicked));
+                else results.Add(Ui.Text(L10n.Tr("pick.noOwnedResults"), "kn-hint"));
+            };
+            Action rebuildControls = null;
+            rebuildControls = () =>
+            {
+                controls.Clear();
+                var empty = !ItemLedger.All().Any(p => p != null && p.prefabs != null && p.prefabs.Count > 0);
+                controls.Add(Ui.Button(L10n.Tr(empty ? "pick.scanExisting" : "pick.rescan"), () =>
+                {
+                    ItemLedger.ScanExisting();
+                    rebuildControls();
+                    refresh();
+                }, "kn-button--small", "kn-button--ghost"));
+            };
+            field.RegisterValueChangedCallback(e => refresh());
+            rebuildControls();
+            refresh();
+            return root;
+        }
+
+        private static bool ContainsName(string value, string query)
+        {
+            return value != null && value.IndexOf(query, StringComparison.OrdinalIgnoreCase) >= 0;
+        }
+
         /// <summary>候補を並べる。押すと onPicked が呼ばれる。</summary>
         public static VisualElement SuggestionList(List<GameObject> items, Action<GameObject> onPicked)
         {

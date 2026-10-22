@@ -135,6 +135,7 @@ namespace Jeni.KaihenNavi
         /// <summary>
         /// このアバター用らしい候補。Prefab の場所や名前に、元のアバターの名前が入っているものを集める
         /// （BOOTH の服やアクセは「アバター名」入りのフォルダに対応版が入っていることが多い）。
+        /// 台帳に記録された同じ種類のものも加え、アバター名が合うものから先に並べる。
         /// </summary>
         public static List<GameObject> Suggestions(VRCAvatarDescriptor avatar, ItemKind kind)
         {
@@ -142,15 +143,21 @@ namespace Jeni.KaihenNavi
             if (avatar == null) return result;
 
             var keywords = Keywords(avatar);
-            if (keywords.Count == 0) return result;
+            var ledgerKind = kind == ItemKind.Outfit ? LedgerItemKind.Outfit
+                : kind == ItemKind.Accessory ? LedgerItemKind.Accessory : LedgerItemKind.Other;
+            var ledgerPaths = ItemLedger.All().Where(p => p != null && p.prefabs != null)
+                .SelectMany(p => p.prefabs).Where(p => p != null && p.kind == ledgerKind)
+                .Select(p => p.path).Where(p => !string.IsNullOrEmpty(p)).ToList();
+            var matchingPaths = AssetDatabase.FindAssets("t:Prefab", new[] { "Assets" })
+                .Select(AssetDatabase.GUIDToAssetPath)
+                .Where(p => keywords.Any(k => p.ToLowerInvariant().Contains(k)));
+            var paths = matchingPaths.Concat(ledgerPaths).Distinct()
+                .Where(p => !p.StartsWith(WorkFolders.Root + "/", StringComparison.Ordinal))
+                .OrderByDescending(p => keywords.Any(k => p.ToLowerInvariant().Contains(k)))
+                .ThenBy(p => p, StringComparer.Ordinal);
 
-            foreach (var guid in AssetDatabase.FindAssets("t:Prefab", new[] { "Assets" }))
+            foreach (var path in paths)
             {
-                var path = AssetDatabase.GUIDToAssetPath(guid);
-                if (path.StartsWith(WorkFolders.Root + "/")) continue;
-                var lower = path.ToLowerInvariant();
-                if (!keywords.Any(k => lower.Contains(k))) continue;
-
                 var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(path);
                 if (prefab == null || KindOf(prefab) != kind) continue;
                 if (IsSameAsAvatar(prefab, avatar)) continue;
@@ -159,7 +166,6 @@ namespace Jeni.KaihenNavi
                 if (result.Count >= MaxSuggestions) break;
             }
 
-            result.Sort((a, b) => string.CompareOrdinal(AssetDatabase.GetAssetPath(a), AssetDatabase.GetAssetPath(b)));
             return result;
         }
 
@@ -182,6 +188,9 @@ namespace Jeni.KaihenNavi
                 var texts = Ui.Box("kn-list__texts");
                 texts.Add(Ui.Text(prefab.name, "kn-list__title"));
                 texts.Add(Ui.Text(ShortFolder(prefab), "kn-list__sub"));
+                var packageName = ItemLedger.PackageOf(AssetDatabase.GetAssetPath(prefab));
+                if (!string.IsNullOrEmpty(packageName))
+                    texts.Add(Ui.Text(L10n.Tr("pick.fromPackage", packageName), "kn-list__sub"));
                 row.Add(texts);
                 list.Add(row);
             }

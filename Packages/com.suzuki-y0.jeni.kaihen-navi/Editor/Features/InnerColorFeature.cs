@@ -20,7 +20,7 @@ namespace Jeni.KaihenNavi
         private const string Tint = "_Color2nd";
         private const string Main = "_Main2ndTex";
         private const string Mask = "_Main2ndBlendMask";
-        private static readonly string[] Floats =
+        internal static readonly string[] Floats =
         {
             Use, "_Main2ndTexBlendMode", "_Main2ndTexAlphaMode", "_Main2ndTexAngle",
             "_Main2ndTex_UVMode", "_Main2ndTex_Cull", "_Main2ndTexIsDecal",
@@ -28,7 +28,7 @@ namespace Jeni.KaihenNavi
             "_Main2ndTexShouldFlipMirror", "_Main2ndTexShouldFlipCopy", "_Main2ndTexIsMSDF",
             "_Main2ndEnableLighting",
         };
-        private static readonly string[] Vectors =
+        internal static readonly string[] Vectors =
         {
             "_Main2ndTex_ScrollRotate", "_Main2ndDissolveParams", "_Main2ndDistanceFade",
             "_Main2ndTexDecalAnimation", "_Main2ndTexDecalSubParam",
@@ -253,6 +253,7 @@ namespace Jeni.KaihenNavi
             CancelPending();
             if (ctx.Avatar == null || ctx.Avatar != _avatar || EditorApplication.isPlayingOrWillChangePlaymode) return;
             var group = -1;
+            InnerColorAssetUndo journal = null;
             try
             {
                 var surfaces = Bake(ctx.Avatar);
@@ -262,73 +263,69 @@ namespace Jeni.KaihenNavi
                     _status.text = L10n.Tr("innerColor.noneSelected");
                     return;
                 }
-                var materials = surfaces.SelectMany(s => s.materials.Values).Distinct().ToList();
                 var state = InnerColorState.Load(ctx.Avatar);
+                // プレビュー中のコピーを、その変更前のマテリアルへ正規化する。
+                foreach (var surface in surfaces)
+                    foreach (var slot in surface.materials.Keys.ToList())
+                    {
+                        var current = surface.materials[slot];
+                        var entry = state == null ? null : state.data.entries.FirstOrDefault(e =>
+                            e.materialPath == AssetDatabase.GetAssetPath(current));
+                        var source = entry == null || entry.source == null ? null : entry.source.Load<Material>();
+                        if (source != null) surface.materials[slot] = source;
+                    }
+                var materials = surfaces.SelectMany(s => s.materials.Values).Distinct().ToList();
                 var conflicts = materials.Where(m => m.GetFloat(Use) > 0.5f &&
-                    (state == null || !state.data.entries.Any(e => e.materialPath == AssetDatabase.GetAssetPath(m)))).ToList();
+                    (state == null || !state.data.entries.Any(e => e.materialPath == AssetDatabase.GetAssetPath(m) ||
+                        (e.source != null && e.source.Load<Material>() == m)))).ToList();
                 if (conflicts.Count > 0 && !EditorUtility.DisplayDialog(L10n.Tr("feature.innerColor.title"),
                     L10n.Tr("innerColor.overwrite", string.Join(", ", conflicts.Select(m => m.name).ToArray())),
                     L10n.Tr("innerColor.overwriteYes"), L10n.Tr("innerColor.cancel"))) return;
 
-                // 全画像を完成させてから見た目を変える。画像は不変にし、Undo/バックアップの参照先を壊さない。
-                var masks = new Dictionary<Material, Texture2D>();
+                // 数値計算が全部成功してから、ファイルや見た目を変える。
+                var masks = new Dictionary<Material, float[]>();
                 foreach (var material in materials)
                 {
                     var pixels = new float[_size * _size];
                     var scale = material.GetTextureScale("_MainTex");
                     var offset = material.GetTextureOffset("_MainTex");
-                    foreach (var s in surfaces)
-                        foreach (var slot in s.materials.Where(p => p.Value == material).Select(p => p.Key))
-                            InnerColorMask.Paint(pixels, _size, s.uv, s.values, s.triangles[slot], scale, offset);
-                    masks.Add(material, InnerColorMask.Save(ctx.Avatar, material.name, pixels, _size));
+                    foreach (var surface in surfaces)
+                        foreach (var slot in surface.materials.Where(p => p.Value == material).Select(p => p.Key))
+                            InnerColorMask.Paint(pixels, _size, surface.uv, surface.values, surface.triangles[slot], scale, offset);
+                    masks.Add(material, pixels);
                 }
                 ctx.BeginEdit();
                 UndoHelper.Separate();
                 Undo.IncrementCurrentGroup(); group = Undo.GetCurrentGroup();
                 var undoName = L10n.Tr("undo.innerColor");
                 Undo.SetCurrentGroupName(undoName);
+                journal = InnerColorAssetUndo.Begin(ctx.Avatar);
                 state = InnerColorState.Load(ctx.Avatar, true);
                 Undo.RecordObject(state, undoName);
-                var active = new HashSet<Material>();
+                // チェックを外した髪と、選択範囲を変える前のコピーは元の割り当てに戻す。
+                foreach (var entry in state.data.entries) RestoreSecond(ctx.Avatar, entry, undoName);
                 foreach (var original in materials)
                 {
-                    var owned = OwnSelected(ctx.Avatar, original, surfaces, undoName);
-                    active.Add(owned);
-                    var path = AssetDatabase.GetAssetPath(owned);
-                    if (!state.data.entries.Any(e => e.materialPath == path))
-                    {
-                        var previous = state.data.entries.FirstOrDefault(e => e.materialPath == AssetDatabase.GetAssetPath(original));
-                        var baseline = previous == null ? null : AssetDatabase.LoadAssetAtPath<Material>(previous.originalPath);
-                        var before = Object.Instantiate(baseline != null ? baseline : owned);
-                        before.name = owned.name;
-                        var beforeFolder = WorkFolders.Ensure(WorkFolders.Materials(ctx.Avatar.gameObject));
-                        var beforePath = AssetDatabase.GenerateUniqueAssetPath(beforeFolder + "/" +
-                            WorkFolders.Sanitize(owned.name) + "_BeforeInnerColor.mat");
-                        AssetDatabase.CreateAsset(before, beforePath);
-                        state.data.entries.Add(new InnerColorState.Entry { materialPath = path, originalPath = beforePath });
-                    }
+                    var entry = OwnSelected(ctx.Avatar, original, surfaces, state, journal, undoName);
+                    var owned = AssetDatabase.LoadAssetAtPath<Material>(entry.materialPath);
+                    journal.Track(entry.maskPath);
+                    var mask = InnerColorMask.Save(entry.maskPath, entry.key, masks[original], _size);
                     Undo.RecordObject(owned, undoName);
                     for (var i = 0; i < Floats.Length; i++)
                         if (owned.HasProperty(Floats[i])) owned.SetFloat(Floats[i], Floats[i] == Use || Floats[i] == "_Main2ndEnableLighting" ? 1 : 0);
                     for (var i = 0; i < Vectors.Length; i++)
                         if (owned.HasProperty(Vectors[i])) owned.SetVector(Vectors[i], VectorDefaults[i]);
                     owned.SetColor(Tint, _color);
-                    owned.SetTexture(Main, null); // shader の既定の白。元の 2nd 画像の影響を残さない。
+                    owned.SetTexture(Main, null);
                     owned.SetTextureScale(Main, new Vector2(1, 1));
                     owned.SetTextureOffset(Main, new Vector2(0, 0));
-                    owned.SetTexture(Mask, masks[original]);
+                    owned.SetTexture(Mask, mask);
                     SyncMultiKeywords(owned);
                     EditorUtility.SetDirty(owned);
                 }
-                // チェックを外した髪は、前回のプレビュー前の値へ戻す。
-                foreach (var entry in state.data.entries)
-                {
-                    var material = AssetDatabase.LoadAssetAtPath<Material>(entry.materialPath);
-                    if (material != null && !active.Contains(material)) RestoreSecond(ctx.Avatar, entry, undoName);
-                }
                 EditorUtility.SetDirty(state);
+                journal.Commit(undoName); journal = null;
                 Undo.CollapseUndoOperations(group); group = -1;
-                AssetDatabase.SaveAssets();
                 _preview = true;
                 _status.text = L10n.Tr("innerColor.done");
                 SceneView.RepaintAll();
@@ -336,61 +333,94 @@ namespace Jeni.KaihenNavi
             catch (Exception e)
             {
                 if (group >= 0) Undo.RevertAllDownToGroup(group);
+                if (journal != null) journal.Rollback();
                 _status.text = L10n.Tr("innerColor.failed", e.Message);
                 Debug.LogException(e);
             }
         }
 
-        private static Material OwnSelected(VRCAvatarDescriptor avatar, Material original, List<Surface> surfaces, string undoName)
+        private static InnerColorState.Entry OwnSelected(VRCAvatarDescriptor avatar, Material original,
+            List<Surface> surfaces, InnerColorState state, InnerColorAssetUndo journal, string undoName)
         {
-            var selected = new Dictionary<SkinnedMeshRenderer, HashSet<int>>();
-            foreach (var s in surfaces)
+            var assignments = new List<InnerColorState.Assignment>();
+            foreach (var surface in surfaces)
+                foreach (var slot in surface.materials.Where(p => p.Value == original).Select(p => p.Key))
+                    assignments.Add(new InnerColorState.Assignment
+                    {
+                        rendererPath = HierarchyPath.Get(avatar.transform, surface.renderer.transform),
+                        rendererIndex = Array.IndexOf(surface.renderer.GetComponents<Renderer>(), surface.renderer),
+                        slot = slot, original = InnerColorState.AssetRef.Of(original),
+                    });
+            var source = InnerColorState.AssetRef.Of(original);
+            var key = source.Key + "|" + string.Join("|", assignments.Select(a =>
+                a.rendererPath.Length + ":" + a.rendererPath + ":" + a.rendererIndex + ":" + a.slot)
+                .OrderBy(value => value, StringComparer.Ordinal).ToArray());
+            var entry = state.data.entries.FirstOrDefault(e => e.key == key);
+            if (entry == null)
             {
-                var slots = s.materials.Where(p => p.Value == original).Select(p => p.Key).ToList();
-                if (slots.Count > 0) selected[s.renderer] = new HashSet<int>(slots);
+                var materials = WorkFolders.Ensure(WorkFolders.Materials(avatar.gameObject));
+                var textures = WorkFolders.Ensure(WorkFolders.ForAvatar(avatar.gameObject) + "/Textures");
+                entry = new InnerColorState.Entry
+                {
+                    key = key, source = source, assignments = assignments,
+                    before = InnerColorState.SecondState.Capture(original),
+                    materialPath = InnerColorAssets.StablePath(materials, original.name, "_InnerColor.mat", key),
+                    maskPath = InnerColorAssets.StablePath(textures, original.name, "_InnerMask.png", key),
+                };
+                state.data.entries.Add(entry);
             }
-            var sharedOutside = false;
-            foreach (var r in avatar.GetComponentsInChildren<Renderer>(true))
+            journal.Track(entry.materialPath);
+            var owned = MaterialCopier.EnsureInnerColorCopy(original, entry.materialPath, key, undoName);
+            foreach (var assignment in entry.assignments)
             {
-                HashSet<int> slots = null;
-                var smr = r as SkinnedMeshRenderer;
-                if (smr != null) selected.TryGetValue(smr, out slots);
-                var mats = r.sharedMaterials;
-                for (var i = 0; i < mats.Length; i++)
-                    if (mats[i] == original && (slots == null || !slots.Contains(i))) sharedOutside = true;
+                var renderer = InnerColorState.RendererFor(avatar, assignment);
+                if (renderer == null) continue;
+                var mats = renderer.sharedMaterials;
+                if (assignment.slot >= mats.Length || mats[assignment.slot] != original) continue;
+                Undo.RecordObject(renderer, undoName);
+                mats[assignment.slot] = owned;
+                renderer.sharedMaterials = mats;
             }
-            if (!sharedOutside) return MaterialCopier.EnsureOwned(avatar, original, undoName);
-
-            // EnsureOwned の全参照差し替えを避けるため、一時複製を渡して所有アセットを作り、選んだ枠だけへ割り当てる。
-            var temporary = Object.Instantiate(original);
-            temporary.name = original.name;
-            Material owned;
-            try { owned = MaterialCopier.EnsureOwned(avatar, temporary, undoName); }
-            finally { Object.DestroyImmediate(temporary); }
-            foreach (var pair in selected)
-            {
-                Undo.RecordObject(pair.Key, undoName);
-                var mats = pair.Key.sharedMaterials;
-                foreach (var slot in pair.Value) mats[slot] = owned;
-                pair.Key.sharedMaterials = mats;
-            }
-            return owned;
+            return entry;
         }
 
         private void Reset(FeatureContext ctx)
         {
             CancelPending();
+            if (ctx.Avatar == null || EditorApplication.isPlayingOrWillChangePlaymode) return;
             var state = InnerColorState.Load(ctx.Avatar);
-            if (state == null || state.data.entries.Count == 0) return;
+            var candidates = InnerColorAssets.Candidates(ctx.Avatar, state);
+            if (state == null && candidates.Count == 0) return;
             ctx.BeginEdit();
             var undoName = L10n.Tr("undo.innerColor");
             UndoHelper.Separate(); UndoHelper.Begin("innerColor-reset", undoName);
-            Undo.RecordObject(state, undoName);
-            foreach (var entry in state.data.entries) RestoreSecond(ctx.Avatar, entry, undoName);
-            state.data = new InnerColorState.Data();
-            EditorUtility.SetDirty(state);
-            UndoHelper.End(); UndoHelper.Separate();
-            AssetDatabase.SaveAssets();
+            var journal = InnerColorAssetUndo.Begin(ctx.Avatar);
+            try
+            {
+                // 変更前のファイルを保存する。削除後の Ctrl+Z でも GUID と内容を復元できる。
+                foreach (var path in candidates) journal.Track(path);
+                if (state != null)
+                {
+                    Undo.RecordObject(state, undoName);
+                    foreach (var entry in state.data.entries) RestoreSecond(ctx.Avatar, entry, undoName);
+                    state.data = new InnerColorState.Data();
+                    EditorUtility.SetDirty(state);
+                }
+                AssetDatabase.SaveAssets();
+                // 自分用 Prefab の古い割り当てが、片付けを妨げないよう先に保存する。
+                MyAvatar.Save(ctx.Avatar);
+                InnerColorAssets.Cleanup(candidates, journal);
+                journal.Commit(undoName);
+                UndoHelper.End(); UndoHelper.Separate();
+            }
+            catch (Exception e)
+            {
+                journal.Rollback();
+                UndoHelper.End(); UndoHelper.Separate();
+                _status.text = L10n.Tr("innerColor.failed", e.Message);
+                Debug.LogException(e);
+                return;
+            }
             _preview = false;
             _status.text = L10n.Tr("innerColor.restored");
             SceneView.RepaintAll();
@@ -399,23 +429,29 @@ namespace Jeni.KaihenNavi
         private static void RestoreSecond(VRCAvatarDescriptor avatar, InnerColorState.Entry entry, string undoName)
         {
             var material = AssetDatabase.LoadAssetAtPath<Material>(entry.materialPath);
-            var before = AssetDatabase.LoadAssetAtPath<Material>(entry.originalPath);
-            if (material == null || before == null || !WorkFolders.IsOwnedBy(material, avatar.gameObject)) return;
-            Undo.RecordObject(material, undoName);
-            foreach (var property in Floats)
-                if (material.HasProperty(property) && before.HasProperty(property)) material.SetFloat(property, before.GetFloat(property));
-            foreach (var property in Vectors)
-                if (material.HasProperty(property) && before.HasProperty(property)) material.SetVector(property, before.GetVector(property));
-            if (material.HasProperty(Tint) && before.HasProperty(Tint)) material.SetColor(Tint, before.GetColor(Tint));
-            foreach (var property in new[] { Main, Mask })
+            if (material == null || !WorkFolders.IsOwnedBy(material, avatar.gameObject)) return;
+            // 旧版の控えは読み込めるが、新しい .mat は作らない。
+            if (entry.before == null && !string.IsNullOrEmpty(entry.originalPath))
             {
-                if (!material.HasProperty(property) || !before.HasProperty(property)) continue;
-                material.SetTexture(property, before.GetTexture(property));
-                material.SetTextureScale(property, before.GetTextureScale(property));
-                material.SetTextureOffset(property, before.GetTextureOffset(property));
+                var before = AssetDatabase.LoadAssetAtPath<Material>(entry.originalPath);
+                if (before != null) entry.before = InnerColorState.SecondState.Capture(before);
             }
-            SyncMultiKeywords(material);
-            EditorUtility.SetDirty(material);
+            if (entry.before != null)
+            {
+                Undo.RecordObject(material, undoName);
+                entry.before.Apply(material);
+            }
+            foreach (var assignment in entry.assignments)
+            {
+                var renderer = InnerColorState.RendererFor(avatar, assignment);
+                var original = assignment.original.Load<Material>();
+                if (renderer == null || original == null) continue;
+                var mats = renderer.sharedMaterials;
+                if (assignment.slot >= mats.Length || mats[assignment.slot] != material) continue;
+                Undo.RecordObject(renderer, undoName);
+                mats[assignment.slot] = original;
+                renderer.sharedMaterials = mats;
+            }
         }
 
         // Multi 版はプロパティだけでなくキーワードも必要。2nd/3rd 共用のものは 3rd の状態を保つ。

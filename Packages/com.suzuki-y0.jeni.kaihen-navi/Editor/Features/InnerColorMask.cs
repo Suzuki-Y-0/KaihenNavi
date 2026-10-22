@@ -131,8 +131,9 @@ namespace Jeni.KaihenNavi
             return result;
         }
 
-        internal static Texture2D Save(VRCAvatarDescriptor avatar, string materialName, float[] pixels, int size)
+        internal static Texture2D Save(string path, string key, float[] pixels, int size)
         {
+            if (!WorkFolders.IsToolPath(path)) throw new InvalidOperationException(L10n.Tr("innerColor.importFailed"));
             var blurred = Blur(pixels, size);
             var colors = new Color32[blurred.Length];
             for (var i = 0; i < colors.Length; i++)
@@ -140,8 +141,7 @@ namespace Jeni.KaihenNavi
                 var value = (byte)Math.Round(Clamp01(blurred[i]) * 255);
                 colors[i] = new Color32(value, value, value, 255); // ブレンドマスクは R チャンネル。
             }
-            var folder = WorkFolders.Ensure(WorkFolders.ForAvatar(avatar.gameObject) + "/Textures");
-            var path = AssetDatabase.GenerateUniqueAssetPath(folder + "/" + WorkFolders.Sanitize(materialName) + "_InnerMask.png");
+            WorkFolders.Ensure(Path.GetDirectoryName(path).Replace('\\', '/'));
             var texture = new Texture2D(size, size, TextureFormat.RGBA32, false);
             try
             {
@@ -153,6 +153,7 @@ namespace Jeni.KaihenNavi
             AssetDatabase.ImportAsset(path);
             var importer = AssetImporter.GetAtPath(path) as TextureImporter;
             if (importer == null) throw new InvalidOperationException(L10n.Tr("innerColor.importFailed"));
+            importer.userData = InnerColorAssets.Tag + key;
             importer.textureType = TextureImporterType.Default;
             importer.isReadable = true;
             importer.sRGBTexture = false;

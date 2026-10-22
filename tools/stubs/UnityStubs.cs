@@ -14,12 +14,21 @@ namespace UnityEngine
         public Rect(float x, float y, float w, float h) { this.x = x; this.y = y; width = w; height = h; }
     }
 
+    public static class Resources
+    {
+        public static Func<Type, Object[]> FindForTests;
+        public static T[] FindObjectsOfTypeAll<T>() where T : Object
+        { return FindForTests == null ? new T[0] : Array.ConvertAll(FindForTests(typeof(T)), o => (T)o); }
+    }
+
     public class Object
     {
         public string name;
         public HideFlags hideFlags;
         public int GetInstanceID() { return 0; }
-        public static T Instantiate<T>(T original) where T : Object { return original; }
+        public static Func<Object, Object> InstantiateForTests;
+        public static T Instantiate<T>(T original) where T : Object
+        { return InstantiateForTests == null ? original : (T)InstantiateForTests(original); }
         public static void DestroyImmediate(Object o) { }
         public static implicit operator bool(Object o) { return !ReferenceEquals(o, null); }
     }
@@ -31,7 +40,8 @@ namespace UnityEngine
         public GameObject gameObject;
         public Transform transform;
         public T GetComponent<T>() { return default(T); }
-        public T[] GetComponentsInChildren<T>(bool includeInactive) { return new T[0]; }
+        public T[] GetComponents<T>() { return gameObject == null ? new T[0] : gameObject.GetComponents<T>(); }
+        public T[] GetComponentsInChildren<T>(bool includeInactive) { return gameObject == null ? new T[0] : gameObject.GetComponentsInChildren<T>(includeInactive); }
         public T GetComponentInChildren<T>(bool includeInactive) { return default(T); }
     }
 
@@ -50,7 +60,10 @@ namespace UnityEngine
         public void SetActive(bool value) { }
         public T AddComponent<T>() where T : Component { return null; }
         public T GetComponent<T>() { return default(T); }
-        public T[] GetComponentsInChildren<T>(bool includeInactive) { return new T[0]; }
+        public Func<Type, object[]> ComponentsForTests;
+        public T[] GetComponents<T>()
+        { return ComponentsForTests == null ? new T[0] : Array.ConvertAll(ComponentsForTests(typeof(T)), o => (T)o); }
+        public T[] GetComponentsInChildren<T>(bool includeInactive) { return GetComponents<T>(); }
         public T GetComponentInChildren<T>(bool includeInactive) { return default(T); }
     }
 
@@ -150,10 +163,39 @@ namespace UnityEngine
 
     public class Material : Object
     {
-        public Material(Material m) { }
         public Texture mainTexture;
         public Color color;
         public Shader shader;
+#if INNER_COLOR_ASSET_TESTS
+        internal Dictionary<string, object> values = new Dictionary<string, object>();
+        internal HashSet<string> keywords = new HashSet<string>();
+        public Material(Material m)
+        {
+            if (m == null) return;
+            name = m.name; shader = m.shader;
+            values = new Dictionary<string, object>(m.values);
+            keywords = new HashSet<string>(m.keywords);
+        }
+        private T Read<T>(string key) { object value; return values.TryGetValue(key, out value) ? (T)value : default(T); }
+        public bool HasProperty(string n) { return values.ContainsKey(n); }
+        public Vector4 GetVector(string n) { return Read<Vector4>(n); }
+        public void SetVector(string n, Vector4 v) { values[n] = v; }
+        public Color GetColor(string n) { return Read<Color>(n); }
+        public void SetColor(string n, Color c) { values[n] = c; }
+        public float GetFloat(string n) { return Read<float>(n); }
+        public void SetFloat(string n, float v) { values[n] = v; }
+        public Texture GetTexture(string n) { return Read<Texture>(n); }
+        public void SetTexture(string n, Texture t) { values[n] = t; }
+        public bool IsKeywordEnabled(string keyword) { return keywords.Contains(keyword); }
+        public string[] GetTexturePropertyNames() { var names = new List<string>(); foreach (var p in values) if (p.Value is Texture) names.Add(p.Key); return names.ToArray(); }
+        public void EnableKeyword(string keyword) { keywords.Add(keyword); }
+        public void DisableKeyword(string keyword) { keywords.Remove(keyword); }
+        public Vector2 GetTextureScale(string n) { return Read<Vector2>(n + "#scale"); }
+        public Vector2 GetTextureOffset(string n) { return Read<Vector2>(n + "#offset"); }
+        public void SetTextureScale(string n, Vector2 v) { values[n + "#scale"] = v; }
+        public void SetTextureOffset(string n, Vector2 v) { values[n + "#offset"] = v; }
+#else
+        public Material(Material m) { }
         public bool HasProperty(string n) { return false; }
         public Vector4 GetVector(string n) { return default(Vector4); }
         public void SetVector(string n, Vector4 v) { }
@@ -163,17 +205,22 @@ namespace UnityEngine
         public void SetFloat(string n, float v) { }
         public Texture GetTexture(string n) { return null; }
         public void SetTexture(string n, Texture t) { }
+        public bool IsKeywordEnabled(string keyword) { return false; }
+        public string[] GetTexturePropertyNames() { return new string[0]; }
         public void EnableKeyword(string keyword) { }
         public void DisableKeyword(string keyword) { }
         public Vector2 GetTextureScale(string n) { return default(Vector2); }
         public Vector2 GetTextureOffset(string n) { return default(Vector2); }
         public void SetTextureScale(string n, Vector2 v) { }
         public void SetTextureOffset(string n, Vector2 v) { }
+#endif
     }
 
     public class ScriptableObject : Object
     {
-        public static T CreateInstance<T>() where T : ScriptableObject { return null; }
+        public static Func<Type, ScriptableObject> CreateForTests;
+        public static T CreateInstance<T>() where T : ScriptableObject
+        { return CreateForTests == null ? null : (T)CreateForTests(typeof(T)); }
     }
 
     public class TextAsset : Object { public string text; }
@@ -270,9 +317,12 @@ namespace UnityEngine
 
     public static class JsonUtility
     {
-        public static string ToJson(object o) { return ""; }
+        public static Func<object, string> SerializeForTests;
+        public static Func<string, Type, object> DeserializeForTests;
+        public static string ToJson(object o) { return SerializeForTests == null ? "" : SerializeForTests(o); }
         public static string ToJson(object o, bool pretty) { return ""; }
-        public static T FromJson<T>(string json) { return default(T); }
+        public static T FromJson<T>(string json)
+        { return DeserializeForTests == null ? default(T) : (T)DeserializeForTests(json, typeof(T)); }
     }
 
     public static class ColorUtility { public static bool TryParseHtmlString(string s, out Color c) { c = default(Color); return true; } }
@@ -551,7 +601,9 @@ namespace UnityEditor
     public class AssetImporter : Object
     {
         public string assetPath;
-        public static AssetImporter GetAtPath(string path) { return null; }
+        public string userData;
+        public static Func<string, AssetImporter> LoadForTests;
+        public static AssetImporter GetAtPath(string path) { return LoadForTests == null ? null : LoadForTests(path); }
         public void SaveAndReimport() { }
     }
 
@@ -605,27 +657,47 @@ namespace UnityEditor
 
     public static class AssetDatabase
     {
+        public static Func<Object, string> PathForTests;
+        public static Func<string, Object> LoadForTests;
+        public static Func<string, Object[]> LoadAllForTests;
+        public static Action<Object, string> CreateForTests;
+        public static Action<string> ImportForTests, DeleteForTests;
+        public static Func<string[]> PathsForTests;
+        public static Func<string[], string[]> DependenciesForTests;
+        public static Func<string, string> GuidForTests;
+        public static Func<string, string> PathFromGuidForTests;
+        public static Func<Object, long> LocalIdForTests;
+        public static Func<string, bool> FolderForTests;
+        public static Action<string, string> MoveForTests;
         public static Action<string> importPackageStarted;
         public static Action<string> importPackageCompleted;
         public static Action<string> importPackageCancelled;
         public static Action<string, string> importPackageFailed;
+        public static string MoveAsset(string from, string to) { if (MoveForTests != null) MoveForTests(from, to); return ""; }
+        public static bool TryGetGUIDAndLocalFileIdentifier(Object o, out string guid, out long localId)
+        { guid = GuidForTests == null ? "" : GuidForTests(GetAssetPath(o));
+            localId = LocalIdForTests == null ? 0 : LocalIdForTests(o); return o != null; }
+        public static Object[] LoadAllAssetsAtPath(string path) { return LoadAllForTests == null ? new Object[0] : LoadAllForTests(path); }
+        public static string[] GetAllAssetPaths() { return PathsForTests == null ? new string[0] : PathsForTests(); }
+        public static string[] GetDependencies(string[] paths, bool recursive) { return DependenciesForTests == null ? new string[0] : DependenciesForTests(paths); }
         public static bool Contains(Object o) { return false; }
         public static string[] FindAssets(string filter) { return new string[0]; }
-        public static string[] FindAssets(string filter, string[] folders) { return new string[0]; }
-        public static string GUIDToAssetPath(string guid) { return null; }
-        public static T LoadAssetAtPath<T>(string path) where T : Object { return null; }
-        public static string GetAssetPath(Object o) { return null; }
-        public static bool IsValidFolder(string p) { return true; }
+        public static string[] FindAssets(string filter, string[] folders)
+        { return PathsForTests == null ? new string[0] : Array.ConvertAll(Array.FindAll(PathsForTests(), p => Array.Exists(folders, f => p.StartsWith(f + "/"))), AssetPathToGUID); }
+        public static string GUIDToAssetPath(string guid) { return PathFromGuidForTests == null ? null : PathFromGuidForTests(guid); }
+        public static T LoadAssetAtPath<T>(string path) where T : Object { return LoadForTests == null ? null : LoadForTests(path) as T; }
+        public static string GetAssetPath(Object o) { return PathForTests == null ? null : PathForTests(o); }
+        public static bool IsValidFolder(string p) { return FolderForTests == null ? true : FolderForTests(p); }
         public static string CreateFolder(string parent, string name) { return null; }
         public static string GenerateUniqueAssetPath(string p) { return p; }
-        public static void CreateAsset(Object o, string path) { }
+        public static void CreateAsset(Object o, string path) { if (CreateForTests != null) CreateForTests(o, path); }
         public static void AddObjectToAsset(Object o, Object asset) { }
-        public static bool DeleteAsset(string path) { return true; }
+        public static bool DeleteAsset(string path) { if (DeleteForTests != null) DeleteForTests(path); return true; }
         public static void SaveAssets() { }
         public static void SaveAssetIfDirty(Object o) { }
         public static bool CopyAsset(string a, string b) { return true; }
-        public static void ImportAsset(string path) { }
-        public static string AssetPathToGUID(string path) { return ""; }
+        public static void ImportAsset(string path) { if (ImportForTests != null) ImportForTests(path); }
+        public static string AssetPathToGUID(string path) { return GuidForTests == null ? "" : GuidForTests(path); }
         public static string RenameAsset(string path, string name) { return ""; }
     }
 
@@ -685,7 +757,9 @@ namespace UnityEditor
         public static void RevertAllDownToGroup(int group) { }
         public static void SetTransformParent(Transform t, Transform parent, string name) { }
         public static event Action undoRedoPerformed;
-        public static void RecordObject(Object o, string name) { }
+        public static Action<Object> RecordForTests;
+        public static void RecordObject(Object o, string name) { if (RecordForTests != null) RecordForTests(o); }
+        public static void ReplayForTests() { if (undoRedoPerformed != null) undoRedoPerformed(); }
         public static void RegisterFullObjectHierarchyUndo(Object o, string name) { }
         public static void IncrementCurrentGroup() { }
         public static int GetCurrentGroup() { return 0; }
@@ -702,7 +776,8 @@ namespace UnityEditor
         public static void DisplayProgressBar(string title, string info, float progress) { }
         public static void ClearProgressBar() { }
         public static void SetDirty(Object o) { }
-        public static void CopySerialized(Object src, Object dst) { }
+        public static Action<Object, Object> CopyForTests;
+        public static void CopySerialized(Object src, Object dst) { if (CopyForTests != null) CopyForTests(src, dst); }
         public static bool DisplayDialog(string t, string m, string ok) { return true; }
         public static bool DisplayDialog(string t, string m, string ok, string cancel) { return true; }
     }
@@ -784,6 +859,7 @@ namespace UnityEditor.PackageManager
     public class PackageInfo
     {
         public string assetPath;
+        public string userData;
         public static PackageInfo FindForAssembly(System.Reflection.Assembly a) { return null; }
     }
 }

@@ -765,3 +765,15 @@
     flex-shrink: 0;
     -unity-background-scale-mode: scale-to-fit;
 }
+
+/* 商品選択のメニューを行の右端に置く。行の内容が長くても折り返さない。 */
+.kn-kono-row {
+    flex-direction: row;
+    align-items: center;
+}
+
+.kn-kono-row > .kn-suggest__row {
+    flex-grow: 1;
+    flex-shrink: 1;
+    min-width: 0;
+}

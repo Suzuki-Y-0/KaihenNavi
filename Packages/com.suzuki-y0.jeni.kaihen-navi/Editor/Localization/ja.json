@@ -422,5 +422,17 @@
   "pick.rescan": "読み込み直す",
   "pick.scanning": "アイテムを調べています…",
   "pick.noOwnedResults": "見つかりませんでした。名前を変えるか、アイテムを読み込んでみてください。",
-  "pick.scanFailed": "アイテムを読み込めませんでした。もう一度試してください。"
+  "pick.scanFailed": "アイテムを読み込めませんでした。もう一度試してください。",
+  "kono.connected": "KonoAsset と連携中（{0} 商品）",
+  "kono.notFound": "KonoAsset が見つかりません",
+  "kono.chooseFolder": "フォルダを選ぶ",
+  "kono.reload": "読み込み直す",
+  "kono.selectProduct": "KonoAsset の商品を選ぶ",
+  "kono.unlink": "KonoAsset との結び付けを外す",
+  "kono.searchProducts": "商品名・作者で探す",
+  "kono.noProducts": "商品が見つかりませんでした。名前を変えてみてください。",
+  "kono.productCredit": "{0} ／ {1}",
+  "kono.invalidFolder": "KonoAsset のデータがあるフォルダを選んでください。中に metadata フォルダがあります。",
+  "kono.unsupportedVersion": "[KaihenNavi] KonoAsset のデータ形式が対応範囲外のため、そのファイルは読み込みません。対応する形式は version 3 です。",
+  "kono.more": "…"
 }

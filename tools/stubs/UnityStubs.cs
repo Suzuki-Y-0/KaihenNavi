@@ -104,6 +104,11 @@ namespace UnityEngine
         public void Apply() { }
     }
 
+    public static class ImageConversion
+    {
+        public static bool LoadImage(this Texture2D texture, byte[] data, bool markNonReadable) { return true; }
+    }
+
     public enum RenderTextureFormat { ARGB32 }
     public class RenderTexture : Texture
     {
@@ -344,6 +349,7 @@ namespace UnityEngine.UIElements
 
     public interface IStyle
     {
+        float flexGrow { get; set; }
         StyleFontDefinition unityFontDefinition { get; set; }
         StyleEnum<UnityEngine.FontStyle> unityFontStyleAndWeight { get; set; }
         StyleEnum<DisplayStyle> display { get; set; }
@@ -511,6 +517,8 @@ namespace UnityEditor
         public UnityEngine.UIElements.VisualElement rootVisualElement;
         public static T GetWindow<T>() where T : EditorWindow { return null; }
         public void Show() { }
+        public void ShowUtility() { }
+        public void Close() { }
     }
 
     public class AssetImporter : Object
@@ -653,6 +661,7 @@ namespace UnityEditor
 
     public static class EditorUtility
     {
+        public static string OpenFolderPanel(string title, string folder, string defaultName) { return ""; }
         public static void DisplayProgressBar(string title, string info, float progress) { }
         public static void ClearProgressBar() { }
         public static void SetDirty(Object o) { }
@@ -665,6 +674,11 @@ namespace UnityEditor
     {
         public static bool isProSkin;
         public static void PingObject(Object o) { }
+    }
+
+    public static class AssemblyReloadEvents
+    {
+        public static Action beforeAssemblyReload;
     }
 
     public static class EditorApplication

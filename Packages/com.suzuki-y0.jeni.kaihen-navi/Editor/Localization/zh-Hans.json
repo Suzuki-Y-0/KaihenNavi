@@ -414,5 +414,6 @@
   "check.folder": "位置：{0}",
   "toggle.clothes": "衣服与配饰",
   "toggle.others": "其他（头发、身体等）{0} 个",
-  "toggle.inMenu": "已加入菜单"
+  "toggle.inMenu": "已加入菜单",
+  "pick.fromPackage": "来自 {0}"
 }

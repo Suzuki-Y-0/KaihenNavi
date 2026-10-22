@@ -414,5 +414,6 @@
   "check.folder": "위치: {0}",
   "toggle.clothes": "옷·액세서리",
   "toggle.others": "그 밖의 항목(머리카락·몸 등) {0}개",
-  "toggle.inMenu": "메뉴에 추가됨"
+  "toggle.inMenu": "메뉴에 추가됨",
+  "pick.fromPackage": "{0}에서 가져옴"
 }

@@ -414,5 +414,6 @@
   "check.folder": "場所：{0}",
   "toggle.clothes": "服・アクセ",
   "toggle.others": "そのほか（髪・体など）{0} 個",
-  "toggle.inMenu": "メニューに追加済み"
+  "toggle.inMenu": "メニューに追加済み",
+  "pick.fromPackage": "{0} から"
 }

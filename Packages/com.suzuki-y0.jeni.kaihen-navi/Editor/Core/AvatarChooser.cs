@@ -218,7 +218,10 @@ namespace Jeni.KaihenNavi
         private VisualElement ExistingRow(GameObject prefab)
         {
             var row = Ui.Box("kn-list__row", "kn-avatar-row");
-            row.Add(Ui.Thumbnail(prefab, "kn-avatar-row__thumb"));
+            // サムネイルを撮ってあれば、それを見せる（Prefab のプレビューより見分けやすい）
+            var shot = AssetDatabase.LoadAssetAtPath<Texture2D>(
+                System.IO.Path.GetDirectoryName(AssetDatabase.GetAssetPath(prefab)).Replace('\\', '/') + "/Thumbnail.png");
+            row.Add(shot != null ? Ui.Image(shot, "kn-avatar-row__thumb") : Ui.Thumbnail(prefab, "kn-avatar-row__thumb"));
 
             var texts = Ui.Box("kn-list__texts");
             if (Edition.IsTrial)

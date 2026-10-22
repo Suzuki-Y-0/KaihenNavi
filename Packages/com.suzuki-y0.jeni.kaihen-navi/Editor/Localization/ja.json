@@ -411,5 +411,8 @@
   "check.attention": "アップロードの前に直す必要があるモデルが {0} 個あります（アクセや服の読み込み設定）。",
   "check.kind.normalsUnknown": "シェイプキーの法線の設定を確認できませんでした（自動では直せません。元のファイルの設定を見てください）",
   "mine.savedManually": "{0} に保存しました。元のアバターは変わりません。",
-  "check.folder": "場所：{0}"
+  "check.folder": "場所：{0}",
+  "toggle.clothes": "服・アクセ",
+  "toggle.others": "そのほか（髪・体など）{0} 個",
+  "toggle.inMenu": "メニューに追加済み"
 }

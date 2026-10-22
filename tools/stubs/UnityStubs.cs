@@ -361,7 +361,7 @@ namespace UnityEngine.UIElements
         public void Add(StyleSheet s) { }
     }
 
-    public abstract class EventBase { }
+    public abstract class EventBase { public object target; }
     public class MouseDownEvent : EventBase { public int clickCount; }
     public class FocusOutEvent : EventBase { }
     public class DragUpdatedEvent : EventBase { }
@@ -464,6 +464,7 @@ namespace UnityEngine.UIElements
     public class TextElement : VisualElement { public string text; }
     public class Label : TextElement { public Label() { } public Label(string text) { } }
     public class Button : TextElement { public Button() { } public Button(Action clickEvent) { } }
+    public class Foldout : BaseField<bool> { public string text; }
     public class Toggle : BaseField<bool> { public Toggle() { } public Toggle(string label) { } }
     public class TextField : BaseField<string> { }
     public class Slider : BaseField<float>

@@ -127,7 +127,7 @@ namespace Jeni.KaihenNavi
             if (_shown == null) return;
             var world = _shown.transform.TransformPoint(_shown.ViewPosition);
             var size = HandleUtility.GetHandleSize(world) * 0.08f;
-            Handles.color = new Color(1f, 0.35f, 0.65f, 0.9f);
+            Handles.color = new Color(0.227f, 0.475f, 0.733f, 0.9f);
             Handles.SphereHandleCap(0, world, Quaternion.identity, size, EventType.Repaint);
             Handles.DrawLine(world, world + _shown.transform.forward * size * 4f);
         }

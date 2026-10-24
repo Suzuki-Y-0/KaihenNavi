@@ -26,7 +26,7 @@ namespace Jeni.KaihenNavi
         private const float DragPercentPerPixel = 0.4f;
 
         /// <summary>体の部位。左右があるものは両方を同時に変える。</summary>
-        private sealed class Group
+        private sealed class BoneGroup
         {
             public string Key;
             public HumanBodyBones[] Bones;
@@ -34,20 +34,20 @@ namespace Jeni.KaihenNavi
             public bool Whole;
         }
 
-        private static readonly Group[] Groups =
+        private static readonly BoneGroup[] Groups =
         {
-            new Group { Key = "body.whole", Bones = new[] { HumanBodyBones.Hips }, Whole = true },
-            new Group { Key = "body.head", Bones = new[] { HumanBodyBones.Head }, Uniform = true },
-            new Group { Key = "body.neck", Bones = new[] { HumanBodyBones.Neck } },
-            new Group { Key = "body.chest", Bones = new[] { HumanBodyBones.Chest } },
-            new Group { Key = "body.waist", Bones = new[] { HumanBodyBones.Spine } },
-            new Group { Key = "body.shoulder", Bones = new[] { HumanBodyBones.LeftShoulder, HumanBodyBones.RightShoulder } },
-            new Group { Key = "body.upperArm", Bones = new[] { HumanBodyBones.LeftUpperArm, HumanBodyBones.RightUpperArm } },
-            new Group { Key = "body.lowerArm", Bones = new[] { HumanBodyBones.LeftLowerArm, HumanBodyBones.RightLowerArm } },
-            new Group { Key = "body.hand", Bones = new[] { HumanBodyBones.LeftHand, HumanBodyBones.RightHand }, Uniform = true },
-            new Group { Key = "body.upperLeg", Bones = new[] { HumanBodyBones.LeftUpperLeg, HumanBodyBones.RightUpperLeg } },
-            new Group { Key = "body.lowerLeg", Bones = new[] { HumanBodyBones.LeftLowerLeg, HumanBodyBones.RightLowerLeg } },
-            new Group { Key = "body.foot", Bones = new[] { HumanBodyBones.LeftFoot, HumanBodyBones.RightFoot }, Uniform = true },
+            new BoneGroup { Key = "body.whole", Bones = new[] { HumanBodyBones.Hips }, Whole = true },
+            new BoneGroup { Key = "body.head", Bones = new[] { HumanBodyBones.Head }, Uniform = true },
+            new BoneGroup { Key = "body.neck", Bones = new[] { HumanBodyBones.Neck } },
+            new BoneGroup { Key = "body.chest", Bones = new[] { HumanBodyBones.Chest } },
+            new BoneGroup { Key = "body.waist", Bones = new[] { HumanBodyBones.Spine } },
+            new BoneGroup { Key = "body.shoulder", Bones = new[] { HumanBodyBones.LeftShoulder, HumanBodyBones.RightShoulder } },
+            new BoneGroup { Key = "body.upperArm", Bones = new[] { HumanBodyBones.LeftUpperArm, HumanBodyBones.RightUpperArm } },
+            new BoneGroup { Key = "body.lowerArm", Bones = new[] { HumanBodyBones.LeftLowerArm, HumanBodyBones.RightLowerArm } },
+            new BoneGroup { Key = "body.hand", Bones = new[] { HumanBodyBones.LeftHand, HumanBodyBones.RightHand }, Uniform = true },
+            new BoneGroup { Key = "body.upperLeg", Bones = new[] { HumanBodyBones.LeftUpperLeg, HumanBodyBones.RightUpperLeg } },
+            new BoneGroup { Key = "body.lowerLeg", Bones = new[] { HumanBodyBones.LeftLowerLeg, HumanBodyBones.RightLowerLeg } },
+            new BoneGroup { Key = "body.foot", Bones = new[] { HumanBodyBones.LeftFoot, HumanBodyBones.RightFoot }, Uniform = true },
         };
 
         private static int _selected;
@@ -326,7 +326,7 @@ namespace Jeni.KaihenNavi
                 var selected = group.Whole ? pair.Key == HumanBodyBones.Hips : group.Bones.Contains(pair.Key);
                 var clickable = GroupOf(pair.Key) >= 0;
                 var radius = selected ? 7f : clickable ? 5f : 3f;
-                painter.fillColor = selected ? new Color(0.93f, 0.48f, 0.66f, 1f) : clickable ? new Color(1f, 1f, 1f, 0.95f) : new Color(1f, 1f, 1f, 0.5f);
+                painter.fillColor = selected ? new Color(0.227f, 0.475f, 0.733f, 1f) : clickable ? new Color(1f, 1f, 1f, 0.95f) : new Color(1f, 1f, 1f, 0.5f);
                 Circle(painter, ToCanvas(pair.Value), radius);
             }
         }
@@ -412,7 +412,7 @@ namespace Jeni.KaihenNavi
         // ---------------------------------------------------------------- 大きさを変える
 
         /// <summary>部位の今の大きさ（Scale Adjuster の値）と、骨の長さ方向の軸。</summary>
-        private void Read(Group group, out Vector3 scale, out int axis)
+        private void Read(BoneGroup group, out Vector3 scale, out int axis)
         {
             var bone = AvatarMeasure.Bone(_avatar, group.Bones[0]);
             axis = BoneFollow.LengthAxis(bone, AvatarMeasure.HumanAnimator(_avatar));
@@ -429,7 +429,7 @@ namespace Jeni.KaihenNavi
             if (adjuster != null) scale = adjuster.Scale;
         }
 
-        private void SetPart(FeatureContext ctx, Group group, float lengthPercent, float widthPercent)
+        private void SetPart(FeatureContext ctx, BoneGroup group, float lengthPercent, float widthPercent)
         {
             var undoName = L10n.Tr("undo.body");
             var animator = AvatarMeasure.HumanAnimator(_avatar);
@@ -469,7 +469,7 @@ namespace Jeni.KaihenNavi
             Refresh();
         }
 
-        private void ResetGroup(FeatureContext ctx, Group group)
+        private void ResetGroup(FeatureContext ctx, BoneGroup group)
         {
             if (group.Whole)
             {

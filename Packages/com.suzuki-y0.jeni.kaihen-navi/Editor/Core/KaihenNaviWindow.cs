@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using System.Linq;
 using UnityEditor;
 using UnityEditor.SceneManagement;
+using UnityEditor.UIElements;
 using UnityEngine;
 using UnityEngine.UIElements;
 using VRC.SDK3.Avatars.Components;
@@ -10,7 +11,7 @@ namespace Jeni.KaihenNavi
 {
     /// <summary>
     /// かいへんナビのメインウィンドウ。
-    /// 上から「アバターを選ぶ → やりたいことを選ぶ → 動かす」の一方向だけで完結させる。
+    /// アバター帯・機能ナビゲーション・操作ページを持つ Editor 専用の画面。
     /// </summary>
     internal sealed class KaihenNaviWindow : EditorWindow
     {
@@ -26,14 +27,26 @@ namespace Jeni.KaihenNavi
         private FeatureBase _selected;
 
         private VisualElement _avatarArea;
-        private VisualElement _cardsArea;
+        private VisualElement _navigation;
+        private VisualElement _workspace;
+        private VisualElement _chooserArea;
+        private VisualElement _chooserScroll;
+        private VisualElement _footer;
+        private VisualElement _compactArea;
+        private PopupField<string> _featurePopup;
+        private List<FeatureBase> _navigationFeatures;
+        private List<string> _featureChoices;
+        private VisualElement _pageHeader;
+        private VisualElement _avatarActions;
+        private VisualElement _avatarAdvice;
+        private bool _compact;
         private VisualElement _panelArea;
         private Label _backupLabel;
         private Button _restoreButton;
         private Button _historyButton;
         private bool _scanQueued;
         private ulong _panelHierarchyHash;
-        private readonly Dictionary<FeatureBase, VisualElement> _cards = new Dictionary<FeatureBase, VisualElement>();
+        private readonly Dictionary<FeatureBase, VisualElement> _navigationItems = new Dictionary<FeatureBase, VisualElement>();
 
         // 自分用アバターの案内と自動保存
         private VisualElement _avatarStatus;
@@ -47,10 +60,9 @@ namespace Jeni.KaihenNavi
         private bool _lastSaveManual;
         private const double AutoSaveDelay = 1.5;
 
-        // ①の二択（新しく作る／前に作ったものを直す）
+        // アバター選択の二択（新しく作る／前に作ったものを直す）
         private readonly AvatarChooser _chooser = new AvatarChooser();
         private bool _choosing;
-        private VisualElement _step2Header;
 
         // 「あとで」を押したアバター（エディタを開いている間だけ覚える）
         private static readonly HashSet<string> Postponed = new HashSet<string>();
@@ -122,34 +134,40 @@ namespace Jeni.KaihenNavi
             var sheet = AssetDatabase.LoadAssetAtPath<StyleSheet>(PackagePaths.StyleSheet);
             if (sheet != null && !root.styleSheets.Contains(sheet)) root.styleSheets.Add(sheet);
 
-            root.Add(BuildHeader());
+            _avatarArea = Ui.Box("kn-avatar-area");
+            root.Add(_avatarArea);
 
+            var chooserScroll = new ScrollView(ScrollViewMode.Vertical);
+            chooserScroll.AddToClassList("kn-chooser-scroll");
+            _chooserScroll = chooserScroll;
+            _chooserArea = Ui.Box("kn-chooser");
+            chooserScroll.Add(_chooserArea);
+            root.Add(chooserScroll);
+
+            _workspace = Ui.Box("kn-workspace");
+            var navigation = new ScrollView(ScrollViewMode.Vertical);
+            navigation.AddToClassList("kn-navigation");
+            _navigation = navigation;
+            _workspace.Add(navigation);
+            var page = Ui.Box("kn-page");
+            _compactArea = Ui.Box("kn-compact");
+            page.Add(_compactArea);
+            _pageHeader = Ui.Box("kn-page-header");
+            page.Add(_pageHeader);
             var scroll = new ScrollView(ScrollViewMode.Vertical);
-            scroll.AddToClassList("kn-body");
-            root.Add(scroll);
-
-            scroll.Add(Ui.StepHeader("1", L10n.Tr("step.avatar")));
-            _avatarArea = Ui.Box("kn-section");
-            scroll.Add(_avatarArea);
-
-            _step2Header = Ui.StepHeader("2", L10n.Tr("step.feature"));
-            scroll.Add(_step2Header);
-            _cardsArea = Ui.Box("kn-section", "kn-cards");
-            scroll.Add(_cardsArea);
-
-            _panelArea = Ui.Box("kn-section", "kn-panel");
+            scroll.AddToClassList("kn-page-scroll");
+            _panelArea = Ui.Box("kn-panel");
             scroll.Add(_panelArea);
+            page.Add(scroll);
+            _workspace.Add(page);
+            root.Add(_workspace);
+            _footer = BuildFooter();
+            root.Add(_footer);
 
-            // ③の中身が短い項目に切り替えたとき、スクロール位置が巻き戻って①②まで動いて見えないよう、
-            // ③は少なくとも画面の高さぶんの場所を取っておく
-            var panel = _panelArea;
-            scroll.RegisterCallback<GeometryChangedEvent>(e =>
-            {
-                var height = scroll.contentViewport.layout.height;
-                if (height > 0) panel.style.minHeight = height;
-            });
-
-            root.Add(BuildFooter());
+            // root は RebuildAll でも再利用するため、コールバックを重複登録しない。
+            root.UnregisterCallback<GeometryChangedEvent>(OnGeometryChanged);
+            root.RegisterCallback<GeometryChangedEvent>(OnGeometryChanged);
+            ApplyResponsiveLayout(root.layout.width);
 
             if (_autoSave != null) _autoSave.Pause();
             _autoSave = root.schedule.Execute(AutoSaveTick).Every(1000);
@@ -161,32 +179,37 @@ namespace Jeni.KaihenNavi
             }
 
             BuildAvatarArea();
-            BuildCards();
+            BuildNavigation();
             BuildPanel();
             RefreshFooter();
         }
 
-        private VisualElement BuildHeader()
+        private VisualElement BuildLanguage()
         {
-            var header = Ui.Box("kn-header");
-
-            var titles = Ui.Box("kn-header__titles");
-            titles.Add(Ui.Text(L10n.Tr("app.name"), "kn-header__title"));
-            titles.Add(Ui.Text(L10n.Tr("app.easyMode"), "kn-badge"));
-            if (Edition.IsTrial) titles.Add(Ui.Text(L10n.Tr("app.trial"), "kn-badge", "kn-badge--trial"));
-            header.Add(titles);
-
             var language = new DropdownField(L10n.DisplayNames.ToList(), L10n.CurrentIndex);
             language.AddToClassList("kn-language");
-            language.tooltip = "Language";
+            language.tooltip = L10n.Tr("nav.language");
             language.RegisterValueChangedCallback(e =>
             {
                 var index = System.Array.IndexOf(L10n.DisplayNames, e.newValue);
-                // 画面の作り直しはイベント処理が終わってから行う
                 if (index >= 0) EditorApplication.delayCall += () => L10n.Current = L10n.Codes[index];
             });
-            header.Add(language);
-            return header;
+            return language;
+        }
+
+        private void OnGeometryChanged(GeometryChangedEvent e)
+        {
+            ApplyResponsiveLayout(e.newRect.width);
+        }
+
+        private void ApplyResponsiveLayout(float width)
+        {
+            var changed = _compact != (width < 560);
+            _compact = width < 560;
+            rootVisualElement.EnableInClassList("kn-compact-window", _compact);
+            if (_navigation != null) _navigation.style.display = _compact ? DisplayStyle.None : DisplayStyle.Flex;
+            if (_compactArea != null) _compactArea.style.display = _compact ? DisplayStyle.Flex : DisplayStyle.None;
+            if (changed && _selected == null && _panelArea != null) BuildPanel();
         }
 
         private VisualElement BuildFooter()
@@ -199,7 +222,7 @@ namespace Jeni.KaihenNavi
 
             _historyButton = Ui.Button(L10n.Tr("footer.history"), ShowHistoryMenu, "kn-button--ghost");
             footer.Add(_historyButton);
-            _restoreButton = Ui.Button(L10n.Tr("footer.restore"), RestoreLatest, "kn-button--primary");
+            _restoreButton = Ui.Button(L10n.Tr("footer.restore"), RestoreLatest, "kn-button--ghost");
             footer.Add(_restoreButton);
             return footer;
         }
@@ -207,15 +230,24 @@ namespace Jeni.KaihenNavi
         private void BuildAvatarArea()
         {
             _avatarArea.Clear();
+            _chooserArea.Clear();
             _avatarStatus = null;
+            _avatarActions = null;
+            _avatarAdvice = null;
             _saveLabel = null;
             _checkArea = null;
 
-            // アバターが決まるまでは二択を出し、②③は隠す
             var choosing = _avatar == null || _choosing;
-            SetEditingVisible(!choosing);
+            _workspace.style.display = choosing ? DisplayStyle.None : DisplayStyle.Flex;
+            _chooserScroll.style.display = choosing ? DisplayStyle.Flex : DisplayStyle.None;
+            _footer.style.display = choosing ? DisplayStyle.None : DisplayStyle.Flex;
             if (choosing)
             {
+                var header = Ui.Box("kn-header");
+                header.Add(Ui.Text(L10n.Tr("app.name"), "kn-header__title"));
+                header.Add(BuildLanguage());
+                _avatarArea.Add(header);
+                _chooserArea.Add(Ui.Text(L10n.Tr("step.avatar"), "kn-page-title"));
                 _chooser.Picked = OnAvatarPicked;
                 _chooser.Changed = BuildAvatarArea;
                 _chooser.Cancel = _avatar == null ? (System.Action)null : () =>
@@ -223,39 +255,26 @@ namespace Jeni.KaihenNavi
                     _choosing = false;
                     BuildAvatarArea();
                 };
-                _avatarArea.Add(_chooser.Build());
+                _chooserArea.Add(_chooser.Build());
                 return;
             }
 
-            var current = Ui.Box("kn-row", "kn-current");
-            var texts = Ui.Box("kn-grow");
+            var current = Ui.Box("kn-current");
+            var texts = Ui.Box("kn-current__texts");
             texts.Add(Ui.Text(L10n.Tr("current.label"), "kn-hint"));
             texts.Add(Ui.Text(_avatar.name, "kn-current__name"));
+            _avatarStatus = Ui.Box("kn-status-chips");
+            texts.Add(_avatarStatus);
             current.Add(texts);
-            current.Add(Ui.Button(L10n.Tr("current.change"), () =>
-            {
-                SaveNow();
-                _choosing = true;
-                _chooser.CurrentMode = AvatarChooser.Mode.Start;
-                BuildAvatarArea();
-            }, "kn-button--small", "kn-button--ghost"));
+            _avatarActions = Ui.Box("kn-avatar-actions");
+            current.Add(_avatarActions);
             _avatarArea.Add(current);
-
-            _avatarStatus = Ui.Box("kn-avatar-status");
-            _avatarArea.Add(_avatarStatus);
+            _avatarAdvice = Ui.Box("kn-avatar-advice");
+            _avatarArea.Add(_avatarAdvice);
             RefreshAvatarStatus();
-
             _checkArea = Ui.Box("kn-upload-check");
             _avatarArea.Add(_checkArea);
             RefreshUploadCheck();
-        }
-
-        private void SetEditingVisible(bool visible)
-        {
-            var display = visible ? DisplayStyle.Flex : DisplayStyle.None;
-            if (_step2Header != null) _step2Header.style.display = display;
-            if (_cardsArea != null) _cardsArea.style.display = display;
-            if (_panelArea != null) _panelArea.style.display = display;
         }
 
         private void OnAvatarPicked(VRCAvatarDescriptor avatar)
@@ -270,106 +289,88 @@ namespace Jeni.KaihenNavi
 
         // ---------------------------------------------------------------- 自分用アバター
 
-        /// <summary>①の下に、自分用アバターの状態（作る案内・保存の状態）を出す。</summary>
+        /// <summary>アバター帯の状態チップと操作を更新する。</summary>
         private void RefreshAvatarStatus()
         {
-            if (_avatarStatus == null) return;
+            if (_avatarStatus == null || _avatarActions == null) return;
             _avatarStatus.Clear();
+            _avatarActions.Clear();
+            _avatarAdvice.Clear();
             _saveLabel = null;
             if (_avatar == null) return;
 
-            switch (MyAvatar.KindOf(_avatar))
+            _avatarStatus.Add(Ui.Text(L10n.Tr(Edition.IsTrial ? "app.trial" : "nav.full"), "kn-status-chip"));
+            _avatarActions.Add(Ui.Button(L10n.Tr("nav.changeAvatar"), () =>
             {
-                case AvatarKind.Mine:
-                {
-                    var path = MyAvatar.PrefabPath(_avatar);
-                    var row = Ui.Box("kn-mine");
-                    var texts = Ui.Box("kn-mine__texts");
-                    _saveLabel = Ui.Text("", "kn-mine__sub");
-                    texts.Add(_saveLabel);
-                    row.Add(texts);
-                    row.Add(Ui.Button(L10n.Tr("mine.saveNow"), () =>
-                    {
-                        _savedGroup = Undo.GetCurrentGroup();
-                        SaveNow(true);
-                    }, "kn-button--small"));
-                    row.Add(Ui.Button(L10n.Tr("common.where"), () =>
-                    {
-                        var asset = AssetDatabase.LoadAssetAtPath<GameObject>(path);
-                        if (asset != null) EditorGUIUtility.PingObject(asset);
-                    }, "kn-button--small", "kn-button--ghost"));
-                    _avatarStatus.Add(row);
-                    UpdateSaveLabel();
-                    _avatarStatus.Add(BuildUploadTarget());
-                    break;
-                }
+                SaveNow();
+                _choosing = true;
+                _chooser.CurrentMode = AvatarChooser.Mode.Start;
+                BuildAvatarArea();
+            }, "kn-button--small", "kn-button--ghost"));
 
-                case AvatarKind.Original:
+            var kind = MyAvatar.KindOf(_avatar);
+            if (kind == AvatarKind.Mine)
+            {
+                _saveLabel = Ui.Text("", "kn-status-chip");
+                _avatarStatus.Add(_saveLabel);
+                UpdateSaveLabel();
+                _avatarActions.Add(Ui.Button(L10n.Tr("mine.saveNow"), () =>
                 {
-                    if (Postponed.Contains(_avatarId))
-                    {
-                        var later = Ui.Box("kn-row", "kn-mine-later");
-                        later.Add(Ui.Text(L10n.Tr("mine.notYet"), "kn-hint"));
-                        later.Add(Ui.Button(L10n.Tr("mine.create"), CreateMine, "kn-button--small"));
-                        _avatarStatus.Add(later);
-                        break;
-                    }
-
-                    _avatarStatus.Add(Ui.Notice(L10n.Tr("mine.suggest"), "warn"));
-                    var buttons = Ui.Box("kn-row");
-                    buttons.Add(Ui.Button(L10n.Tr("mine.create"), CreateMine, "kn-button--primary"));
+                    _savedGroup = Undo.GetCurrentGroup();
+                    SaveNow(true);
+                }, "kn-button--small"));
+                var path = MyAvatar.PrefabPath(_avatar);
+                _avatarActions.Add(Ui.Button(L10n.Tr("common.where"), () =>
+                {
+                    var asset = AssetDatabase.LoadAssetAtPath<GameObject>(path);
+                    if (asset != null) EditorGUIUtility.PingObject(asset);
+                }, "kn-button--small", "kn-button--ghost"));
+            }
+            else
+            {
+                var postponed = kind == AvatarKind.Original && Postponed.Contains(_avatarId);
+                var message = kind == AvatarKind.Original ? (postponed ? "mine.notYet" : "mine.suggest") : "mine.unlinked";
+                var chip = Ui.Text(L10n.Tr("nav.sceneOnly"), "kn-status-chip");
+                chip.tooltip = L10n.Tr(message);
+                _avatarStatus.Add(chip);
+                // 詳しい説明は折りたたみ、通常の帯の高さを保つ。
+                var advice = new Foldout { text = L10n.Tr("nav.saveAdvice"), value = false };
+                advice.Add(Ui.Notice(L10n.Tr(message), "info"));
+                var buttons = Ui.Box("kn-row");
+                buttons.Add(Ui.Button(L10n.Tr(kind == AvatarKind.Original ? "mine.create" : "mine.createUnlinked"), CreateMine, "kn-button--small"));
+                if (kind == AvatarKind.Original && !postponed)
                     buttons.Add(Ui.Button(L10n.Tr("mine.later"), () =>
                     {
                         Postponed.Add(_avatarId);
                         RefreshAvatarStatus();
-                    }, "kn-button--ghost"));
-                    _avatarStatus.Add(buttons);
-                    break;
-                }
-
-                default:
-                {
-                    _avatarStatus.Add(Ui.Notice(L10n.Tr("mine.unlinked"), "warn"));
-                    _avatarStatus.Add(Ui.Button(L10n.Tr("mine.createUnlinked"), CreateMine, "kn-button--primary"));
-                    break;
-                }
+                    }, "kn-button--small", "kn-button--ghost"));
+                advice.Add(buttons);
+                _avatarAdvice.Add(advice);
             }
-        }
 
-        /// <summary>アップロード先（新しく出る／前のアバターを更新する）と、上書き事故の警告。</summary>
-        private VisualElement BuildUploadTarget()
-        {
-            var box = Ui.Box("kn-upload");
             var id = MyAvatar.BlueprintId(_avatar.gameObject);
-            var row = Ui.Box("kn-row");
-            row.Add(Ui.Text(id.Length == 0 ? L10n.Tr("upload.new") : L10n.Tr("upload.update", id), "kn-hint", "kn-grow"));
+            var upload = Ui.Text(L10n.Tr(id.Length == 0 ? "nav.uploadNew" : "nav.uploadUpdate"), "kn-status-chip");
+            upload.tooltip = id.Length == 0 ? L10n.Tr("upload.new") : L10n.Tr("upload.update", id);
+            _avatarStatus.Add(upload);
             if (id.Length > 0)
             {
-                row.Add(Ui.Button(L10n.Tr("upload.makeNew"), () =>
+                _avatarActions.Add(Ui.Button(L10n.Tr("upload.makeNew"), () =>
                 {
                     if (!EditorUtility.DisplayDialog(L10n.Tr("app.name"), L10n.Tr("upload.makeNewConfirm"),
                             L10n.Tr("upload.makeNew"), L10n.Tr("dialog.cancel"))) return;
                     MyAvatar.ClearBlueprintId(_avatar.gameObject);
                     SaveNow();
                     RefreshAvatarStatus();
+                    RefreshUploadCheck();
                 }, "kn-button--small", "kn-button--ghost"));
             }
-
-            box.Add(row);
-
-            var same = MyAvatar.SameUploadTarget(_avatar);
-            if (same.Count > 0)
-            {
-                box.Add(Ui.Notice(L10n.Tr("upload.conflict", string.Join("、", same.Select(p => p.name).ToArray())), "warn"));
-            }
-
-            return box;
+            _avatarActions.Add(BuildLanguage());
         }
 
         // ---------------------------------------------------------------- アップロード前のチェック
 
         /// <summary>
-        /// SDK がアップロードを止めるモデルの読み込み設定（Read/Write など）を先に見つけて、①の下に出す。
+        /// SDK がアップロードを止めるモデルの読み込み設定（Read/Write など）を先に見つけて、アバター帯の直下に出す。
         /// 直すと配布物の読み込み設定（.meta）が変わるので、必ず確認を出す。
         /// </summary>
         private void RefreshUploadCheck()
@@ -379,22 +380,24 @@ namespace Jeni.KaihenNavi
             if (_avatar == null) return;
 
             var issues = UploadCheck.Find(_avatar);
+            var same = MyAvatar.SameUploadTarget(_avatar);
+            if (same.Count > 0)
+                _checkArea.Add(Ui.Notice(L10n.Tr("upload.conflict", string.Join("、", same.Select(p => p.name).ToArray())), "warn"));
             if (issues.Count == 0) return;
 
-            _checkArea.Add(Ui.Notice(L10n.Tr("check.attention", issues.Count), "warn"));
-            _checkArea.Add(Ui.Text(UploadCheck.Describe(issues), "kn-hint"));
+            var notice = Ui.Notice(L10n.Tr("check.attention", issues.Count), "warn");
+            notice.tooltip = UploadCheck.Describe(issues);
+            _checkArea.Add(notice);
             var fixableIssues = issues.Where(i => i.CanFix).ToList();
             if (fixableIssues.Count == 0) return;
-            var row = Ui.Box("kn-row");
-            row.Add(Ui.Button(L10n.Tr("check.fix"), () =>
+            notice.Add(Ui.Button(L10n.Tr("check.fix"), () =>
             {
                 if (!EditorUtility.DisplayDialog(L10n.Tr("app.name"), L10n.Tr("check.confirm", UploadCheck.Describe(fixableIssues)),
                         L10n.Tr("check.fix"), L10n.Tr("dialog.cancel"))) return;
                 var fixedCount = UploadCheck.Fix(fixableIssues);
                 RefreshUploadCheck();
                 EditorUtility.DisplayDialog(L10n.Tr("app.name"), L10n.Tr("check.fixed", fixedCount), L10n.Tr("dialog.ok"));
-            }, "kn-button--small", "kn-button--primary"));
-            _checkArea.Add(row);
+            }, "kn-button--small", "kn-button--ghost"));
         }
 
         private void CreateMine()
@@ -417,6 +420,7 @@ namespace Jeni.KaihenNavi
                 L10n.Tr("mine.created", System.IO.Path.GetFileNameWithoutExtension(path)), L10n.Tr("dialog.ok"));
 
             RefreshAvatarStatus();
+            RefreshUploadCheck();
             BuildPanel();
             RefreshFooter();
         }
@@ -425,8 +429,8 @@ namespace Jeni.KaihenNavi
         {
             if (_saveLabel == null) return;
             _saveLabel.text = _lastSavedAt == default(System.DateTime)
-                ? L10n.Tr("mine.autosave")
-                : L10n.Tr(_lastSaveManual ? "mine.savedManually" : "mine.savedAt", _lastSavedAt.ToString("HH:mm:ss"));
+                ? L10n.Tr("nav.autosave")
+                : L10n.Tr(_lastSaveManual ? "nav.savedManually" : "nav.savedAt", _lastSavedAt.ToString("HH:mm:ss"));
         }
 
         /// <summary>
@@ -472,43 +476,53 @@ namespace Jeni.KaihenNavi
             SaveNow();
         }
 
-        private void BuildCards()
+        private void BuildNavigation()
         {
-            _cardsArea.Clear();
-            _cards.Clear();
-            foreach (var feature in _features)
+            _navigation.Clear();
+            _navigationItems.Clear();
+            _compactArea.Clear();
+            _navigationFeatures = new List<FeatureBase>();
+            foreach (var group in _features.GroupBy(f => f.Group))
             {
-                var f = feature;
-                var card = new Button(() => SelectFeature(f));
-                card.AddToClassList("kn-card");
-                if (f == _selected) card.AddToClassList("kn-card--selected");
-                if (f.Locked) card.AddToClassList("kn-card--locked");
-
-                var icon = Ui.Text(f.Icon, "kn-card__icon");
-                icon.style.backgroundColor = f.Accent;
-                card.Add(icon);
-
-                var texts = Ui.Box("kn-card__texts");
-                texts.Add(Ui.Text(f.Title, "kn-card__title"));
-                texts.Add(Ui.Text(f.Description, "kn-card__desc"));
-                card.Add(texts);
-
-                if (f.Locked || !f.Implemented) card.AddToClassList("kn-card--badged");
-                if (f.Locked) card.Add(Ui.Text(L10n.Tr("card.full"), "kn-card__badge", "kn-card__badge--lock"));
-                else if (!f.Implemented) card.Add(Ui.Text(L10n.Tr("card.soon"), "kn-card__badge"));
-
-                _cardsArea.Add(card);
-                _cards[f] = card;
+                _navigation.Add(Ui.Text(L10n.Tr("nav.group." + group.Key), "kn-nav-group"));
+                foreach (var feature in group)
+                {
+                    var f = feature;
+                    _navigationFeatures.Add(f);
+                    var item = new Button(() => SelectFeature(f));
+                    item.AddToClassList("kn-nav-item");
+                    item.tooltip = f.Description;
+                    item.Add(Ui.NavigationIcon(f.Group));
+                    item.Add(Ui.Text(f.Title, "kn-nav-item__title"));
+                    // Unity のアイコン取得に依存せず、製品版の表示を常に保証する。
+                    if (f.Locked) item.Add(Ui.Text(L10n.Tr("card.full"), "kn-nav-item__lock"));
+                    _navigation.Add(item);
+                    _navigationItems[f] = item;
+                }
             }
+
+            _featureChoices = new List<string> { L10n.Tr("nav.chooseFeature") };
+            _featureChoices.AddRange(_navigationFeatures.Select(f => L10n.Tr("nav.group." + f.Group) + " / " + f.Title +
+                (f.Locked ? " (" + L10n.Tr("card.full") + ")" : "")));
+            _featurePopup = new PopupField<string>(_featureChoices, 0);
+            _featurePopup.AddToClassList("kn-feature-popup");
+            _featurePopup.tooltip = L10n.Tr("nav.chooseFeature");
+            _featurePopup.RegisterValueChangedCallback(e =>
+            {
+                var index = _featureChoices.IndexOf(e.newValue) - 1;
+                if (index >= 0) SelectFeature(_navigationFeatures[index]);
+                else UpdateNavigationSelection();
+            });
+            _compactArea.Add(_featurePopup);
+            UpdateNavigationSelection();
         }
 
-        /// <summary>カードは作り直さず、選択中の印だけ付け替える（作り直すと一瞬見た目が変わるため）。</summary>
-        private void UpdateCardSelection()
+        private void UpdateNavigationSelection()
         {
-            foreach (var pair in _cards)
-            {
-                pair.Value.EnableInClassList("kn-card--selected", pair.Key == _selected);
-            }
+            foreach (var pair in _navigationItems)
+                pair.Value.EnableInClassList("kn-nav-item--selected", pair.Key == _selected);
+            if (_featurePopup != null)
+                _featurePopup.SetValueWithoutNotify(_featureChoices[_navigationFeatures.IndexOf(_selected) + 1]);
         }
 
         private void BuildPanel()
@@ -516,18 +530,23 @@ namespace Jeni.KaihenNavi
             // 手動更新や機能切り替えでも比較の基準を更新し、同じ変更で二度作り直さない。
             _panelHierarchyHash = HierarchyHash();
             _panelArea.Clear();
+            _pageHeader.Clear();
+            _panelArea.EnableInClassList("kn-panel--empty", _selected == null);
             if (_selected == null)
             {
-                _panelArea.Add(Ui.StepHeader("3", L10n.Tr("step.adjust")));
-                _panelArea.Add(Ui.Notice(L10n.Tr("panel.chooseFeature"), "info"));
+                _panelArea.Add(Ui.Text(L10n.Tr(_compact ? "nav.emptyCompact" : "nav.empty"), "kn-empty"));
                 return;
             }
 
-            var header = Ui.StepHeader("3", _selected.Title);
+            var header = Ui.Box("kn-page-header__row");
+            var titles = Ui.Box("kn-page-header__texts");
+            titles.Add(Ui.Text(_selected.Title, "kn-page-title"));
+            titles.Add(Ui.Text(_selected.Description, "kn-page-description"));
+            header.Add(titles);
             var refresh = Ui.Button(L10n.Tr("panel.refresh"), () => BuildPanel(), "kn-button--small", "kn-button--ghost");
             refresh.tooltip = L10n.Tr("panel.refreshTip");
             header.Add(refresh);
-            _panelArea.Add(header);
+            _pageHeader.Add(header);
 
             if (_selected.Locked)
             {
@@ -608,7 +627,7 @@ namespace Jeni.KaihenNavi
             UndoHelper.Separate();
             _selected = feature;
             _featureId = feature.Id;
-            UpdateCardSelection();
+            UpdateNavigationSelection();
             BuildPanel();
         }
 

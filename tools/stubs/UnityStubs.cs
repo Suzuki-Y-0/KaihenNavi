@@ -372,6 +372,7 @@ namespace UnityEngine
     public class GUIContent
     {
         public GUIContent(string text) { }
+        public Texture image;
     }
 
     [AttributeUsage(AttributeTargets.Field)] public class SerializeField : Attribute { }
@@ -530,6 +531,7 @@ namespace UnityEngine.UIElements
         public void EnableInClassList(string c, bool enable) { }
         public void SetEnabled(bool value) { }
         public void RegisterCallback<T>(EventCallback<T> callback) where T : EventBase { }
+        public void UnregisterCallback<T>(EventCallback<T> callback) where T : EventBase { }
     }
 
     public class ChangeEvent<T> : EventBase
@@ -570,7 +572,7 @@ namespace UnityEngine.UIElements
 
     public enum ScrollViewMode { Vertical, Horizontal }
     public class ScrollView : VisualElement { public ScrollView(ScrollViewMode mode) { } public VisualElement contentViewport; }
-    public class GeometryChangedEvent : EventBase { }
+    public class GeometryChangedEvent : EventBase { public UnityEngine.Rect newRect; }
 }
 
 namespace UnityEditor.UIElements
@@ -803,6 +805,7 @@ namespace UnityEditor
     public static class EditorGUIUtility
     {
         public static bool isProSkin;
+        public static GUIContent IconContent(string name) { return new GUIContent(name); }
         public static void PingObject(Object o) { }
     }
 

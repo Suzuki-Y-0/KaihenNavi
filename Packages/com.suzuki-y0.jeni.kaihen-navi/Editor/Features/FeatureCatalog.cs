@@ -2,7 +2,7 @@ using System.Collections.Generic;
 
 namespace Jeni.KaihenNavi
 {
-    /// <summary>カードに並べる「やりたいこと」の一覧。並び順がそのまま画面の順番になる。</summary>
+    /// <summary>ナビに並べる「やりたいこと」の一覧。並び順がそのまま画面の順番になる。</summary>
     internal static class FeatureCatalog
     {
         public static List<FeatureBase> Create()
@@ -11,16 +11,16 @@ namespace Jeni.KaihenNavi
             {
                 new OutfitFeature(),
                 new TransformFeature(),
+                new ToggleFeature(),
+                new SkinFeature(),
                 new ColorFeature(),
                 new InnerColorFeature(),
-                new ToggleFeature(),
+                new LightFeature(),
+                new PinkFeature(),
                 new BodyFeature(),
+                new ViewFeature(),
                 new WalkFeature(),
                 new MenuFeature(),
-                new SkinFeature(),
-                new ViewFeature(),
-                new PinkFeature(),
-                new LightFeature(),
                 new ThumbnailFeature(),
             };
         }

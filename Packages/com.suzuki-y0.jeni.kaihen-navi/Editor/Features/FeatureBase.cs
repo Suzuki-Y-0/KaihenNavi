@@ -6,13 +6,28 @@ using VRC.SDK3.Avatars.Components;
 namespace Jeni.KaihenNavi
 {
     /// <summary>
-    /// 「やりたいこと」1 つぶんの機能。カードに表示され、選ぶと操作エリアに Build() の中身が出る。
+    /// 「やりたいこと」1 つぶんの機能。ナビに表示され、選ぶと操作エリアに Build() の中身が出る。
     /// 新しい機能はこのクラスを継承して FeatureCatalog に登録する。
     /// </summary>
     internal abstract class FeatureBase
     {
         /// <summary>英小文字の識別子。言語ファイルのキー（feature.ID.title など）にも使う。</summary>
         public abstract string Id { get; }
+
+        /// <summary>ナビのグループキー。表示名は nav.group.KEY で翻訳する。</summary>
+        public virtual string Group
+        {
+            get
+            {
+                switch (Id)
+                {
+                    case "outfit": case "transform": case "toggle": case "skin": return "outfit";
+                    case "color": case "innerColor": case "light": case "pink": return "appearance";
+                    case "body": case "view": case "walk": return "body";
+                    default: return "finish";
+                }
+            }
+        }
 
         /// <summary>企画書の機能番号（1〜10）。</summary>
         public abstract int Number { get; }

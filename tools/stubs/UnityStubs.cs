@@ -105,7 +105,7 @@ namespace UnityEngine
         public void BakeMesh(Mesh m, bool useScale) { }
     }
 
-    public class Mesh : Object { public Vector2[] uv; public int subMeshCount; public int[] GetTriangles(int submesh) { return new int[0]; } public bool isReadable; public int blendShapeCount; public Vector3[] vertices; public Vector3[] normals; public int[] triangles; public int vertexCount { get { return vertices == null ? 0 : vertices.Length; } } public UnityEngine.Rendering.IndexFormat indexFormat; public void RecalculateNormals() { } public void RecalculateBounds() { } public string GetBlendShapeName(int i) { return ""; } }
+    public class Mesh : Object { public Vector2[] uv; public int subMeshCount; public int[] GetTriangles(int submesh) { return new int[0]; } public bool isReadable; public int blendShapeCount; public Vector3[] vertices; public Vector3[] normals; public int[] triangles; public int vertexCount { get { return vertices == null ? 0 : vertices.Length; } } public UnityEngine.Rendering.IndexFormat indexFormat; public void RecalculateNormals() { } public void RecalculateBounds() { } public string GetBlendShapeName(int i) { return ""; } public int GetBlendShapeIndex(string name) { return -1; } }
     public class Collider : Component { }
     public class MeshCollider : Collider { public Mesh sharedMesh; }
     public struct RaycastHit { public Collider collider; }
@@ -846,6 +846,7 @@ namespace UnityEditor
     public class SceneView : EditorWindow
     {
         public static SceneView lastActiveSceneView;
+        public Camera camera;
         public static Action<SceneView> duringSceneGui;
         public static void RepaintAll() { }
         public bool FrameSelected() { return true; }
@@ -857,6 +858,10 @@ namespace UnityEditor
         public static Color color;
         public static void SphereHandleCap(int id, Vector3 position, Quaternion rotation, float size, EventType type) { }
         public static void DrawLine(Vector3 a, Vector3 b) { }
+        public static void DrawLine(Vector3 a, Vector3 b, float thickness) { }
+        public static void DrawWireDisc(Vector3 center, Vector3 normal, float radius, float thickness) { }
+        public static void ConeHandleCap(int id, Vector3 position, Quaternion rotation, float size, EventType type) { }
+        public static UnityEngine.Rendering.CompareFunction zTest;
     }
 
     public static class HandleUtility
@@ -920,4 +925,4 @@ namespace UnityEngine.TextCore.Text
     }
 }
 
-namespace UnityEngine.Rendering { public enum IndexFormat { UInt16, UInt32 } }
+namespace UnityEngine.Rendering { public enum IndexFormat { UInt16, UInt32 } public enum CompareFunction { Disabled, Never, Less, Equal, LessEqual, Greater, NotEqual, GreaterEqual, Always } }

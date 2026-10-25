@@ -124,12 +124,16 @@ namespace UnityEngine
         public Matrix4x4 transpose { get { return this; } }
         public Vector3 MultiplyVector(Vector3 v) { return v; }
     }
-    public class Texture : Object { public TextureWrapMode wrapMode; }
+    public enum FilterMode { Point, Bilinear, Trilinear }
+    public class Texture : Object { public TextureWrapMode wrapMode; public int width; public int height; public FilterMode filterMode; }
     public enum TextureFormat { RGBA32, RGB24 }
     public enum TextureWrapMode { Repeat, Clamp }
     public class Texture2D : Texture
     {
         public Texture2D(int w, int h, TextureFormat f, bool mip) { }
+        public Texture2D(int w, int h, TextureFormat f, bool mip, bool linear) { }
+        public Color[] GetPixels() { return new Color[0]; }
+        public void SetPixels(Color[] p) { }
         public void SetPixel(int x, int y, Color c) { }
         public Color32[] GetPixels32() { return new Color32[0]; }
         public void SetPixels32(Color32[] p) { }
@@ -143,13 +147,17 @@ namespace UnityEngine
         public static bool LoadImage(this Texture2D texture, byte[] data, bool markNonReadable) { return true; }
     }
 
-    public enum RenderTextureFormat { ARGB32 }
+    public enum RenderTextureFormat { ARGB32, RGFloat, ARGBFloat, Depth }
+    public enum RenderTextureReadWrite { Default, Linear, sRGB }
+    public static class Graphics { public static void Blit(Texture source, RenderTexture dest) { } }
     public class RenderTexture : Texture
     {
         public RenderTexture(int w, int h, int depth, RenderTextureFormat f) { }
         public int antiAliasing;
         public static RenderTexture active;
         public void Release() { }
+        public static RenderTexture GetTemporary(int w, int h, int depth, RenderTextureFormat f, RenderTextureReadWrite rw) { return null; }
+        public static void ReleaseTemporary(RenderTexture rt) { }
     }
 
     public enum CameraClearFlags { Skybox, SolidColor }
@@ -638,6 +646,8 @@ namespace UnityEditor
         public TextureImporterType textureType;
         public bool isReadable, sRGBTexture, mipmapEnabled;
         public TextureWrapMode wrapMode;
+        public FilterMode filterMode;
+        public int maxTextureSize;
         public TextureImporterCompression textureCompression;
     }
 
@@ -723,6 +733,7 @@ namespace UnityEditor
         public static void SaveAssetIfDirty(Object o) { }
         public static bool CopyAsset(string a, string b) { return true; }
         public static void ImportAsset(string path) { if (ImportForTests != null) ImportForTests(path); }
+        public static void ImportAsset(string path, ImportAssetOptions options) { ImportAsset(path); }
         public static string AssetPathToGUID(string path) { return GuidForTests == null ? "" : GuidForTests(path); }
         public static string RenameAsset(string path, string name) { return ""; }
     }
@@ -826,8 +837,10 @@ namespace UnityEditor
         public static Action beforeAssemblyReload;
     }
 
+    public enum ImportAssetOptions { Default, ForceUpdate, ForceSynchronousImport }
     public static class EditorApplication
     {
+        public static CallbackFunction update;
         public static double timeSinceStartup;
         public static bool isPlayingOrWillChangePlaymode;
         public static Action hierarchyChanged;

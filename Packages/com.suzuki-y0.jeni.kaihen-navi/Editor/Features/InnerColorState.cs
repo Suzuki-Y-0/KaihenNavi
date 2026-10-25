@@ -98,27 +98,45 @@ namespace Jeni.KaihenNavi
         {
             public string rendererPath;
             public int rendererIndex;
-            public int slot;
+            public int slot = 0;
             public AssetRef original;
         }
 
         [Serializable]
         internal sealed class Entry
         {
-            public string materialPath;
+            public string materialPath = null;
             // 旧版の .mat 控えを読むためだけに残す。新規の控えは作らない。
             public string originalPath = null;
-            public string key;
-            public string maskPath;
-            public AssetRef source;
+            public string key = null;
+            public string maskPath = null;
+            public AssetRef source = null;
             public SecondState before;
             public List<Assignment> assignments = new List<Assignment>();
+        }
+
+        /// <summary>面方式の元メッシュと元の枠。旧方式の entries とは別に保存する。</summary>
+        [Serializable]
+        internal sealed class MeshEntry
+        {
+            public Assignment assignment;
+            public AssetRef originalMesh;
+            public AssetRef[] originalMaterials;
+            public string meshPath;
+            public string materialPath = null;
+            public int sourceSlot;
         }
 
         [Serializable]
         internal sealed class Data
         {
             public List<Entry> entries = new List<Entry>();
+            public List<MeshEntry> meshes = new List<MeshEntry>();
+            public bool hasSettings;
+            public Color color;
+            public float range = 56.25f;
+            public float height;
+            public float brightness = 1f;
         }
 
         public Data data = new Data();
@@ -127,6 +145,7 @@ namespace Jeni.KaihenNavi
         {
             if (data == null) data = new Data();
             if (data.entries == null) data.entries = new List<Entry>();
+            if (data.meshes == null) data.meshes = new List<MeshEntry>();
             foreach (var entry in data.entries)
             {
                 if (entry.assignments == null) entry.assignments = new List<Assignment>();
@@ -153,12 +172,7 @@ namespace Jeni.KaihenNavi
             {
                 var oldPath = WorkFolders.ForAvatar(avatar.gameObject) + "/InnerColorState.asset";
                 state = AssetDatabase.LoadAssetAtPath<InnerColorState>(oldPath);
-                if (state != null)
-                {
-                    WorkFolders.Ensure(WorkFolders.Backups(avatar.gameObject));
-                    var error = AssetDatabase.MoveAsset(oldPath, path);
-                    if (!string.IsNullOrEmpty(error)) throw new InvalidOperationException(error);
-                }
+                // 旧版もその場所で読む。画面を開くだけでファイルを移動すると Undo の外で変更される。
             }
             if (state != null) state.Normalize();
             if (state != null || !create) return state;

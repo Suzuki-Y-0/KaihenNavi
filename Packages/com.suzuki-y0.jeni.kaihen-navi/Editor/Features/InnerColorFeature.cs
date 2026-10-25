@@ -10,16 +10,11 @@ using Object = UnityEngine.Object;
 
 namespace Jeni.KaihenNavi
 {
+    /// <summary>今の姿勢で髪の面を選び、複製メッシュの内側用の枠へ移す。</summary>
     internal sealed class InnerColorFeature : FeatureBase
     {
-        // lilToon 公式ソースで確認（2026-10-22）。Main2nd のプロパティと既定値:
-        // https://github.com/lilxyzw/lilToon/blob/master/Assets/lilToon/Shader/lts.shader
-        // マスクは fd.uvMain（MainTex の拡縮・移動を含む UV0）の R を読む:
-        // https://github.com/lilxyzw/lilToon/blob/master/Assets/lilToon/Shader/Includes/lil_common_frag.hlsl
+        // 旧方式の台帳を「元に戻す」で読めるよう、2nd カラーの項目だけ残す。
         private const string Use = "_UseMain2ndTex";
-        private const string Tint = "_Color2nd";
-        private const string Main = "_Main2ndTex";
-        private const string Mask = "_Main2ndBlendMask";
         internal static readonly string[] Floats =
         {
             Use, "_Main2ndTexBlendMode", "_Main2ndTexAlphaMode", "_Main2ndTexAngle",
@@ -33,30 +28,23 @@ namespace Jeni.KaihenNavi
             "_Main2ndTex_ScrollRotate", "_Main2ndDissolveParams", "_Main2ndDistanceFade",
             "_Main2ndTexDecalAnimation", "_Main2ndTexDecalSubParam",
         };
-        private static readonly Vector4[] VectorDefaults =
-        {
-            new Vector4(0, 0, 0, 0), new Vector4(0, 0, 0.5f, 0.1f), new Vector4(0.1f, 0.01f, 0, 0),
-            new Vector4(1, 1, 1, 30), new Vector4(1, 1, 0, 1),
-        };
-        private static readonly string[] ModeKeys = { "layers", "lower", "rear" };
         private static readonly string[] ColorKeys = { "pink", "blue", "purple", "silver", "black" };
         private static readonly Color[] Colors =
         {
             new Color(1f, 0.35f, 0.6f), new Color(0.25f, 0.65f, 1f), new Color(0.65f, 0.35f, 1f),
             new Color(0.85f, 0.88f, 0.95f), new Color(0.06f, 0.05f, 0.08f),
         };
-
         private VRCAvatarDescriptor _avatar;
+        private FeatureContext _context;
         private readonly HashSet<SkinnedMeshRenderer> _excluded = new HashSet<SkinnedMeshRenderer>();
         private readonly HashSet<SkinnedMeshRenderer> _selectionInitialized = new HashSet<SkinnedMeshRenderer>();
-        private readonly InnerColorOpenness.Cache _openness = new InnerColorOpenness.Cache();
-        private readonly InnerColorVisibility _visibility = new InnerColorVisibility();
+        private readonly Dictionary<SkinnedMeshRenderer, int> _slots = new Dictionary<SkinnedMeshRenderer, int>();
         private Color _color = Colors[0];
-        private int _mode;
-        private int _size = 512;
-        private float _thickness = 0.08f;
-        private float _height = 0.5f;
+        private float _range = 56.25f;
+        private float _height;
+        private float _brightness = 1f;
         private bool _preview;
+        private bool _draggingSlider;
         private VisualElement _root;
         private Label _status;
         private IVisualElementScheduledItem _pending;
@@ -70,44 +58,64 @@ namespace Jeni.KaihenNavi
         public override VisualElement Build(FeatureContext ctx)
         {
             CancelPending();
+            _context = ctx;
+            InnerColorAssetUndo.Replayed -= OnAssetsReplayed;
+            InnerColorAssetUndo.Replayed += OnAssetsReplayed;
+            _draggingSlider = false;
             if (_avatar != ctx.Avatar)
             {
                 _avatar = ctx.Avatar;
-                _excluded.Clear();
-                _selectionInitialized.Clear();
-                _openness.Clear();
-                _visibility.Clear();
+                _excluded.Clear(); _selectionInitialized.Clear(); _slots.Clear();
+                _color = Colors[0]; _range = 56.25f; _height = 0; _brightness = 1;
             }
             var state = InnerColorState.Load(ctx.Avatar);
-            _preview = state != null && state.data.entries.Count > 0;
+            _preview = state != null && (state.data.meshes.Count > 0 || state.data.entries.Count > 0);
+            if (state != null && state.data.hasSettings)
+            {
+                _color = state.data.color; _range = state.data.range;
+                _height = state.data.height; _brightness = state.data.brightness;
+            }
             _root = new VisualElement();
             _root.Add(Ui.Notice(L10n.Tr("innerColor.intro"), "info"));
-            var targets = HairRenderers(ctx.Avatar);
             _root.Add(Ui.Heading(L10n.Tr("innerColor.which")));
+            var targets = HairRenderers(ctx.Avatar, state);
             foreach (var renderer in targets)
             {
                 var r = renderer;
-                if (_selectionInitialized.Add(r) && DefaultExcluded(r.name)) _excluded.Add(r);
-                var hair = HairSlots(ctx.Avatar, r).Select(i => r.sharedMaterials[i]).ToList();
-                var supported = hair.Any(Supported);
+                var saved = MeshEntry(ctx.Avatar, state, r);
+                if (_selectionInitialized.Add(r))
+                {
+                    if (DefaultExcluded(r.name) && saved == null) _excluded.Add(r);
+                }
+                if (state != null && state.data.hasSettings)
+                {
+                    if (saved != null) _excluded.Remove(r); else _excluded.Add(r);
+                }
+                var materials = OriginalMaterials(ctx.Avatar, state, r);
+                var slots = HairSlots(ctx.Avatar, r, materials);
                 var row = Ui.Box("kn-list__row");
-                var toggle = new Toggle(r.name) { value = supported && !_excluded.Contains(r) };
-                toggle.SetEnabled(supported);
+                var toggle = new Toggle(r.name) { value = !_excluded.Contains(r) };
                 toggle.RegisterValueChangedCallback(e =>
                 {
                     if (e.newValue) _excluded.Remove(r); else _excluded.Add(r);
                     Queue(ctx);
                 });
-                row.Add(toggle);
-                _root.Add(row);
-                if (hair.Any(m => !IsLil(m))) _root.Add(Ui.Text(L10n.Tr("innerColor.lilOnly", r.name), "kn-hint"));
-                if (hair.Any(m => IsLil(m) && !Supported(m)))
-                    _root.Add(Ui.Text(L10n.Tr("innerColor.noSecond", r.name), "kn-hint"));
+                row.Add(toggle); _root.Add(row);
+                var selected = saved == null ? (_slots.ContainsKey(r) ? _slots[r] : slots[0]) : saved.sourceSlot;
+                if (!slots.Contains(selected)) selected = slots[0];
+                _slots[r] = selected;
+                // 同じマテリアルの枠はまとめて選ぶ。髪ごとに内側用の枠は 1 つだけ足す。
+                if (slots.Count > 1)
+                    _root.Add(Ui.Chips(slots.Select(i => materials[i].name).ToList(), slots.IndexOf(selected), i =>
+                    {
+                        _slots[r] = slots[i]; Queue(ctx);
+                    }));
+                if (slots.Any(i => !IsLil(materials[i])))
+                    _root.Add(Ui.Text(L10n.Tr("innerColor.otherShader", r.name), "kn-hint"));
             }
             if (targets.Count == 0) _root.Add(Ui.Notice(L10n.Tr("innerColor.noHair"), "warn"));
             if (AvatarMeasure.Bone(ctx.Avatar, HumanBodyBones.Head) == null)
                 _root.Add(Ui.Notice(L10n.Tr("innerColor.noHead"), "warn"));
-
             var color = new ColorField(L10n.Tr("innerColor.color")) { value = _color, showAlpha = false, hdr = false };
             color.RegisterValueChangedCallback(e => { _color = e.newValue; _color.a = 1f; Queue(ctx); });
             _root.Add(color);
@@ -115,70 +123,87 @@ namespace Jeni.KaihenNavi
             {
                 _color = Colors[i]; color.SetValueWithoutNotify(_color); Queue(ctx);
             }));
-            _root.Add(Ui.Heading(L10n.Tr("innerColor.method")));
-            _root.Add(Ui.Chips(ModeKeys.Select(k => L10n.Tr("innerColor.mode." + k)).ToList(), _mode, i =>
-            {
-                _mode = i; ctx.Rebuild(); Queue(ctx);
-            }));
-            if (_mode == 1)
-                _root.Add(Ui.Slider(L10n.Tr("innerColor.height"), 0, 100, _height * 100, v => { _height = v / 100; Queue(ctx); }));
-            else
-                _root.Add(Ui.Slider(L10n.Tr("innerColor.thickness"), 1, 40, _thickness * 100, v => { _thickness = v / 100; Queue(ctx); }));
-            _root.Add(Ui.Text(L10n.Tr(_mode == 1 ? "innerColor.heightHint" : "innerColor.thicknessHint"), "kn-hint"));
-            _root.Add(Ui.Text(L10n.Tr("innerColor.timeHint"), "kn-hint"));
-            _root.Add(Ui.Heading(L10n.Tr("innerColor.quality")));
-            _root.Add(Ui.Chips(new List<string> { L10n.Tr("innerColor.size512"), L10n.Tr("innerColor.size1024") }, _size == 512 ? 0 : 1,
-                i => { _size = i == 0 ? 512 : 1024; Queue(ctx); }));
+            _root.Add(DeferredSlider(ctx, "innerColor.brightness", 25, 400, _brightness * 100, v => _brightness = v / 100));
+            _root.Add(Ui.Text(L10n.Tr("innerColor.brightnessHint"), "kn-hint"));
+            _root.Add(DeferredSlider(ctx, "innerColor.thickness", 0, 100, _range, v => _range = v));
+            _root.Add(Ui.Text(L10n.Tr("innerColor.thicknessHint"), "kn-hint"));
+            _root.Add(DeferredSlider(ctx, "innerColor.height", 0, 100, _height * 100, v => _height = v / 100));
+            _root.Add(Ui.Text(L10n.Tr("innerColor.heightHint"), "kn-hint"));
             var buttons = Ui.Box("kn-row");
             buttons.Add(Ui.Button(L10n.Tr("innerColor.preview"), () => Preview(ctx)));
             buttons.Add(Ui.Button(L10n.Tr("innerColor.reset"), () => Reset(ctx)));
             _root.Add(buttons);
-            _status = Ui.Text("", "kn-hint");
-            _root.Add(_status);
-            _root.Add(Ui.Text(L10n.Tr("innerColor.uvHint"), "kn-hint"));
+            _status = Ui.Text("", "kn-hint"); _root.Add(_status);
+            _root.Add(Ui.Text(L10n.Tr("innerColor.materialHint"), "kn-hint"));
             return _root;
         }
 
-        public override void OnClosed() { CancelPending(); _preview = false; _root = null; _visibility.Clear(); _openness.Clear(); }
+        /// <summary>ドラッグの途中で止まっても反映を分けず、指を離した後に 1 手で反映する。</summary>
+        private Slider DeferredSlider(FeatureContext ctx, string key, float min, float max, float value, Action<float> change)
+        {
+            var slider = Ui.Slider(L10n.Tr(key), min, max, value, v => { change(v); Queue(ctx); });
+            slider.RegisterCallback<PointerDownEvent>(e => { _draggingSlider = true; CancelPending(); }, TrickleDown.TrickleDown);
+            Action finish = () =>
+            {
+                if (!_draggingSlider) return;
+                _draggingSlider = false; Queue(ctx);
+            };
+            slider.RegisterCallback<PointerUpEvent>(e => finish(), TrickleDown.TrickleDown);
+            slider.RegisterCallback<PointerCaptureOutEvent>(e => finish());
+            slider.RegisterCallback<FocusOutEvent>(e => finish());
+            return slider;
+        }
+
+        public override void OnClosed()
+        {
+            CancelPending(); _draggingSlider = false; _preview = false; _root = null; _context = null;
+            InnerColorAssetUndo.Replayed -= OnAssetsReplayed;
+        }
+        private void OnAssetsReplayed()
+        {
+            // ウィンドウの Undo 通知より後にファイルが戻る場合も、戻った台帳と選択を表示する。
+            if (_root != null && _context != null && _context.Rebuild != null) _context.Rebuild();
+        }
         private void CancelPending() { if (_pending != null) _pending.Pause(); _pending = null; }
         private void Queue(FeatureContext ctx)
         {
             CancelPending();
-            if (_preview && _root != null) _pending = _root.schedule.Execute(() => Preview(ctx)).StartingIn(300);
+            if (_preview && !_draggingSlider && _root != null) _pending = _root.schedule.Execute(() => Preview(ctx)).StartingIn(300);
+        }
+        private static bool IsLil(Material m) { return m != null && m.HasProperty("_lilToonVersion"); }
+
+        private static InnerColorState.MeshEntry MeshEntry(VRCAvatarDescriptor avatar, InnerColorState state, SkinnedMeshRenderer r)
+        {
+            if (state == null) return null;
+            return state.data.meshes.FirstOrDefault(e => InnerColorState.RendererFor(avatar, e.assignment) == r &&
+                AssetDatabase.GetAssetPath(r.sharedMesh) == e.meshPath);
         }
 
-        private static bool IsLil(Material m) { return m != null && m.HasProperty("_lilToonVersion"); }
-        private static bool Supported(Material m)
+        /// <summary>新旧の複製を元の参照へ読み替える。計算中はシーンも元アセットも変えない。</summary>
+        private static Material[] OriginalMaterials(VRCAvatarDescriptor avatar, InnerColorState state, SkinnedMeshRenderer r)
         {
-            return IsLil(m) && m.HasProperty(Use) && m.HasProperty(Tint) && m.HasProperty(Main) &&
-                m.HasProperty(Mask) && m.HasProperty("_Main2ndTexBlendMode");
+            var saved = MeshEntry(avatar, state, r);
+            var materials = saved == null ? r.sharedMaterials.ToArray() : saved.originalMaterials.Select(m => m.Load<Material>()).ToArray();
+            if (state != null)
+                foreach (var entry in state.data.entries)
+                    foreach (var a in entry.assignments.Where(a => InnerColorState.RendererFor(avatar, a) == r))
+                        if (a.slot < materials.Length && AssetDatabase.GetAssetPath(materials[a.slot]) == entry.materialPath)
+                            materials[a.slot] = a.original.Load<Material>();
+            return materials;
         }
-        private static List<int> HairSlots(VRCAvatarDescriptor avatar, SkinnedMeshRenderer r)
+        private static List<int> HairSlots(VRCAvatarDescriptor avatar, SkinnedMeshRenderer r, Material[] materials)
         {
-            var result = new List<int>();
             var body = AvatarFinder.FindBody(avatar);
-            var mats = r.sharedMaterials;
-            for (var i = 0; i < mats.Length; i++)
-                if (mats[i] != null && PartGuesser.Guess(r, mats[i], body) == BodyPart.Hair) result.Add(i);
-            return result;
+            return Enumerable.Range(0, materials.Length).Where(i => materials[i] != null && materials[i].HasProperty("_Color") &&
+                PartGuesser.Guess(r, materials[i], body) == BodyPart.Hair)
+                .GroupBy(i => materials[i]).Select(g => g.First()).ToList();
         }
-        private static List<SkinnedMeshRenderer> HairRenderers(VRCAvatarDescriptor avatar)
+        private static List<SkinnedMeshRenderer> HairRenderers(VRCAvatarDescriptor avatar, InnerColorState state)
         {
             return avatar.GetComponentsInChildren<SkinnedMeshRenderer>(true)
-                .Where(r => r.sharedMesh != null && HairSlots(avatar, r).Count > 0).OrderBy(r => r.name).ToList();
+                .Where(r => r.sharedMesh != null && HairSlots(avatar, r, OriginalMaterials(avatar, state, r)).Count > 0)
+                .OrderBy(r => r.name).ToList();
         }
-
-        private sealed class Surface
-        {
-            public SkinnedMeshRenderer renderer;
-            public InnerColorOpenness.Geometry geometry;
-            public Vector3[] positions;
-            public Vector2[] uv;
-            public readonly Dictionary<int, int[]> triangles = new Dictionary<int, int[]>();
-            public readonly Dictionary<int, Material> materials = new Dictionary<int, Material>();
-            public float[] values;
-        }
-
         internal static bool DefaultExcluded(string name)
         {
             if (string.IsNullOrEmpty(name)) return false;
@@ -188,8 +213,6 @@ namespace Jeni.KaihenNavi
                 "acc", "ribbon", "pin", "clip", "earring", "飾", "リボン", "ピン",
             }.Any(lower.Contains);
         }
-
-        /// <summary>画面に出ない物は判定から除く。EditorOnly は親のタグも調べる。</summary>
         private static bool Visible(Renderer renderer)
         {
             if (!renderer.enabled || renderer.forceRenderingOff || !renderer.gameObject.activeInHierarchy) return false;
@@ -198,108 +221,47 @@ namespace Jeni.KaihenNavi
             return true;
         }
 
-        private List<Surface> Bake(VRCAvatarDescriptor avatar)
+        internal sealed class Surface
+        {
+            public SkinnedMeshRenderer renderer;
+            public Mesh original;
+            public Material[] materials;
+            public int slot;
+            public InnerColorTriangles.Split split;
+        }
+
+        private List<Surface> Bake(VRCAvatarDescriptor avatar, InnerColorState state)
         {
             var head = AvatarMeasure.Bone(avatar, HumanBodyBones.Head);
             if (head == null) throw new InvalidOperationException(L10n.Tr("innerColor.noHead"));
-            var hair = HairRenderers(avatar);
+            var up = avatar.transform.up.normalized;
+            var center = InnerColorTriangles.HeadCenter(head.position, up, AvatarMeasure.Height(avatar));
             var surfaces = new List<Surface>();
-            foreach (var r in hair.Where(r => !_excluded.Contains(r) && Visible(r)))
+            foreach (var r in HairRenderers(avatar, state).Where(r => !_excluded.Contains(r) && Visible(r)))
             {
-                var slots = HairSlots(avatar, r).Where(i => Supported(r.sharedMaterials[i])).ToList();
-                if (slots.Count == 0) continue;
-                var geometry = InnerColorOpenness.Bake(r);
-                var s = new Surface { renderer = r, geometry = geometry, uv = geometry.uv };
-                if (geometry.positions.Length == 0 || s.uv.Length != geometry.positions.Length)
-                    throw new InvalidOperationException(L10n.Tr("innerColor.noUV", r.name));
-                // 下のほう・後頭部の重みだけ、頭の中心とアバターの向きを基準にする。
-                var rotation = Quaternion.Inverse(avatar.transform.rotation);
-                s.positions = geometry.positions.Select(p => rotation * (p - head.position)).ToArray();
-                foreach (var slot in slots)
+                var entry = MeshEntry(avatar, state, r);
+                var original = entry == null ? r.sharedMesh : entry.originalMesh.Load<Mesh>();
+                if (original == null) throw new InvalidOperationException(L10n.Tr("innerColor.missingMesh", r.name));
+                var materials = OriginalMaterials(avatar, state, r);
+                var slots = HairSlots(avatar, r, materials);
+                var slot = _slots.ContainsKey(r) && slots.Contains(_slots[r]) ? _slots[r] : slots[0];
+                // マテリアルとサブメッシュが 1 対 1 でない髪では、枠を足すと既存の描画も変わってしまう。
+                if (materials.Length != original.subMeshCount)
+                    throw new InvalidOperationException(L10n.Tr("innerColor.slotMismatch", r.name));
+                var baked = new Mesh();
+                try
                 {
-                    if (slot >= geometry.triangles.Length) continue;
-                    s.triangles.Add(slot, geometry.triangles[slot]);
-                    s.materials.Add(slot, r.sharedMaterials[slot]);
+                    r.BakeMesh(baked, true);
+                    var vertices = baked.vertices.Select(v => r.transform.position + r.transform.rotation * v).ToArray();
+                    var triangles = Enumerable.Range(0, original.subMeshCount).Select(original.GetTriangles).ToArray();
+                    var selected = Enumerable.Range(0, original.subMeshCount).Select(i => materials[i] == materials[slot]).ToArray();
+                    surfaces.Add(new Surface { renderer = r, original = original, materials = materials, slot = slot,
+                        split = InnerColorTriangles.Classify(vertices, triangles, selected, center, up,
+                            InnerColorTriangles.Threshold(_range), _height) });
                 }
-                geometry.used = s.triangles.Values.SelectMany(t => t).Distinct().OrderBy(i => i).ToArray();
-                if (geometry.used.Length > 0) surfaces.Add(s);
+                finally { Object.DestroyImmediate(baked); }
             }
             return surfaces;
-        }
-
-        /// <summary>髪・体を同じ姿勢で読む。シーンに測定用オブジェクトは足さない。</summary>
-        private static bool LooksLikeHair(Renderer renderer)
-        {
-            var name = renderer.name.ToLowerInvariant();
-            return (name.Contains("hair") || name.Contains("髪")) && !name.Contains("accessor") && !name.Contains("ribbon") && !name.Contains("pin");
-        }
-
-        private static List<InnerColorVisibility.Source> Sources(VRCAvatarDescriptor avatar, List<Surface> surfaces)
-        {
-            var result = new List<InnerColorVisibility.Source>();
-            var body = AvatarFinder.FindBody(avatar);
-            foreach (var renderer in avatar.GetComponentsInChildren<Renderer>(true).Where(Visible).OrderBy(r => r.GetInstanceID()))
-            {
-                var surface = surfaces.FirstOrDefault(s => s.renderer == renderer);
-                // 遮るものは髪と体だけにする。頭のリボンや帽子まで入れると、その下の髪の外側まで「隠れている＝内側」になってしまう。
-                if (surface == null && renderer != body && !LooksLikeHair(renderer)) continue;
-                var skinned = renderer as SkinnedMeshRenderer;
-                var regular = renderer as MeshRenderer;
-                var filter = regular == null ? null : regular.GetComponent<MeshFilter>();
-                if (skinned == null && (filter == null || filter.sharedMesh == null)) continue;
-                if (skinned != null && skinned.sharedMesh == null) continue;
-                var geometry = surface != null ? surface.geometry : skinned != null ? InnerColorOpenness.Bake(skinned) : InnerColorOpenness.Bake(regular);
-                if (geometry.positions.Length == 0) continue;
-                var materials = renderer.sharedMaterials.Take(geometry.triangles.Length).ToArray();
-                var selected = new bool[materials.Length];
-                if (surface != null)
-                    foreach (var pair in surface.materials)
-                    {
-                        materials[pair.Key] = pair.Value; // プレビューの複製は元のマテリアルへ正規化済み。
-                        selected[pair.Key] = true;
-                    }
-                result.Add(new InnerColorVisibility.Source { geometry = geometry, materials = materials, selected = selected });
-            }
-            return result;
-        }
-
-        private Dictionary<Material, float[]> Masks(VRCAvatarDescriptor avatar, List<Surface> surfaces, List<Material> materials)
-        {
-            var sources = Sources(avatar, surfaces);
-            Dictionary<Material, InnerColorVisibility.Map> visibility = null;
-            try
-            {
-                visibility = _visibility.Get(sources, AvatarMeasure.Bone(avatar, HumanBodyBones.Head).position, avatar.transform.rotation, _size);
-            }
-            catch (Exception e)
-            {
-                // 描画に失敗しても元アセットは触らず、これまでの方式で続行する。
-                Debug.LogWarning("かいへんナビ: 髪の GPU 判定が使えないため、レイで調べます。" + e.Message);
-            }
-            if (visibility != null)
-                return materials.ToDictionary(m => m, m => visibility[m].Mask(_mode, _thickness, _height, _size));
-
-            List<float[]> openness = null;
-            if (_mode != 1)
-            {
-                var geometry = sources.Select(s => s.geometry).ToList();
-                var measured = _openness.Get(InnerColorOpenness.CacheKey(avatar.GetInstanceID(), geometry),
-                    () => InnerColorOpenness.Measure(geometry));
-                openness = surfaces.Select(s => measured[geometry.IndexOf(s.geometry)]).ToList();
-            }
-            InnerColorMask.Classify(surfaces.Select(s => s.positions).ToList(), surfaces.Select(s => s.geometry.used).ToList(),
-                openness, _mode, _thickness, _height, (i, values) => surfaces[i].values = values);
-            var result = new Dictionary<Material, float[]>();
-            foreach (var material in materials)
-            {
-                var pixels = new float[_size * _size];
-                var scale = material.GetTextureScale("_MainTex"); var offset = material.GetTextureOffset("_MainTex");
-                foreach (var surface in surfaces)
-                    foreach (var slot in surface.materials.Where(p => p.Value == material).Select(p => p.Key))
-                        InnerColorMask.Paint(pixels, _size, surface.uv, surface.values, surface.triangles[slot], scale, offset);
-                result.Add(material, pixels);
-            }
-            return result;
         }
 
         private void Preview(FeatureContext ctx)
@@ -311,65 +273,26 @@ namespace Jeni.KaihenNavi
             var started = EditorApplication.timeSinceStartup;
             try
             {
-                var surfaces = Bake(ctx.Avatar);
-                if (surfaces.Count == 0)
-                {
-                    Reset(ctx);
-                    _status.text = L10n.Tr("innerColor.noneSelected");
-                    return;
-                }
                 var state = InnerColorState.Load(ctx.Avatar);
-                // プレビュー中のコピーを、その変更前のマテリアルへ正規化する。
-                foreach (var surface in surfaces)
-                    foreach (var slot in surface.materials.Keys.ToList())
-                    {
-                        var current = surface.materials[slot];
-                        var entry = state == null ? null : state.data.entries.FirstOrDefault(e =>
-                            e.materialPath == AssetDatabase.GetAssetPath(current));
-                        var source = entry == null || entry.source == null ? null : entry.source.Load<Material>();
-                        if (source != null) surface.materials[slot] = source;
-                    }
-                var materials = surfaces.SelectMany(s => s.materials.Values).Distinct().ToList();
-                var conflicts = materials.Where(m => m.GetFloat(Use) > 0.5f &&
-                    (state == null || !state.data.entries.Any(e => e.materialPath == AssetDatabase.GetAssetPath(m) ||
-                        (e.source != null && e.source.Load<Material>() == m)))).ToList();
-                if (conflicts.Count > 0 && !EditorUtility.DisplayDialog(L10n.Tr("feature.innerColor.title"),
-                    L10n.Tr("innerColor.overwrite", string.Join(", ", conflicts.Select(m => m.name).ToArray())),
-                    L10n.Tr("innerColor.overwriteYes"), L10n.Tr("innerColor.cancel"))) return;
-
-                // 数値計算が全部成功してから、ファイルや見た目を変える。
-                var masks = Masks(ctx.Avatar, surfaces, materials);
-                ctx.BeginEdit();
-                UndoHelper.Separate();
+                var surfaces = Bake(ctx.Avatar, state);
+                if (surfaces.Count == 0) { Reset(ctx); _status.text = L10n.Tr("innerColor.noneSelected"); return; }
+                // 判定が全て成功してからバックアップと Undo を始める。
+                ctx.BeginEdit(); UndoHelper.Separate();
                 Undo.IncrementCurrentGroup(); group = Undo.GetCurrentGroup();
-                var undoName = L10n.Tr("undo.innerColor");
-                Undo.SetCurrentGroupName(undoName);
+                var undoName = L10n.Tr("undo.innerColor"); Undo.SetCurrentGroupName(undoName);
                 journal = InnerColorAssetUndo.Begin(ctx.Avatar);
+                var candidates = InnerColorAssets.Candidates(ctx.Avatar, state);
+                candidates.Remove(InnerColorState.PathFor(ctx.Avatar));
+                if (state != null) candidates.Remove(AssetDatabase.GetAssetPath(state));
                 state = InnerColorState.Load(ctx.Avatar, true);
                 Undo.RecordObject(state, undoName);
-                // チェックを外した髪と、選択範囲を変える前のコピーは元の割り当てに戻す。
-                foreach (var entry in state.data.entries) RestoreSecond(ctx.Avatar, entry, undoName);
-                foreach (var original in materials)
-                {
-                    var entry = OwnSelected(ctx.Avatar, original, surfaces, state, journal, undoName);
-                    var owned = AssetDatabase.LoadAssetAtPath<Material>(entry.materialPath);
-                    journal.Track(entry.maskPath);
-                    var mask = InnerColorMask.Save(entry.maskPath, entry.key, masks[original], _size);
-                    Undo.RecordObject(owned, undoName);
-                    for (var i = 0; i < Floats.Length; i++)
-                        if (owned.HasProperty(Floats[i])) owned.SetFloat(Floats[i], Floats[i] == Use || Floats[i] == "_Main2ndEnableLighting" ? 1 : 0);
-                    for (var i = 0; i < Vectors.Length; i++)
-                        if (owned.HasProperty(Vectors[i])) owned.SetVector(Vectors[i], VectorDefaults[i]);
-                    owned.SetColor(Tint, _color);
-                    owned.SetTexture(Main, null);
-                    owned.SetTextureScale(Main, new Vector2(1, 1));
-                    owned.SetTextureOffset(Main, new Vector2(0, 0));
-                    owned.SetTexture(Mask, mask);
-                    SyncMultiKeywords(owned);
-                    EditorUtility.SetDirty(owned);
-                }
+                RestoreAll(ctx.Avatar, state, undoName);
+                state.data = new InnerColorState.Data { hasSettings = true, color = _color,
+                    range = _range, height = _height, brightness = _brightness };
+                foreach (var surface in surfaces) ApplySurface(ctx.Avatar, surface, state, journal, undoName);
                 EditorUtility.SetDirty(state);
-                journal.Commit(undoName); journal = null;
+                Finish(ctx, journal, candidates, undoName, group);
+                journal = null;
                 Undo.CollapseUndoOperations(group); group = -1;
                 _preview = true;
                 _status.text = L10n.Tr("innerColor.doneElapsed", (EditorApplication.timeSinceStartup - started).ToString("F1"));
@@ -379,54 +302,88 @@ namespace Jeni.KaihenNavi
             {
                 if (group >= 0) Undo.RevertAllDownToGroup(group);
                 if (journal != null) journal.Rollback();
-                _status.text = L10n.Tr("innerColor.failed", e.Message);
-                Debug.LogException(e);
+                _status.text = L10n.Tr("innerColor.failed", e.Message); Debug.LogException(e);
             }
         }
 
-        private static InnerColorState.Entry OwnSelected(VRCAvatarDescriptor avatar, Material original,
-            List<Surface> surfaces, InnerColorState state, InnerColorAssetUndo journal, string undoName)
+        /// <summary>保存済みの生成物は書き換えない。過去の履歴や別バージョンが参照する形と色を守る。</summary>
+        internal void ApplySurface(VRCAvatarDescriptor avatar, Surface surface, InnerColorState state,
+            InnerColorAssetUndo journal, string undoName)
         {
-            var assignments = new List<InnerColorState.Assignment>();
-            foreach (var surface in surfaces)
-                foreach (var slot in surface.materials.Where(p => p.Value == original).Select(p => p.Key))
-                    assignments.Add(new InnerColorState.Assignment
-                    {
-                        rendererPath = HierarchyPath.Get(avatar.transform, surface.renderer.transform),
-                        rendererIndex = Array.IndexOf(surface.renderer.GetComponents<Renderer>(), surface.renderer),
-                        slot = slot, original = InnerColorState.AssetRef.Of(original),
-                    });
-            var source = InnerColorState.AssetRef.Of(original);
-            var key = source.Key + "|" + string.Join("|", assignments.Select(a =>
-                a.rendererPath.Length + ":" + a.rendererPath + ":" + a.rendererIndex + ":" + a.slot)
-                .OrderBy(value => value, StringComparer.Ordinal).ToArray());
-            var entry = state.data.entries.FirstOrDefault(e => e.key == key);
-            if (entry == null)
+            var r = surface.renderer;
+            var key = Guid.NewGuid().ToString("N");
+            var meshFolder = WorkFolders.Ensure(WorkFolders.ForAvatar(avatar.gameObject) + "/Meshes");
+            var materialFolder = WorkFolders.Ensure(WorkFolders.Materials(avatar.gameObject));
+            var meshPath = InnerColorAssets.StablePath(meshFolder, r.name, "_InnerColor.asset", key);
+            var source = surface.materials[surface.slot];
+            var materialPath = InnerColorAssets.StablePath(materialFolder, source.name, "_InnerColor.mat", key);
+            journal.Track(meshPath); journal.Track(materialPath);
+            var mesh = Object.Instantiate(surface.original);
+            mesh.name = surface.original.name + "_InnerColor";
+            try
             {
-                var materials = WorkFolders.Ensure(WorkFolders.Materials(avatar.gameObject));
-                var textures = WorkFolders.Ensure(WorkFolders.ForAvatar(avatar.gameObject) + "/Textures");
-                entry = new InnerColorState.Entry
-                {
-                    key = key, source = source, assignments = assignments,
-                    before = InnerColorState.SecondState.Capture(original),
-                    materialPath = InnerColorAssets.StablePath(materials, original.name, "_InnerColor.mat", key),
-                    maskPath = InnerColorAssets.StablePath(textures, original.name, "_InnerMask.png", key),
-                };
-                state.data.entries.Add(entry);
+                // baseVertex 付きの大きなメッシュも、絶対頂点番号で安全に保存する。
+                if (mesh.vertexCount > ushort.MaxValue) mesh.indexFormat = UnityEngine.Rendering.IndexFormat.UInt32;
+                mesh.subMeshCount = surface.original.subMeshCount + 1;
+                for (var i = 0; i < surface.split.outer.Length; i++) mesh.SetTriangles(surface.split.outer[i], i);
+                mesh.SetTriangles(surface.split.inner, surface.original.subMeshCount);
+                AssetDatabase.CreateAsset(mesh, meshPath);
             }
-            journal.Track(entry.materialPath);
-            var owned = MaterialCopier.EnsureInnerColorCopy(original, entry.materialPath, key, undoName);
-            foreach (var assignment in entry.assignments)
+            catch { if (!EditorUtility.IsPersistent(mesh)) Object.DestroyImmediate(mesh); throw; }
+            InnerColorAssets.Mark(meshPath, key);
+            var material = Object.Instantiate(source);
+            material.name = source.name + "_InnerColor";
+            try
             {
-                var renderer = InnerColorState.RendererFor(avatar, assignment);
-                if (renderer == null) continue;
-                var mats = renderer.sharedMaterials;
-                if (assignment.slot >= mats.Length || mats[assignment.slot] != original) continue;
-                Undo.RecordObject(renderer, undoName);
-                mats[assignment.slot] = owned;
-                renderer.sharedMaterials = mats;
+                ConfigureMaterial(material, _color, _brightness);
+                AssetDatabase.CreateAsset(material, materialPath);
             }
-            return entry;
+            catch { if (!EditorUtility.IsPersistent(material)) Object.DestroyImmediate(material); throw; }
+            InnerColorAssets.Mark(materialPath, key);
+            var assignment = new InnerColorState.Assignment
+            {
+                rendererPath = HierarchyPath.Get(avatar.transform, r.transform),
+                rendererIndex = Array.IndexOf(r.GetComponents<Renderer>(), r),
+            };
+            state.data.meshes.Add(new InnerColorState.MeshEntry { assignment = assignment,
+                originalMesh = InnerColorState.AssetRef.Of(surface.original), meshPath = meshPath, materialPath = materialPath,
+                originalMaterials = surface.materials.Select(InnerColorState.AssetRef.Of).ToArray(), sourceSlot = surface.slot });
+            Undo.RecordObject(r, undoName);
+            r.sharedMesh = mesh;
+            r.sharedMaterials = surface.materials.Concat(new[] { material }).ToArray();
+            PrefabUtility.RecordPrefabInstancePropertyModifications(r);
+            EditorUtility.SetDirty(r);
+        }
+
+        internal static void ConfigureMaterial(Material material, Color color, float brightness)
+        {
+            // lilToneCorrection は w 乗してから HSV を補正する。値を小さくすると暗い髪も明るくなる。
+            // https://github.com/lilxyzw/lilToon/blob/master/Assets/lilToon/Shader/Includes/lil_common_functions.hlsl
+            if (IsLil(material) && material.HasProperty("_MainTexHSVG"))
+            {
+                material.SetVector("_MainTexHSVG", new Vector4(0, 0, 1, 1 / Mathf.Max(0.25f, brightness)));
+                // Multi 版は色調補正のキーワードも必要（lilMaterialUtils.SetupMultiMaterial）。
+                if (material.shader != null && material.shader.name.Contains("Multi"))
+                    material.EnableKeyword("EFFECT_HUE_VARIATION");
+            }
+            if (material.HasProperty("_Color"))
+            {
+                // 透け方は変えない。lilToon 以外は色だけを変える。
+                color.a = material.GetColor("_Color").a;
+                material.SetColor("_Color", color);
+            }
+            EditorUtility.SetDirty(material);
+        }
+
+        private static void Finish(FeatureContext ctx, InnerColorAssetUndo journal, HashSet<string> candidates, string undoName, int group)
+        {
+            // 片付けより先に履歴を保存し、操作前のメッシュへの参照も保護する。
+            ctx.Backup.CompletePending(group);
+            AssetDatabase.SaveAssets();
+            Undo.FlushUndoRecordObjects();
+            MyAvatar.Save(ctx.Avatar);
+            InnerColorAssets.Cleanup(candidates, journal);
+            journal.Commit(undoName);
         }
 
         private void Reset(FeatureContext ctx)
@@ -436,39 +393,43 @@ namespace Jeni.KaihenNavi
             var state = InnerColorState.Load(ctx.Avatar);
             var candidates = InnerColorAssets.Candidates(ctx.Avatar, state);
             if (state == null && candidates.Count == 0) return;
-            ctx.BeginEdit();
-            var undoName = L10n.Tr("undo.innerColor");
-            UndoHelper.Separate(); UndoHelper.Begin("innerColor-reset", undoName);
+            ctx.BeginEdit(); UndoHelper.Separate();
+            Undo.IncrementCurrentGroup(); var group = Undo.GetCurrentGroup();
+            var undoName = L10n.Tr("undo.innerColor"); Undo.SetCurrentGroupName(undoName);
             var journal = InnerColorAssetUndo.Begin(ctx.Avatar);
             try
             {
-                // 変更前のファイルを保存する。削除後の Ctrl+Z でも GUID と内容を復元できる。
-                foreach (var path in candidates) journal.Track(path);
                 if (state != null)
                 {
-                    Undo.RecordObject(state, undoName);
-                    foreach (var entry in state.data.entries) RestoreSecond(ctx.Avatar, entry, undoName);
-                    state.data = new InnerColorState.Data();
-                    EditorUtility.SetDirty(state);
+                    Undo.RecordObject(state, undoName); RestoreAll(ctx.Avatar, state, undoName);
+                    state.data = new InnerColorState.Data(); EditorUtility.SetDirty(state);
                 }
-                AssetDatabase.SaveAssets();
-                // 自分用 Prefab の古い割り当てが、片付けを妨げないよう先に保存する。
-                MyAvatar.Save(ctx.Avatar);
-                InnerColorAssets.Cleanup(candidates, journal);
-                journal.Commit(undoName);
-                UndoHelper.End(); UndoHelper.Separate();
+                Finish(ctx, journal, candidates, undoName, group);
+                Undo.CollapseUndoOperations(group);
             }
             catch (Exception e)
             {
-                journal.Rollback();
-                UndoHelper.End(); UndoHelper.Separate();
-                _status.text = L10n.Tr("innerColor.failed", e.Message);
-                Debug.LogException(e);
-                return;
+                Undo.RevertAllDownToGroup(group); journal.Rollback();
+                _status.text = L10n.Tr("innerColor.failed", e.Message); Debug.LogException(e); return;
             }
-            _preview = false;
-            _status.text = L10n.Tr("innerColor.restored");
-            SceneView.RepaintAll();
+            _preview = false; _status.text = L10n.Tr("innerColor.restored"); SceneView.RepaintAll();
+        }
+
+        private static void RestoreAll(VRCAvatarDescriptor avatar, InnerColorState state, string undoName)
+        {
+            foreach (var entry in state.data.meshes)
+            {
+                var renderer = InnerColorState.RendererFor(avatar, entry.assignment) as SkinnedMeshRenderer;
+                if (renderer == null || AssetDatabase.GetAssetPath(renderer.sharedMesh) != entry.meshPath) continue;
+                var original = entry.originalMesh.Load<Mesh>();
+                if (original == null) throw new InvalidOperationException(L10n.Tr("innerColor.missingMesh", renderer.name));
+                Undo.RecordObject(renderer, undoName);
+                renderer.sharedMesh = original;
+                renderer.sharedMaterials = entry.originalMaterials.Select(m => m.Load<Material>()).ToArray();
+                PrefabUtility.RecordPrefabInstancePropertyModifications(renderer);
+                EditorUtility.SetDirty(renderer);
+            }
+            foreach (var entry in state.data.entries) RestoreSecond(avatar, entry, undoName);
         }
 
         private static void RestoreSecond(VRCAvatarDescriptor avatar, InnerColorState.Entry entry, string undoName)
@@ -499,33 +460,5 @@ namespace Jeni.KaihenNavi
             }
         }
 
-        // Multi 版はプロパティだけでなくキーワードも必要。2nd/3rd 共用のものは 3rd の状態を保つ。
-        // https://github.com/lilxyzw/lilToon/blob/master/Assets/lilToon/Editor/lilMaterialUtils.cs (SetupMultiMaterial)
-        // https://github.com/lilxyzw/lilToon/blob/master/Assets/lilToon/Editor/lilShaderUtils.cs (IsMultiShaderName)
-        private static void SyncMultiKeywords(Material material)
-        {
-            if (material.shader == null) return;
-            var name = material.shader.name;
-            var separator = name.LastIndexOf('/');
-            if (separator < 0 || name.IndexOf("Multi", separator + 1, StringComparison.Ordinal) < 0) return;
-            var second = material.GetFloat(Use) > 0.5f;
-            var third = material.HasProperty("_UseMain3rdTex") && material.GetFloat("_UseMain3rdTex") > 0.5f;
-            Keyword(material, "_COLORADDSUBDIFF_ON", second);
-            Keyword(material, "_SUNDISK_NONE", (second && AnimatedDecal(material, "_Main2ndTexDecalAnimation")) ||
-                (third && AnimatedDecal(material, "_Main3rdTexDecalAnimation")));
-            Keyword(material, "GEOM_TYPE_FROND", (second && material.HasProperty("_Main2ndDissolveParams") &&
-                material.GetVector("_Main2ndDissolveParams").x != 0) ||
-                (third && material.HasProperty("_Main3rdDissolveParams") && material.GetVector("_Main3rdDissolveParams").x != 0));
-        }
-        private static bool AnimatedDecal(Material material, string property)
-        {
-            if (!material.HasProperty(property)) return false;
-            var v = material.GetVector(property);
-            return v.x != 1 || v.y != 1 || v.z != 1 || v.w != 30;
-        }
-        private static void Keyword(Material material, string keyword, bool enabled)
-        {
-            if (enabled) material.EnableKeyword(keyword); else material.DisableKeyword(keyword);
-        }
     }
 }

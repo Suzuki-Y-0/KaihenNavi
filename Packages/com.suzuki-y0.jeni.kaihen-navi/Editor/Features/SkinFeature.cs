@@ -129,7 +129,10 @@ namespace Jeni.KaihenNavi
             var shapes = new List<int>();
             for (var i = 0; i < mesh.blendShapeCount; i++)
             {
-                if (_showAll || ShrinkPattern.IsMatch(mesh.GetBlendShapeName(i))) shapes.Add(i);
+                var shapeName = mesh.GetBlendShapeName(i);
+                // 「======Shrink======」のような区切り用の名前（記号が多いもの）は出さない
+                if (IsDivider(shapeName)) continue;
+                if (_showAll || ShrinkPattern.IsMatch(shapeName)) shapes.Add(i);
             }
 
             // いつ隠すか（服を選ぶと、その服を着ているときだけ）
@@ -222,6 +225,13 @@ namespace Jeni.KaihenNavi
             if (body.GetBlendShapeWeight(index) > 0f) texts.Add(Ui.Text(L10n.Tr("skin.usedByAlways"), "kn-list__sub"));
             row.Add(texts);
             return row;
+        }
+
+        private static bool IsDivider(string shapeName)
+        {
+            if (string.IsNullOrEmpty(shapeName)) return true;
+            var symbols = shapeName.Count(c => !char.IsLetterOrDigit(c) && c != ' ' && c != '_' && c != '.');
+            return symbols >= 4 && symbols * 2 >= shapeName.Length - shapeName.Count(char.IsWhiteSpace);
         }
 
         private static string Pretty(string shapeName)

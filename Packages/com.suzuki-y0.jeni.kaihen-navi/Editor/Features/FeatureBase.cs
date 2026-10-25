@@ -60,7 +60,7 @@ namespace Jeni.KaihenNavi
             }
         }
 
-        /// <summary>ナビの右端に表示する件数。ナビ再構築時にだけ呼ばれる。</summary>
+        /// <summary>ナビの右端に表示する件数。構成や操作の結果が変わったときに呼ばれる。</summary>
         public virtual string NavBadge(VRCAvatarDescriptor avatar) => null;
 
         /// <summary>完了済みならナビの右端に緑のチェックを出す。</summary>
@@ -71,6 +71,9 @@ namespace Jeni.KaihenNavi
 
         /// <summary>操作エリアの中身を作る。</summary>
         public abstract VisualElement Build(FeatureContext ctx);
+
+        /// <summary>要素を保ったまま値だけ更新できる機能は true を返す。</summary>
+        public virtual bool RefreshValues() { return false; }
 
         /// <summary>別の機能やアバターに切り替わるとき。</summary>
         public virtual void OnClosed()
@@ -85,6 +88,9 @@ namespace Jeni.KaihenNavi
         public BackupService Backup;
         public string FeatureId;
 
+        /// <summary>Undo/Redo 後の保存待ちを、新しい編集で解除する。</summary>
+        public Action Editing;
+
         /// <summary>操作エリアを作り直す（一覧の中身が変わったときなど）。</summary>
         public Action Rebuild;
 
@@ -94,10 +100,38 @@ namespace Jeni.KaihenNavi
         /// <summary>別の「やりたいこと」に切り替える（id を指定）。</summary>
         public Action<string> OpenFeature;
 
-        /// <summary>何かを変える直前に呼ぶ。最初の 1 回だけ自動バックアップを取る。</summary>
-        public void BeginEdit()
+        /// <summary>
+        /// 終わったことを、作業を止めずに知らせる（下のステータスに数秒出す）。
+        /// 成功のたびに閉じるまで操作できない窓を出すと、続けて作業しにくいため。
+        /// </summary>
+        public Action<string> Notify;
+
+        /// <summary>Notify が無いとき（テストなど）は何もしない。</summary>
+        public void Tell(string message)
         {
-            Backup.BeginEdit(Avatar, FeatureId);
+            if (Notify != null) Notify(message);
+        }
+
+        /// <summary>何かを変える直前に呼ぶ。連続入力では UndoHelper.Begin と同じキーを渡すと、1 手にまとめて保存する。</summary>
+        public void BeginEdit(string mergeKey = null)
+        {
+            if (Editing != null) Editing();
+            Backup.BeginEdit(Avatar, FeatureId, mergeKey);
+        }
+
+        /// <summary>保存による Prefab の変更も含めて、編集を Ctrl+Z 1 回分にまとめる。</summary>
+        public void CompleteEdit(int group)
+        {
+            // RecordObject の差分を確定してから Prefab 側の Undo を登録する。
+            UnityEditor.Undo.FlushUndoRecordObjects();
+            try
+            {
+                MyAvatar.Save(Avatar);
+            }
+            finally
+            {
+                UnityEditor.Undo.CollapseUndoOperations(group);
+            }
         }
 
         public void NoteCreated(GameObject created)

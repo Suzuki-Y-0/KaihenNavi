@@ -18,7 +18,7 @@ namespace Jeni.KaihenNavi
         public static void Begin(string key, string undoName)
         {
             var now = EditorApplication.timeSinceStartup;
-            if (_lastKey != key || now - _lastTime > MergeSeconds || _group < 0)
+            if (_lastKey != key || now - _lastTime > MergeSeconds || _group < 0 || _group != Undo.GetCurrentGroup())
             {
                 Undo.IncrementCurrentGroup();
                 _group = Undo.GetCurrentGroup();
@@ -27,6 +27,13 @@ namespace Jeni.KaihenNavi
 
             _lastKey = key;
             _lastTime = now;
+        }
+
+        /// <summary>次の入力も同じ操作にまとまるか。履歴用の状態を毎フレーム複製しないために使う。</summary>
+        public static bool WillMerge(string key)
+        {
+            return !string.IsNullOrEmpty(key) && _lastKey == key && _group == Undo.GetCurrentGroup() &&
+                   EditorApplication.timeSinceStartup - _lastTime <= MergeSeconds;
         }
 
         /// <summary>変更の直後に呼ぶ。</summary>

@@ -1,7 +1,6 @@
 using System.Collections.Generic;
 using System.Linq;
 using UnityEditor;
-using UnityEditor.UIElements;
 using UnityEngine;
 using UnityEngine.UIElements;
 using VRC.SDK3.Avatars.Components;
@@ -11,12 +10,11 @@ namespace Jeni.KaihenNavi
     /// <summary>
     /// 機能 6：アクセをつけたい。
     /// アクセの Prefab を選び、「頭」「首」などの場所を選ぶだけで体の骨に付ける（ヒエラルキーの親子関係は触らせない）。
-    /// 付けたあとは、大きな矢印ボタンとスライダーで位置・向き・大きさを直す。向きはアバターから見た向き。
+    /// 付けたあとは、同じページのスライダーで骨からの位置・向き・大きさを直す。
     /// </summary>
     internal sealed class TransformFeature : FeatureBase
     {
-        private static readonly float[] Steps = { 0.001f, 0.005f, 0.02f };
-        private const float RotateStep = 5f;
+        private const string BaselineName = "KaihenNavi_AttachBaseline";
 
         private sealed class Baseline
         {
@@ -26,6 +24,22 @@ namespace Jeni.KaihenNavi
         }
 
         private static GameObject _target;
+        private static System.Action _finishAdjustment;
+
+        /// <summary>スライダーを操作中は、ウィンドウの自動保存を待たせる。</summary>
+        internal static bool IsAdjusting { get { return _finishAdjustment != null; } }
+
+        internal static void FinishAdjustment()
+        {
+            var finish = _finishAdjustment;
+            if (finish != null) finish();
+        }
+
+        /// <summary>Undo/Redo 後に古いスライダーの終了通知から保存しない。</summary>
+        internal static void CancelAdjustment()
+        {
+            _finishAdjustment = null;
+        }
 
         // これから付けるアクセ（Prefab）と、付ける場所
         private static GameObject _pending;
@@ -42,9 +56,7 @@ namespace Jeni.KaihenNavi
             "attach.head", "attach.neck", "attach.chest", "attach.hips",
             "attach.rightHand", "attach.leftHand", "attach.rightFoot", "attach.leftFoot",
         };
-        private static int _stepIndex = 1;
         private readonly Dictionary<GameObject, Baseline> _baselines = new Dictionary<GameObject, Baseline>();
-        private Slider _size;
 
         public override string Id { get { return "transform"; } }
         public override int Number { get { return 6; } }
@@ -62,10 +74,9 @@ namespace Jeni.KaihenNavi
 
         public override VisualElement Build(FeatureContext ctx)
         {
+            FinishAdjustment();
             var root = new VisualElement();
             var avatar = ctx.Avatar;
-            root.Add(BuildAttach(ctx));
-
             var targets = FindTargets(avatar);
 
             if (_target != null && (!_target.transform.IsChildOf(avatar.transform) || _target == avatar.gameObject))
@@ -73,40 +84,28 @@ namespace Jeni.KaihenNavi
                 _target = null;
             }
 
-            if (_target != null && !targets.Contains(_target.transform)) targets.Insert(0, _target.transform);
-
-            // どれを直す？
-            root.Add(Ui.Heading(L10n.Tr("transform.which")));
-            root.Add(Ui.Text(L10n.Tr("transform.whichHint"), "kn-hint"));
-            var pickRow = Ui.Box("kn-row");
-            if (targets.Count > 0)
+            var overview = new VisualElement();
+            // 一覧の「調整」と装着直後で、同じ調整パネルを使う。
+            overview.Add(Ui.Heading(L10n.Tr("attach.attached")));
+            if (targets.Count == 0) overview.Add(Ui.Text(L10n.Tr("transform.none"), "kn-hint"));
+            var list = Ui.Box("kn-list");
+            foreach (var t in targets)
             {
-                // 先頭は「えらんでください」
-                var labels = new List<string> { L10n.Tr("transform.choose") };
-                foreach (var t in targets)
+                var accessory = t.gameObject;
+                var row = Ui.Box("kn-list__row");
+                row.Add(Ui.Text(Label(avatar, t), "kn-grow"));
+                row.Add(Ui.Button(L10n.Tr("attach.adjust"), () =>
                 {
-                    var label = Label(avatar, t);
-                    var unique = label;
-                    var n = 2;
-                    while (labels.Contains(unique)) unique = label + " #" + n++;
-                    labels.Add(unique);
-                }
-
-                var index = _target == null ? 0 : targets.IndexOf(_target.transform) + 1;
-                var popup = new PopupField<string>(labels, Mathf.Max(0, index));
-                popup.AddToClassList("kn-grow");
-                popup.RegisterValueChangedCallback(e =>
-                {
-                    var i = labels.IndexOf(e.newValue);
-                    if (i <= 0) return;
-                    _target = targets[i - 1].gameObject;
+                    _target = accessory;
                     UndoHelper.Separate();
                     ctx.Rebuild();
-                });
-                pickRow.Add(popup);
+                }, "kn-button--small"));
+                row.Add(Ui.Button(L10n.Tr("attach.remove"), () => Remove(ctx, accessory),
+                    "kn-button--small", "kn-button--ghost"));
+                list.Add(row);
             }
-
-            pickRow.Add(Ui.Button(L10n.Tr("transform.useSelection"), () =>
+            overview.Add(list);
+            overview.Add(Ui.Button(L10n.Tr("transform.useSelection"), () =>
             {
                 var selected = Selection.activeTransform;
                 if (selected == null || selected == avatar.transform || !selected.IsChildOf(avatar.transform))
@@ -114,16 +113,15 @@ namespace Jeni.KaihenNavi
                     EditorUtility.DisplayDialog(L10n.Tr("app.name"), L10n.Tr("transform.selectionInvalid"), L10n.Tr("dialog.ok"));
                     return;
                 }
-
                 _target = selected.gameObject;
                 UndoHelper.Separate();
                 ctx.Rebuild();
             }, "kn-button--ghost"));
-            root.Add(pickRow);
 
             if (_target == null)
             {
-                root.Add(Ui.Notice(targets.Count > 0 ? L10n.Tr("transform.pickFirst") : L10n.Tr("transform.none"), "info"));
+                root.Add(BuildAttach(ctx));
+                root.Add(overview);
                 return root;
             }
 
@@ -131,12 +129,10 @@ namespace Jeni.KaihenNavi
             Baseline baseline;
             if (!_baselines.TryGetValue(_target, out baseline))
             {
-                baseline = new Baseline
-                {
-                    LocalPosition = target.localPosition,
-                    LocalRotation = target.localRotation,
-                    LocalScale = target.localScale,
-                };
+                // 装着時の推定値は EditorOnly の空オブジェクトで保持する。
+                // 独自コンポーネントを付けず、保存・再読み込み後も同じ位置へ戻せる。
+                var saved = target.Find(BaselineName);
+                baseline = ReadBaseline(saved != null ? saved : target);
                 _baselines[_target] = baseline;
             }
 
@@ -145,114 +141,84 @@ namespace Jeni.KaihenNavi
                 root.Add(Ui.Notice(L10n.Tr("transform.skinnedWarn"), "warn"));
             }
 
-            // 位置
+            root.Add(Ui.Heading(L10n.Tr("attach.adjusting", target.name)));
+            root.Add(Ui.Text(L10n.Tr("transform.localHint"), "kn-hint"));
+            var height = AvatarMeasure.Height(avatar);
             root.Add(Ui.Heading(L10n.Tr("transform.position")));
-            var stepLabels = new List<string> { L10n.Tr("transform.stepFine"), L10n.Tr("transform.stepNormal"), L10n.Tr("transform.stepLarge") };
-            root.Add(Ui.Chips(stepLabels, _stepIndex, i =>
-            {
-                _stepIndex = i;
-                ctx.Rebuild();
-            }));
+            AddPositionSlider(root, ctx, target, "transform.localY", 1, height, baseline);
+            AddPositionSlider(root, ctx, target, "transform.localZ", 2, height, baseline);
+            AddPositionSlider(root, ctx, target, "transform.localX", 0, height, baseline);
 
-            var up = avatar.transform.up;
-            var right = avatar.transform.right;
-            var forward = avatar.transform.forward;
-
-            var pads = Ui.Box("kn-pads");
-            var vertical = Ui.Box("kn-pad", "kn-pad--vertical");
-            vertical.Add(Ui.Arrow("↑", L10n.Tr("transform.up"), () => Move(ctx, target, up)));
-            vertical.Add(Ui.Arrow("↓", L10n.Tr("transform.down"), () => Move(ctx, target, -up)));
-            pads.Add(vertical);
-
-            var cross = Ui.Box("kn-pad", "kn-pad--cross");
-            var top = Ui.Box("kn-pad__row");
-            top.Add(Ui.Arrow("↑", L10n.Tr("transform.forward"), () => Move(ctx, target, forward)));
-            cross.Add(top);
-            var middle = Ui.Box("kn-pad__row");
-            // アバターと向かい合ったときに画面と同じ向きになるよう、左右ボタンはアバターの右手側を「右」とする
-            middle.Add(Ui.Arrow("←", L10n.Tr("transform.left"), () => Move(ctx, target, -right)));
-            middle.Add(Ui.Arrow("→", L10n.Tr("transform.right"), () => Move(ctx, target, right)));
-            cross.Add(middle);
-            var bottom = Ui.Box("kn-pad__row");
-            bottom.Add(Ui.Arrow("↓", L10n.Tr("transform.back"), () => Move(ctx, target, -forward)));
-            cross.Add(bottom);
-            pads.Add(cross);
-            root.Add(pads);
-            root.Add(Ui.Text(L10n.Tr("transform.directionNote"), "kn-hint"));
-
-            // 向き
             root.Add(Ui.Heading(L10n.Tr("transform.rotation")));
-            root.Add(RotateRow(ctx, target, L10n.Tr("transform.twist"), up));
-            root.Add(RotateRow(ctx, target, L10n.Tr("transform.tiltForward"), right));
-            root.Add(RotateRow(ctx, target, L10n.Tr("transform.tiltSide"), forward));
+            AddRotationSlider(root, ctx, target, "transform.rotationX", 0, baseline);
+            AddRotationSlider(root, ctx, target, "transform.rotationY", 1, baseline);
+            AddRotationSlider(root, ctx, target, "transform.rotationZ", 2, baseline);
 
-            // 大きさ
             root.Add(Ui.Heading(L10n.Tr("transform.size")));
-            var currentPercent = SizePercent(target, baseline);
-            _size = Ui.Slider(L10n.Tr("transform.sizeLabel"), 10f, 300f, currentPercent, v => Resize(ctx, target, baseline, v));
-            root.Add(_size);
-            var sizeButtons = Ui.Box("kn-row");
-            sizeButtons.Add(Ui.Button("−5%", () => _size.value = Mathf.Clamp(_size.value - 5f, 10f, 300f), "kn-button--small"));
-            sizeButtons.Add(Ui.Button("+5%", () => _size.value = Mathf.Clamp(_size.value + 5f, 10f, 300f), "kn-button--small"));
-            sizeButtons.Add(Ui.Button("100%", () => _size.value = 100f, "kn-button--small"));
-            root.Add(sizeButtons);
+            root.Add(EditSlider(ctx, target, L10n.Tr("transform.sizeLabel"), 10f, 300f,
+                SizePercent(target, baseline), L10n.Tr("undo.transformScale"),
+                v => target.localScale = baseline.LocalScale * (v / 100f)));
 
-            // まとめ
             var actions = Ui.Box("kn-row");
             actions.Add(Ui.Button(L10n.Tr("transform.reset"), () =>
             {
+                FinishAdjustment();
                 var undoName = L10n.Tr("undo.transformReset");
                 ctx.BeginEdit();
                 UndoHelper.Separate();
+                Undo.IncrementCurrentGroup();
+                var group = Undo.GetCurrentGroup();
+                Undo.SetCurrentGroupName(undoName);
                 Undo.RecordObject(target, undoName);
                 target.localPosition = baseline.LocalPosition;
                 target.localRotation = baseline.LocalRotation;
                 target.localScale = baseline.LocalScale;
-                UndoHelper.Separate();
-                _size.SetValueWithoutNotify(100f);
+                PrefabUtility.RecordPrefabInstancePropertyModifications(target);
+                ctx.CompleteEdit(group);
+                ctx.Rebuild();
+                SceneView.RepaintAll();
             }));
             actions.Add(Ui.Button(L10n.Tr("transform.frame"), () => Frame(target), "kn-button--ghost"));
+            actions.Add(Ui.Button(L10n.Tr("attach.finish"), () =>
+            {
+                _target = null;
+                UndoHelper.Separate();
+                ctx.Rebuild();
+            }, "kn-button--primary"));
             root.Add(actions);
+            root.Add(overview);
+            root.Add(BuildAttach(ctx));
 
             return root;
         }
 
         public override void OnClosed()
         {
-            _baselines.Clear();
+            FinishAdjustment();
+            _target = null;
         }
 
         // ---------------------------------------------------------------- つける
 
-        private static VisualElement BuildAttach(FeatureContext ctx)
+        private VisualElement BuildAttach(FeatureContext ctx)
         {
             var box = Ui.Box("kn-attach");
             box.Add(Ui.Heading(L10n.Tr("attach.pick")));
 
             if (_pending == null)
             {
-                box.Add(ItemPicker.DropZone(L10n.Tr("attach.drop"), ItemKind.Accessory, prefab =>
+                box.Add(ItemLibrary.Build(ctx.Avatar, ItemKind.Accessory, prefab =>
                 {
                     _pending = prefab;
                     ctx.Rebuild();
                 }));
-
-                var suggestions = ItemPicker.Suggestions(ctx.Avatar, ItemKind.Accessory);
-                if (suggestions.Count > 0)
-                {
-                    box.Add(Ui.Text(L10n.Tr("attach.suggest"), "kn-hint"));
-                    box.Add(ItemPicker.SuggestionList(suggestions, prefab =>
-                    {
-                        _pending = prefab;
-                        ctx.Rebuild();
-                    }));
-                }
-
-                box.Add(ItemPicker.OwnedItems(ItemKind.Accessory, prefab =>
+                var drop = ItemPicker.DropZone(L10n.Tr("attach.drop"), ItemKind.Accessory, prefab =>
                 {
                     _pending = prefab;
                     ctx.Rebuild();
-                }));
+                });
+                drop.AddToClassList("kn-drop--compact");
+                box.Add(drop);
                 return box;
             }
 
@@ -274,17 +240,19 @@ namespace Jeni.KaihenNavi
                 ctx.Rebuild();
             }));
 
-            box.Add(Ui.Button(L10n.Tr("attach.do"), () => Attach(ctx, _pending, Places[_placeIndex]), "kn-button--primary"));
+            box.Add(Ui.Button(L10n.Tr("feature.transform.nav"), () => Attach(ctx, _pending, Places[_placeIndex]), "kn-button--primary"));
             return box;
         }
 
         /// <summary>
-        /// アクセを体の骨に付ける。まずアバターの足元を基準に置き（アバター用に作られたアクセはこれで正しい位置になる）、
-        /// 見た目が付ける場所から大きく離れていれば、その場所へ寄せる。
+        /// アバター用らしいアクセは足元基準の位置を保ち、それ以外は見た目の中心を骨の近くへ寄せる。
+        /// 推定は初期値に過ぎないため、装着直後に必ず調整パネルを開く。
         /// </summary>
-        private static void Attach(FeatureContext ctx, GameObject prefab, HumanBodyBones place)
+        private void Attach(FeatureContext ctx, GameObject prefab, HumanBodyBones place)
         {
             var avatar = ctx.Avatar;
+            if (prefab == null || avatar == null) return;
+            FinishAdjustment();
             var animator = avatar.GetComponent<Animator>();
             var bone = animator != null && animator.isHuman ? animator.GetBoneTransform(place) : null;
             if (bone == null && place == HumanBodyBones.Chest && animator != null && animator.isHuman) bone = animator.GetBoneTransform(HumanBodyBones.Spine);
@@ -294,32 +262,95 @@ namespace Jeni.KaihenNavi
                 return;
             }
 
+            var height = AvatarMeasure.Height(avatar);
             var undoName = L10n.Tr("undo.attach");
             ctx.BeginEdit();
             UndoHelper.Separate();
+            Undo.IncrementCurrentGroup();
+            var group = Undo.GetCurrentGroup();
+            Undo.SetCurrentGroupName(undoName);
 
             var instance = PrefabUtility.InstantiatePrefab(prefab) as GameObject;
             if (instance == null) return;
             Undo.RegisterCreatedObjectUndo(instance, undoName);
-            instance.transform.SetParent(avatar.transform, false);
-            Undo.SetTransformParent(instance.transform, bone, undoName);
+            var target = instance.transform;
+            Undo.SetTransformParent(target, avatar.transform, undoName);
+            Undo.RecordObject(target, undoName);
+            target.localPosition = prefab.transform.localPosition;
+            target.localRotation = prefab.transform.localRotation;
+            target.localScale = prefab.transform.localScale;
 
             Bounds bounds;
-            if (TryBounds(instance, out bounds))
+            var hasBounds = TryBounds(instance, out bounds);
+            // 元の位置を保つのは、このアバター用に作られた物（名前・置き場所にアバター名がある）ときだけ。
+            // 距離で判断すると、別のアバター用の耳が頭の中に入るなど、見えない所に付いてしまった（実際に付けて確かめた）。
+            var keepPosition = MatchesAvatar(avatar, prefab);
+            Undo.SetTransformParent(target, bone, undoName);
+            Undo.RecordObject(target, undoName);
+            if (!keepPosition)
             {
-                var limit = Mathf.Max(0.25f, avatar.ViewPosition.y * 0.25f);
-                if (Vector3.Distance(bounds.center, bone.position) > limit)
-                {
-                    instance.transform.position += bone.position - bounds.center;
-                }
+                // 頭は骨より上、首は少し前。ほかは骨の中心を出発点にする。
+                var offset = place == HumanBodyBones.Head ? avatar.transform.up * (height * 0.08f) :
+                    place == HumanBodyBones.Neck ? avatar.transform.forward * (height * 0.02f) : Vector3.zero;
+                target.position += bone.position + offset - (hasBounds ? bounds.center : target.position);
             }
+            PrefabUtility.RecordPrefabInstancePropertyModifications(target);
+
+            var baseline = ReadBaseline(target);
+            _baselines[instance] = baseline;
+            var marker = new GameObject(BaselineName) { tag = "EditorOnly" };
+            Undo.RegisterCreatedObjectUndo(marker, undoName);
+            Undo.SetTransformParent(marker.transform, target, undoName);
+            Undo.RecordObject(marker.transform, undoName);
+            marker.transform.localPosition = baseline.LocalPosition;
+            marker.transform.localRotation = baseline.LocalRotation;
+            marker.transform.localScale = baseline.LocalScale;
 
             ctx.NoteCreated(instance);
+            ctx.CompleteEdit(group);
             _target = instance;
             _pending = null;
             UndoHelper.Separate();
             ctx.Rebuild();
-            Frame(instance.transform);
+            Frame(target);
+        }
+
+        /// <summary>元アバターの名前を Prefab 名・フォルダ名と比べる。短すぎる語は誤一致するため使わない。</summary>
+        private static bool MatchesAvatar(VRCAvatarDescriptor avatar, GameObject prefab)
+        {
+            var original = MyAvatar.OriginalOf(avatar.gameObject);
+            var name = original != null ? original.name : avatar.name;
+            var token = name.Split(new[] { ' ', '_', '-', '（', '(', '.' },
+                System.StringSplitOptions.RemoveEmptyEntries).FirstOrDefault();
+            if (token == null || token.Length < 3) return false;
+            var path = AssetDatabase.GetAssetPath(prefab) + "/" + prefab.name;
+            return path.IndexOf(token, System.StringComparison.OrdinalIgnoreCase) >= 0;
+        }
+
+        private static Baseline ReadBaseline(Transform target)
+        {
+            return new Baseline { LocalPosition = target.localPosition,
+                LocalRotation = target.localRotation, LocalScale = target.localScale };
+        }
+
+        private static void Remove(FeatureContext ctx, GameObject accessory)
+        {
+            if (accessory == null || accessory == ctx.Avatar.gameObject ||
+                !accessory.transform.IsChildOf(ctx.Avatar.transform)) return;
+            // 体の骨を含むまとまりはアクセとして削除しない。
+            var bones = AvatarFinder.HumanoidBones(ctx.Avatar);
+            if (accessory.GetComponentsInChildren<Transform>(true).Any(bones.Contains)) return;
+            FinishAdjustment();
+            var undoName = L10n.Tr("undo.detach");
+            ctx.BeginEdit();
+            UndoHelper.Separate();
+            Undo.IncrementCurrentGroup();
+            var group = Undo.GetCurrentGroup();
+            Undo.SetCurrentGroupName(undoName);
+            Undo.DestroyObjectImmediate(accessory);
+            ctx.CompleteEdit(group);
+            if (_target == accessory) _target = null;
+            ctx.Rebuild();
         }
 
         private static bool TryBounds(GameObject go, out Bounds bounds)
@@ -387,6 +418,13 @@ namespace Jeni.KaihenNavi
                 if (!result.Contains(t)) result.Add(t);
             }
 
+            // 自前の骨を持つアクセも、装着時の目印からまとまりを拾う。
+            foreach (var t in avatar.GetComponentsInChildren<Transform>(true))
+            {
+                if (t.name != BaselineName || t.parent == null) continue;
+                result.RemoveAll(candidate => candidate != t.parent && candidate.IsChildOf(t.parent));
+                if (!result.Contains(t.parent)) result.Add(t.parent);
+            }
             return result;
         }
 
@@ -399,43 +437,84 @@ namespace Jeni.KaihenNavi
 
         // ---------------------------------------------------------------- 操作
 
-        private static void Move(FeatureContext ctx, Transform target, Vector3 direction)
+        private static float Axis(Vector3 value, int axis)
         {
-            var undoName = L10n.Tr("undo.transformMove");
-            ctx.BeginEdit();
-            UndoHelper.Begin("transform-move", undoName);
-            Undo.RecordObject(target, undoName);
-            target.position += direction.normalized * Steps[_stepIndex];
-            UndoHelper.End();
+            return axis == 0 ? value.x : axis == 1 ? value.y : value.z;
         }
 
-        private static VisualElement RotateRow(FeatureContext ctx, Transform target, string label, Vector3 axis)
+        private static Vector3 WithAxis(Vector3 value, int axis, float next)
         {
-            var row = Ui.Box("kn-row", "kn-rotate-row");
-            row.Add(Ui.Text(label, "kn-rotate-row__label"));
-            row.Add(Ui.Button("−" + RotateStep + "°", () => Rotate(ctx, target, axis, -RotateStep), "kn-button--small"));
-            row.Add(Ui.Button("+" + RotateStep + "°", () => Rotate(ctx, target, axis, RotateStep), "kn-button--small"));
-            return row;
+            if (axis == 0) value.x = next;
+            else if (axis == 1) value.y = next;
+            else value.z = next;
+            return value;
         }
 
-        private static void Rotate(FeatureContext ctx, Transform target, Vector3 axis, float degrees)
+        private static void AddPositionSlider(VisualElement root, FeatureContext ctx, Transform target,
+            string key, int axis, float height, Baseline baseline)
         {
-            var undoName = L10n.Tr("undo.transformRotate");
-            ctx.BeginEdit();
-            UndoHelper.Begin("transform-rotate", undoName);
-            Undo.RecordObject(target, undoName);
-            target.rotation = Quaternion.AngleAxis(degrees, axis) * target.rotation;
-            UndoHelper.End();
+            // 骨のスケールを含めて cm に換算する。表示値の原点は「推定した位置」（0 = つけたときの位置）。
+            // 骨からの値そのものを出すと、足元が原点のアクセでは -106cm のような分かりにくい数字になるため。
+            var scale = target.parent == null ? 1f : Mathf.Abs(Axis(target.parent.lossyScale, axis));
+            scale = Mathf.Max(0.0001f, scale);
+            var origin = Axis(baseline.LocalPosition, axis);
+            var cm = (Axis(target.localPosition, axis) - origin) * scale * 100f;
+            var range = Mathf.Max(height * 25f, Mathf.Abs(cm) + height * 5f);
+            root.Add(EditSlider(ctx, target, L10n.Tr(key), -range, range, cm,
+                L10n.Tr("undo.transformMove"), value =>
+                    target.localPosition = WithAxis(target.localPosition, axis, origin + value / (scale * 100f))));
         }
 
-        private static void Resize(FeatureContext ctx, Transform target, Baseline baseline, float percent)
+        private static void AddRotationSlider(VisualElement root, FeatureContext ctx, Transform target,
+            string key, int axis, Baseline baseline)
         {
-            var undoName = L10n.Tr("undo.transformScale");
-            ctx.BeginEdit();
-            UndoHelper.Begin("transform-scale", undoName);
-            Undo.RecordObject(target, undoName);
-            target.localScale = baseline.LocalScale * (percent / 100f);
-            UndoHelper.End();
+            // 推定した向きからの差（°）で表す
+            var originEuler = baseline.LocalRotation.eulerAngles;
+            var origin = Axis(originEuler, axis);
+            var degrees = Mathf.DeltaAngle(origin, Axis(target.localEulerAngles, axis));
+            root.Add(EditSlider(ctx, target, L10n.Tr(key), -180f, 180f, degrees,
+                L10n.Tr("undo.transformRotate"), value =>
+                    target.localEulerAngles = WithAxis(target.localEulerAngles, axis, origin + value)));
+        }
+
+        /// <summary>ドラッグは離すまで、数値入力は欄を離れるまでを 1 操作にし、最後に保存する。</summary>
+        private static Slider EditSlider(FeatureContext ctx, Transform target, string label, float min,
+            float max, float value, string undoName, System.Action<float> change)
+        {
+            var group = -1;
+            System.Action finish = null;
+            finish = () =>
+            {
+                // Undo 後や別の欄の終了後に届いた、古い通知は無視する。
+                if (_finishAdjustment != finish) return;
+                _finishAdjustment = null;
+                var completedGroup = group;
+                group = -1;
+                if (target != null) ctx.CompleteEdit(completedGroup);
+                UndoHelper.Separate();
+            };
+            var slider = Ui.Slider(label, min, max, value, next =>
+            {
+                if (target == null) return;
+                if (_finishAdjustment != finish)
+                {
+                    FinishAdjustment();
+                    ctx.BeginEdit();
+                    UndoHelper.Separate();
+                    Undo.IncrementCurrentGroup();
+                    group = Undo.GetCurrentGroup();
+                    Undo.SetCurrentGroupName(undoName);
+                    _finishAdjustment = finish;
+                }
+                Undo.RecordObject(target, undoName);
+                change(next);
+                PrefabUtility.RecordPrefabInstancePropertyModifications(target);
+                Undo.CollapseUndoOperations(group);
+                SceneView.RepaintAll();
+            });
+            slider.RegisterCallback<PointerCaptureOutEvent>(e => finish());
+            slider.RegisterCallback<FocusOutEvent>(e => finish());
+            return slider;
         }
 
         private static float SizePercent(Transform target, Baseline baseline)
@@ -452,7 +531,10 @@ namespace Jeni.KaihenNavi
         {
             Selection.activeGameObject = target.gameObject;
             var view = SceneView.lastActiveSceneView;
-            if (view != null) view.FrameSelected();
+            Bounds bounds;
+            if (view != null) view.Frame(TryBounds(target.gameObject, out bounds) ? bounds :
+                new Bounds(target.position, Vector3.one * 0.2f), false);
+            Tools.current = Tool.Move;
         }
     }
 }

@@ -27,7 +27,7 @@ namespace Jeni.KaihenNavi
 
         // シュリンク用のシェイプキーによく使われる名前
         private static readonly Regex ShrinkPattern = new Regex(
-            @"shrink|hide|_off\b|^off_|cut|kill|縮|隠|消|非表示", RegexOptions.IgnoreCase);
+            @"shrink|hide|_off\b|^off_|cut|kill|mask|tuck|thin|縮|隠|消|非表示|貫通|めり込", RegexOptions.IgnoreCase);
 
         private static int _mode;          // 0 = シェイプキー, 1 = Mesh Cutter
         private static string _meshPath;   // 選んだ肌のメッシュ（アバターからの階層パス）
@@ -129,7 +129,10 @@ namespace Jeni.KaihenNavi
             var shapes = new List<int>();
             for (var i = 0; i < mesh.blendShapeCount; i++)
             {
-                if (_showAll || ShrinkPattern.IsMatch(mesh.GetBlendShapeName(i))) shapes.Add(i);
+                var shapeName = mesh.GetBlendShapeName(i);
+                // 「======Shrink======」のような区切り用の名前（記号が多いもの）は出さない
+                if (IsDivider(shapeName)) continue;
+                if (_showAll || ShrinkPattern.IsMatch(shapeName)) shapes.Add(i);
             }
 
             // いつ隠すか（服を選ぶと、その服を着ているときだけ）
@@ -148,6 +151,8 @@ namespace Jeni.KaihenNavi
                 ctx.Rebuild();
             });
             root.Add(popup);
+            // 2 つのやり方で同じシェイプキーを縮めると、どちらが効いているのか分からなくなるので、1 つのキーは 1 つのやり方だけにする
+            root.Add(Ui.Text(L10n.Tr(_targetOutfit == null ? "skin.alwaysHow" : "skin.onlyWithHow"), "kn-hint"));
 
             root.Add(Ui.Heading(L10n.Tr("skin.shapes")));
             if (shapes.Count == 0)
@@ -160,7 +165,7 @@ namespace Jeni.KaihenNavi
                 var list = Ui.Box("kn-list");
                 foreach (var index in shapes)
                 {
-                    list.Add(target == null ? AlwaysRow(ctx, body, index) : OutfitRow(ctx, body, target, index));
+                    list.Add(target == null ? AlwaysRow(ctx, body, index, outfits) : OutfitRow(ctx, body, target, index));
                 }
 
                 root.Add(list);
@@ -177,18 +182,31 @@ namespace Jeni.KaihenNavi
         }
 
         /// <summary>いつも隠す：シェイプキーの値を直接変える（改変アバターに保存される。元の Prefab は変わらない）。</summary>
-        private static VisualElement AlwaysRow(FeatureContext ctx, SkinnedMeshRenderer body, int index)
+        private static VisualElement AlwaysRow(FeatureContext ctx, SkinnedMeshRenderer body, int index, List<GameObject> outfits)
         {
             var name = body.sharedMesh.GetBlendShapeName(index);
-            return Ui.Slider(Pretty(name), 0f, 100f, body.GetBlendShapeWeight(index), v =>
+            var box = new VisualElement();
+            box.Add(Ui.Slider(Pretty(name), 0f, 100f, body.GetBlendShapeWeight(index), v =>
             {
                 var undoName = L10n.Tr("undo.skin");
-                ctx.BeginEdit();
+                ctx.BeginEdit("skin:" + index);
                 UndoHelper.Begin("skin:" + index, undoName);
                 Undo.RecordObject(body, undoName);
                 body.SetBlendShapeWeight(index, v);
+#if KAIHENNAVI_MA
+                // いつも隠すにしたので、服ごとの設定からは外す
+                if (v > 0f)
+                {
+                    foreach (var outfit in outfits) RemoveShape(outfit, body, name, undoName);
+                }
+#endif
                 UndoHelper.End();
-            });
+            }));
+#if KAIHENNAVI_MA
+            var owners = outfits.Where(o => HasShape(o, body, name)).Select(o => o.name).ToArray();
+            if (owners.Length > 0) box.Add(Ui.Text(L10n.Tr("skin.usedByOutfit", string.Join("、", owners)), "kn-hint"));
+#endif
+            return box;
         }
 
         /// <summary>この服を着ているときだけ：服の中に置いた MA Shape Changer に、縮めるシェイプキーを登録する。</summary>
@@ -202,8 +220,18 @@ namespace Jeni.KaihenNavi
             toggle.RegisterValueChangedCallback(e => SetShape(ctx, outfit, body, name, e.newValue));
             row.Add(toggle);
 #endif
-            row.Add(Ui.Text(Pretty(name), "kn-list__title", "kn-grow"));
+            var texts = Ui.Box("kn-list__texts");
+            texts.Add(Ui.Text(Pretty(name), "kn-list__title"));
+            if (body.GetBlendShapeWeight(index) > 0f) texts.Add(Ui.Text(L10n.Tr("skin.usedByAlways"), "kn-list__sub"));
+            row.Add(texts);
             return row;
+        }
+
+        private static bool IsDivider(string shapeName)
+        {
+            if (string.IsNullOrEmpty(shapeName)) return true;
+            var symbols = shapeName.Count(c => !char.IsLetterOrDigit(c) && c != ' ' && c != '_' && c != '.');
+            return symbols >= 4 && symbols * 2 >= shapeName.Length - shapeName.Count(char.IsWhiteSpace);
         }
 
         private static string Pretty(string shapeName)
@@ -250,8 +278,24 @@ namespace Jeni.KaihenNavi
             var undoName = L10n.Tr("undo.skin");
             ctx.BeginEdit();
             UndoHelper.Separate();
+            UndoHelper.Begin("skin-outfit", undoName);
+            if (on)
+            {
+                // 着ている時だけにしたので、いつも隠すの値は 0 に戻す（両方で縮めると服を脱いでも縮んだままになる）
+                var index = body.sharedMesh.GetBlendShapeIndex(shapeName);
+                if (index >= 0 && body.GetBlendShapeWeight(index) > 0f)
+                {
+                    Undo.RecordObject(body, undoName);
+                    body.SetBlendShapeWeight(index, 0f);
+                }
+            }
+
             var changer = Hider(outfit, on, ctx, undoName);
-            if (changer == null) return;
+            if (changer == null)
+            {
+                UndoHelper.End();
+                return;
+            }
 
             Undo.RecordObject(changer, undoName);
             var shapes = changer.Shapes != null ? new List<ChangedShape>(changer.Shapes) : new List<ChangedShape>();
@@ -265,7 +309,21 @@ namespace Jeni.KaihenNavi
 
             changer.Shapes = shapes;
             EditorUtility.SetDirty(changer);
+            UndoHelper.End();
             UndoHelper.Separate();
+            ctx.Rebuild();
+        }
+
+        private static void RemoveShape(GameObject outfit, SkinnedMeshRenderer body, string shapeName, string undoName)
+        {
+            var changer = Hider(outfit, false, null, null);
+            if (changer == null || changer.Shapes == null) return;
+            if (!changer.Shapes.Any(s => s.ShapeName == shapeName && s.Object != null && s.Object.Get(changer) == body.gameObject)) return;
+            Undo.RecordObject(changer, undoName);
+            var shapes = new List<ChangedShape>(changer.Shapes);
+            shapes.RemoveAll(s => s.ShapeName == shapeName && s.Object != null && s.Object.Get(changer) == body.gameObject);
+            changer.Shapes = shapes;
+            EditorUtility.SetDirty(changer);
         }
 #endif
 

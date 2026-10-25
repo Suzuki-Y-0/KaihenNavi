@@ -82,7 +82,7 @@ namespace Jeni.KaihenNavi
         private void Set(FeatureContext ctx, Vector3 value, string undoName)
         {
             var avatar = ctx.Avatar;
-            ctx.BeginEdit();
+            ctx.BeginEdit("view");
             UndoHelper.Begin("view", undoName);
             Undo.RecordObject(avatar, undoName);
             avatar.ViewPosition = value;
@@ -126,10 +126,19 @@ namespace Jeni.KaihenNavi
         {
             if (_shown == null) return;
             var world = _shown.transform.TransformPoint(_shown.ViewPosition);
-            var size = HandleUtility.GetHandleSize(world) * 0.08f;
-            Handles.color = new Color(0.227f, 0.475f, 0.733f, 0.9f);
+            // 小さすぎて見つけにくかったので、画面上でいつも同じくらいの大きさ（指先ほど）に見えるようにする
+            var size = HandleUtility.GetHandleSize(world) * 0.22f;
+            var zTest = Handles.zTest;
+            Handles.zTest = UnityEngine.Rendering.CompareFunction.Always; // 頭の中にあっても見えるように
+            Handles.color = new Color(0.227f, 0.475f, 0.733f, 0.95f);
             Handles.SphereHandleCap(0, world, Quaternion.identity, size, EventType.Repaint);
-            Handles.DrawLine(world, world + _shown.transform.forward * size * 4f);
+            Handles.color = Color.white;
+            var toCamera = view.camera != null ? view.camera.transform.forward : Vector3.forward;
+            Handles.DrawWireDisc(world, toCamera, size * 0.6f, 2f);
+            Handles.color = new Color(0.227f, 0.475f, 0.733f, 0.95f);
+            Handles.DrawLine(world, world + _shown.transform.forward * size * 3f, 3f);
+            Handles.ConeHandleCap(0, world + _shown.transform.forward * size * 3f, Quaternion.LookRotation(_shown.transform.forward), size * 0.6f, EventType.Repaint);
+            Handles.zTest = zTest;
         }
 
         private static void Frame(VRCAvatarDescriptor avatar)

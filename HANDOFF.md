@@ -284,6 +284,63 @@ Assets/KaihenNavi/
 - 調査メモ Docs/research-asset-managers.md（KonoAsset・BLM）。BLM は今回は使わない
 - 注意: computer use で open_application("Unity") を使うと Unity Hub が前に出てユーザーの邪魔になる。Unity のウィンドウを直接クリックする
 
+## 4.13 服のライブラリ（2026-10-25・Unity 実機は未確認）
+
+- 検索不具合の原因: 旧 `ItemPicker.OwnedItems` は Ledger に登録された Prefab だけを検索しており、`KonoAssetLink.All` の全商品索引を使っていなかった。未取り込みの商品は必ず対象外になり、大小文字以外の表記揺れも吸収していなかった。
+- `Core/ItemLibrary.cs` に服・アクセ共通の「商品一覧 → 行内の詳細 → 確定」を実装。商品名・ショップ名・フォルダ名・Prefab 名・unitypackage 名で部分一致。NFKC、大小文字、ひらがな／カタカナを正規化する。検索対象は全件、表示だけ24件ずつに分ける。「このアバター用」が初期値、対応情報と Prefab パスで絞り込む。
+- KonoAsset と Ledger、および既存 Prefab の読み取り専用の探索結果を商品単位で結合。一覧更新・装着では台帳に書き込まない。外部データも変更しない。商品索引は出所の JSON 名を追加してキャッシュ形式を2にした。
+- 詳細に画像、商品・ショップ、Prefab の選択、Project の「場所」、確定ボタン。アクセは確定後に従来の付け場所選択へ進む。`TransformFeature` は共通一覧の呼び出しだけ変更し、付ける処理・位置調整部分は変更していない。
+- 「ファイルから選ぶ…」は「Project から選ぶ…」として補助欄に残した。OS のファイル選択との混同を避け、ドラッグが難しい人も使えるようにするため。「読み込み直す」は1つ、KonoAsset のデータ場所は「設定」にまとめた。他機能へのボタンと説明は左ナビの翻訳を参照する。
+- 未取り込みの商品は `.unitypackage` を選択して `ImportPackage(..., true)`。選択した商品IDと検索・絞り込みを SessionState に保持し、取り込み後も詳細を復元する。
+- 取り込みのファイル Undo は `PackageImportUndo` / `PackageImportState`。gzip/tar の pathname・内容ハッシュ・GUID で既存ファイルへの上書きや別の場所にある同一 GUID を事前に拒否。追加ファイルと .meta、および台帳・ツールの README の前後を `Library/KaihenNavi/Imports/` に保存し、Undo / Redo で復元する。既存の配布ファイルは書き戻さない。版の違う既存ファイルを含むパッケージは、安全のため取り込み全体を停止する。
+- 装着はインスタンス生成・MA の処理・バックアップへの追加パスの記録・自分用 Prefab への保存まで同じ Undo グループにまとめる。`MyAvatar.Save` の Apply を UserAction に変更し、保存の取り消しも記録する。服の操作内で保存することで、後の自動保存が装着の Undo を分けないようにした。
+- `bash tools/check.sh`: NoMA / WithMA / Full のコンパイル、4言語543キー、KonoAsset の60検証が成功。検索・結合、アーカイブ読取、衝突拒否、追加ファイルと GUID・台帳の Undo/Redo 用ファイル復元を検証。Unity の JsonUtility・実 Undo・MA 実行はスタブでは確認できない。
+- **Unity で確認すること**: 行の選択だけでは服が増えないこと／検索と「すべて」の切り替え／画像と狭い幅・両スキン・4言語／装着後に1.5秒待つ・ページ切り替え・保存・ウィンドウ再起動を挟んだ Ctrl+Z と Redo（MA の部品も戻ること）／取り込みの完了・キャンセル・失敗・スクリプトによるドメインリロード後の詳細復元／取り込み Undo で新規ファイル・.meta・台帳が一緒に戻り、Redo で GUID が保たれること／元アセットのハッシュが不変なこと。
+## 4.13 アクセ・脱ぎ着と Ctrl+Z（2026-10-25・Unity 実機は未確認）
+
+### 原因と修正
+
+- `MyAvatar.Save` が `ApplyPrefabInstance(..., AutomatedAction)` を使っていた。シーンの追加物が Prefab に適用される一方、その適用自体は Undo に記録されないため、装着時／メニュー作成時のシーンの Undo だけでは保存先も含めた状態を戻せなかった。`Undo.ClearAll` などで履歴を明示的に消す処理は対象経路にはなかった。
+- アクセの装着では最初の親変更に通常の `SetParent` を使い、最終位置の直接代入の記録とグループの確定も不足。メニュー削除には `CollapseUndoOperations` が無かった。作成は既にグループ化されていたが、後から行う保存がそのグループの外だった。
+- 対象機能は変更 → `FlushUndoRecordObjects` → `UserAction` で自分用 Prefab に保存 → 元の編集グループに Collapse、までを操作内で行う。アクセのスライダーはドラッグ終了／数値欄のフォーカス終了までを1手として、その間のタイマー保存を待たせる。Scene の移動などは `postprocessModifications` で記録した編集グループに保存をまとめる。
+- `KaihenNaviWindow.OnUndoRedo` は画面の再構築だけだった。Undo 後のグループ番号変化を自動保存が新しい変更と誤認すると、再保存が Redo を消すため、新しい編集の記録または明示的な保存まで自動保存を待たせる。再構築自体はモデルを変更しない。未確定のスライダー保存も Undo 時に破棄する。
+- `BackupService.BeginEdit`／`NoteCreated` はバックアップ用アセットの保存であり、アバターへの Prefab 適用は行っていなかった。Undo 後はバックアップの操作区切りを終了する。`InnerColorAssetUndo` の復元コールバックだけは、新しい Undo を作らないよう `Save(avatar, false)` を使う。
+- 根拠: [Unity 2022.3 の ApplyPrefabInstance 実装](https://github.com/Unity-Technologies/UnityCsReference/blob/2022.3/Editor/Mono/Prefabs/PrefabUtility.cs)、[UserAction の説明](https://docs.unity3d.com/2022.3/Documentation/ScriptReference/InteractionMode.UserAction.html)。実機の Undo／Prefab インポートはスタブでは再現できないため、下記の確認を必ず行う。
+
+### アクセの変更
+
+- 「つけたアクセ」一覧に「調整」「外す」を追加。以前の「どれを直しますか？」の欄と矢印は同じ調整パネルに統合した。装着直後は調整パネルをページ先頭に表示する。
+- 骨の localPosition を親のスケール込みの cm で表示（Y＝上下、Z＝前後、X＝左右）。通常の範囲は身長の ±25%、既に範囲外にある値はその周囲まで広げる。骨の軸はアバターによって向きが違う。回転は localEulerAngles の3軸、大きさは推定時の localScale に対する一様な倍率（10〜300%）。
+- 初期位置の判断: 元アバター名の先頭語（3文字以上）がアクセの Prefab 名／フォルダパスに入る、またはアクセの Renderer.bounds の中心が骨から身長の20%以内なら、足元基準で置いたワールド位置を保って骨の子にする。それ以外は見た目の中心を骨へ寄せ、頭なら身長の6%上、首なら2%前へ補正する。Renderer が無い場合はアクセの原点を寄せる。
+- 推定値は `KaihenNavi_AttachBaseline`（EditorOnly の空オブジェクト）の Transform に記録。独自コンポーネントを残さず、Prefab 保存・再読み込み後も「推定した位置に戻す」が使える。以前からあるアクセでは最初に調整欄を開いた値を基準にする。
+- 「シーンで動かす」は Selection、`SceneView.Frame(bounds, false)`、`Tools.current = Move`。外すときはアクセ全体を `Undo.DestroyObjectImmediate`。アバター自身や体の骨を含むものは削除しない。
+
+### 服が消えた理由と変更
+
+- 旧 `CreateMenu` は対象をすべて `SetActive(false)` にしており、MA のプレビューで見えていても実際の `activeSelf` は false だった。旧 `RemoveMenu` は作成前の状態の代わりに `Menu Item.isDefault` を使っていたため、初期値を変更した場合などに作成前へ戻せなかった。保存により旧メニューが復活／削除が完全に戻らない問題も重なり得る。作者の実際の操作順と MA の競合状態は、この環境では再現できていない。
+- MA 1.18.7 の `FindObjectToggles` は対象の `activeSelf` を制御が無い側の状態として使い、`BuildConditions` は `Menu Item.isDefault` に基づく条件を別に扱う。オンの対象に Active=true を置くだけではオフにできない。そのため、メニュー親に常時 OFF の MA Object Toggle を置き、子の項目が ON のときだけ後から ON で上書きする。服本体を非表示にする処理は削除した。
+- 作成前の `activeSelf` は、項目内の `KaihenNavi_OriginalVisibility`（EditorOnly の空オブジェクト）の `activeSelf` に保存。作り直しでは最初の状態とメニュー初期値を引き継ぎ、残す対象の現在の表示は変えない。チェックを外した対象とメニュー削除時は、最初の表示状態に戻す。バックアップの MenuData にも元の状態を含める。
+- 古いメニュー／古いバックアップには元の表示状態が無いため、互換処理では従来の `isDefault` を使う。過去に既定値を変更していた場合の本当の作成前状態は復元できない。
+- 削除ボタンは「脱ぎ着の切り替えを消す（元に戻す）」。対象が全て失われていても削除可能。4言語の文言と説明書も更新。
+- 根拠: [MA 1.18.7 の対象・条件の読み取り](https://github.com/bdunderscore/modular-avatar/blob/1.18.7/Editor/ReactiveObjects/AnimationGeneration/ReactiveObjectAnalyzer.LocateReactions.cs)、[初期状態の解決](https://github.com/bdunderscore/modular-avatar/blob/1.18.7/Editor/ReactiveObjects/AnimationGeneration/ReactiveObjectAnalyzer.cs)、[Object Toggle の優先順位](https://modular-avatar.nadena.dev/ja/docs/reference/reaction/object-toggle)。
+
+### 検証と Unity での確認手順
+
+- `tools/check.sh`: NoMA / WithMA / Full のコンパイル、4言語535キー、既存の34項目、新しい29項目の回帰チェックが通過。新しいチェックは作成・作り直し・削除での状態復元、明示的な OFF 設定、旧データ、対象消失、保存先制限、Undo API の選択・グループ指定、スライダー終了時の保存・Undo時の中止を確認する。**Unity の Undo の実処理、Prefab の再インポート、MA のプレビュー／ビルドの検証ではない**。
+- Unity 2022.3: 改変アバターと通常のシーン上アバターで、アクセ装着 → 数秒待つ → Ctrl+Z 1回 → Redo、外す → Undo、再起動後の一覧／推定値復元を確認。元 Prefab のハッシュも比較する。
+- アクセ: 原点中心の小物／足元基準で作られたアバター用アクセ、移動・回転・拡縮済みのアバター、頭・首・手首で初期位置を見る。位置3軸・回転3軸・大きさのドラッグと直接入力、Scene の Move、推定位置へ戻すをそれぞれ1回の Undo／Redoで確認。
+- 脱ぎ着: activeSelf が true／false の対象を混ぜ、作成 → 作り直し（名前変更・対象追加／除外）→ 削除の各段階で Undo／Redo。MA 初期値だけを手動変更しても削除時に最初の状態へ戻るか確認。自動保存待ち・「今すぐ保存」・ページ切り替え・ウィンドウ開閉のあとにも繰り返す。
+- Gesture Manager と NDMF ビルドで ON/OFF の両側と初期値、対象同士に親子関係がある場合、別の MA Object Toggle と対象が重なる場合の見た目を確認。EditorOnly の目印がビルド結果に残らないことも確認する。
+### インナーカラーの GPU 判定（2026-10-25・Unity 実機は未確認）
+
+- `InnerColorVisibility.cs` / `Hidden/KaihenNavi/InnerColorVisibility`: Head を中心とした64方向の正射影。上・横を多くし、真下を除く。表示中の髪・素体・服・アクセを深度＋UV画像に描く（親の EditorOnly、非アクティブ、Renderer 無効・forceRenderingOff は除外）。SkinnedMeshRenderer は現在の姿勢を BakeMesh、MeshRenderer も遮蔽物として含む。元のメッシュ・マテリアルには書き込まない。
+- カメラ画像の UV だけを CPU で投票すると細い毛の未投票テクセルが内側になるため、UV 上の各テクセルからカメラの線形深度を照合し、GPU で票を加算する方式。読み戻しは最後にマテリアルごと2回（全方向・後ろ方向の票と、頭からの高さ・後ろ向きの条件）にまとめた。画素中心との深度差は三角形の平面で補正する。深度の誤差許容は0.1mm。髪の裏面も遮蔽物にするため両面を描く。
+- 既存の3範囲を維持。「内側の層」は全方向の見えた割合、「後ろの内側」は後ろ方向の票＋頭より後ろの条件、「下のほう」は見えた割合＋テクセルごとの高さ。重複 UV は、いずれかが外から見えれば外側を優先。島の外だけ3px広げ、既存の2pxぼかしをかける。
+- 色・範囲・モード変更では測定を再利用。姿勢・形状・選択サブメッシュ・UV・MainTex の拡縮と移動・透明度・画質・頭位置とアバターの回転が変わったら再測定。Shader.Find 失敗、シェーダーエラー、非対応 GPU、描画例外時は `InnerColorOpenness` のレイ方式へ戻る。元の複製・台帳・ファイル Undo・片付けの流れは維持。
+- 開発用設定（UI には出さない）: `UnityEditor.EditorPrefs.SetBool("KaihenNavi.InnerColor.SaveDebugMasks", true)` で最終マスクを `Library/KaihenNavi/InnerColor/*.png` に保存。`KaihenNavi.InnerColor.DisableGpu` を true にするとレイ方式を確認できる。確認後は両方 false に戻す。
+- 制限: 元シェーダーの照明は再現せず、深度と MainTex（または BaseMap）のアルファ・Color の透明度・Cutoff で測る。専用のアルファマスク、ディゾルブ、頂点シェーダーによる変形は未対応。共有・重複 UV で別々の色分けはできない。
+- `tools/check.sh` に数値テストとファイル Undo テストも追加。**Unity で必要な確認**: シェーダーのコンパイル、外側への漏れ・裏側・毛先、透明な髪、複数枠、UV の Repeat と負の拡縮、服の遮蔽と EditorOnly 除外、512/1024 の処理時間、自動保存を挟む Ctrl+Z / Redo、GPU 無効時の予備処理。画面の2〜5秒は目安で実測前。
+
 ## 5. 設計の要点
 
 - **元アセットは絶対に書き換えない**: マテリアルは初回変更時に `Assets/KaihenNavi/<アバター名>/Materials/` へ複製し、アバター内の参照をすべて差し替える（`MaterialCopier`）
@@ -305,6 +362,18 @@ Assets/KaihenNavi/
 - `kn-chooser` / `kn-choice`: アバター未選択時の中央の二択。`kn-footer`: 自動バックアップ件数・履歴・控えめな元に戻すボタン。
 - `kn-step-header` は番号なし見出し、`kn-notice` は標準アイコン＋薄い枠、`kn-chip` はセグメント、`kn-list__row` は行形式。各機能の編集処理は維持し、体型図の選択点と視点マーカーも青にそろえた。
 - Unity 実機では両スキン・4言語・幅 360 / 559 / 560 / 800px で、折り返し・スクロール・ナビ／ドロップダウンの選択同期・保存／履歴／警告を確認する。
+
+## 5.1 体型の部分更新と細かい履歴（2026-10-25、Unity 実機は未確認）
+
+- **ちらつきの原因**: `BodyFeature` の点・部位ボタンが `ctx.Rebuild()` を呼び、その先で `BuildNavigation()` と `BuildPanel()` がナビのグループ名・ページ見出しまで削除・生成していた。新しい文字には `FontLoader` の 100ms 間隔の処理が後から太字を当てるため、書体の切り替わりも見えていた。FontLoader は適用済みの文字を除外しているので、文字の要素を保てば再適用されない。
+- **体型**: 部位ボタン・見出し・スライダーは使い回し、選択時はクラス、ラベル、範囲、`SetValueWithoutNotify` で値を更新し、影絵の点だけ `MarkDirtyRepaint()`。スライダーの範囲変更で値変更イベントが出ても、表示更新中は変更処理を呼ばない。サイズ変更後の影絵・身長測定は従来どおり 150ms 待ってまとめる。部位・全体のリセットにも Undo グループ名と Collapse を付け、全体リセットでは内側の身長操作と履歴も同じグループにまとめる。
+- **ほかの機能**: `QueueScan` はナビを作り直さず、構成が変わったときにバッジと完了マークだけ更新する。候補の更新や機能内の `ctx.Rebuild` でもページ見出しを保つ。KonoAsset・台帳の更新も該当する候補欄に限定した。アップロード前チェックとサムネイルも、内容が同じなら要素を作り直さない。
+- **謎の「10」**: 旧 `history.item` に渡していた日時 `M/d HH:mm:ss` の `10/…`。GenericMenu が `/` をサブメニューの区切りとして扱い、10 月だけの項目を作っていた。件数・深さではない。履歴は `kn-*` と既存の配色トークンを使ったウィンドウ内の UI Toolkit パネルに置き換え、日付を普通の文字として表示する。作業名を開いて各手順を見る。背景・閉じるボタン・Esc で閉じる。
+- **保存する単位**: `BeginEdit` 時点で選ばれていた FeatureId で分類し、操作側が付け終えた Undo グループ名を入力処理後に取得する。同じ機能を連続して使った分は同じ `sessionTicks`、機能・アバターの切り替え後や Undo 後は別のまとまり。各 Undo 操作の「直前」の Transform、複製マテリアル、各参加機能の状態を別の BackupSnapshot として保存する。連続スライダー入力は UndoHelper と同じキーでまとめる。名前は 4 言語の `undo.*` と照合して翻訳キーも保存し、未知の英語名や名前のない古いバックアップにはナビの機能名を使う。旧形式は 1 手順のまとまりとして読む。
+- **戻し方**: ↶ はこのウィンドウで Undo に載せた直前の 1 手を `Undo.PerformUndo()` で戻す。ウィンドウ再生成後など対応が分からない場合や Undo が行われなかった場合は、最新のバックアップ 1 手順を使う。履歴の「ここまで戻す」は「選んだ手順の直前まで」を意味し、パネルの説明と確認文にも明記。履歴からの複数手順の復元は既存の BackupService と各 IBackupParticipant に統一し、復元自体を Ctrl+Z 1 回で取り消せる新しい操作にする。Redo を捨てる `RevertAllDownToGroup` は履歴移動には使わない（[Unity 2022.3 Undo API](https://docs.unity3d.com/ja/2022.3/ScriptReference/Undo.html)）。
+- **Undo と履歴の整合**: 手順の表示状態をアバターの変更と同じ Undo グループに記録。復元後の対象・新しい履歴は削除せず隠すので、復元を Ctrl+Z すると履歴も再表示される。上限は 20 手順ではなく 20 まとまり。上限から外れたバックアップも Undo の参照を壊さないためファイルは残す（Backups の使用量は増える）。自動保存前に未確定の履歴を確定し、Undo/Redo 後は保存済みグループの目印を無効にして戻した状態も保存対象にする。非表示を含む履歴の状態も保存する。`MyAvatar.Save` の Prefab 適用方式は今回変更していない。
+- **確認済み**: `bash tools/check.sh`（NoMA / WithMA / Full、4 言語 530 キー、KonoAsset 34 件、追加した履歴・体型の回帰テスト 29 件）。`bash tools/test_inner_color.sh` も数値処理 387 件・アセット処理 47 件が成功。新しいテストは Unity の Undo 本体・Prefab の保存・描画を再現していない。
+- **Unity で確認すること**: (1) 点と部位ボタンを交互に選び、左ナビ・見出し・スクロール位置が動かず、選択だけでは値も履歴も変わらないこと。(2) 身長・頭・腕のスライダー、点のドラッグ、部位／全体リセットの見た目と Undo/Redo が 1 手でそろうこと。(3) 服を着せる・脱がす・体型変更を続け、2 段の履歴、各手順の直前への復元、その復元の Ctrl+Z/Redo がアバターと履歴の両方に効くこと。(4) 自動保存を待った後と「保存」を押した後の Undo/Redo、ドメインリロード後・旧バックアップからの復元。(5) ダーク／ライト、4 言語、幅 360/560/800px でポップオーバーの収まりとスクロール・Esc。
 
 ## 6. ファイル構成
 

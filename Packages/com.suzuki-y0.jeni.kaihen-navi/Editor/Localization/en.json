@@ -565,7 +565,7 @@
   "attach.adjusting": "Adjust “{0}”",
   "attach.finish": "Done",
   "undo.detach": "Remove accessory",
-  "transform.localHint": "Position and rotation are relative to the bone. You can also type values. Press Ctrl+Z to undo.",
+  "transform.localHint": "0 is the position and rotation estimated when attaching. You can also type values. Press Ctrl+Z to undo.",
   "transform.localY": "Up / down (Y, cm)",
   "transform.localZ": "Forward / back (Z, cm)",
   "transform.localX": "Left / right (X, cm)",

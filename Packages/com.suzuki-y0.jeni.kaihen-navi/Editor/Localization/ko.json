@@ -565,7 +565,7 @@
   "attach.adjusting": "「{0}」 조정",
   "attach.finish": "완료",
   "undo.detach": "액세서리 제거",
-  "transform.localHint": "위치와 회전은 장착한 뼈를 기준으로 합니다. 값을 직접 입력할 수도 있습니다. Ctrl+Z로 되돌릴 수 있습니다.",
+  "transform.localHint": "0이 붙였을 때 추정한 위치와 방향입니다. 숫자를 직접 입력할 수도 있습니다. Ctrl+Z로 한 단계 되돌릴 수 있습니다.",
   "transform.localY": "상하 (Y, cm)",
   "transform.localZ": "앞뒤 (Z, cm)",
   "transform.localX": "좌우 (X, cm)",

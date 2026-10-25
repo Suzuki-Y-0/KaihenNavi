@@ -227,13 +227,22 @@ namespace Jeni.KaihenNavi
             return surfaces;
         }
 
-        /// <summary>髪・体・服・アクセを同じ姿勢で読む。シーンに測定用オブジェクトは足さない。</summary>
+        /// <summary>髪・体を同じ姿勢で読む。シーンに測定用オブジェクトは足さない。</summary>
+        private static bool LooksLikeHair(Renderer renderer)
+        {
+            var name = renderer.name.ToLowerInvariant();
+            return (name.Contains("hair") || name.Contains("髪")) && !name.Contains("accessor") && !name.Contains("ribbon") && !name.Contains("pin");
+        }
+
         private static List<InnerColorVisibility.Source> Sources(VRCAvatarDescriptor avatar, List<Surface> surfaces)
         {
             var result = new List<InnerColorVisibility.Source>();
+            var body = AvatarFinder.FindBody(avatar);
             foreach (var renderer in avatar.GetComponentsInChildren<Renderer>(true).Where(Visible).OrderBy(r => r.GetInstanceID()))
             {
                 var surface = surfaces.FirstOrDefault(s => s.renderer == renderer);
+                // 遮るものは髪と体だけにする。頭のリボンや帽子まで入れると、その下の髪の外側まで「隠れている＝内側」になってしまう。
+                if (surface == null && renderer != body && !LooksLikeHair(renderer)) continue;
                 var skinned = renderer as SkinnedMeshRenderer;
                 var regular = renderer as MeshRenderer;
                 var filter = regular == null ? null : regular.GetComponent<MeshFilter>();

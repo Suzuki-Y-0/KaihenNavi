@@ -24,7 +24,8 @@ namespace Jeni.KaihenNavi
 
         private static readonly string[] FramingKeys = { "thumb.face", "thumb.upper", "thumb.full" };
         private static readonly float[] Angles = { 0f, -25f, 25f };
-        private static readonly string[] AngleKeys = { "thumb.front", "thumb.left", "thumb.right" };
+        // -25° では写真の中で体が右を向く（実際に撮って確かめた）
+        private static readonly string[] AngleKeys = { "thumb.front", "thumb.right", "thumb.left" };
 
         // 背景（最初はシーンのまま）
         private static readonly Color?[] Backgrounds =

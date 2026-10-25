@@ -520,5 +520,13 @@
   "feature.walk.nav": "動きを変える",
   "feature.menu.nav": "メニューを整理",
   "feature.thumbnail.nav": "サムネイルを撮る",
-  "nav.sceneAdvice": "改変はシーンにだけ残ります。自動保存するには「…」から改変アバターを作ってください。"
+  "nav.sceneAdvice": "改変はシーンにだけ残ります。自動保存するには「…」から改変アバターを作ってください。",
+  "history.close": "閉じる",
+  "history.hint": "作業名を開くと、細かい手順が見られます。「ここまで戻す」で、その手順を行う直前に戻ります。",
+  "history.session": "{0} · {1} 件 ▾",
+  "history.restoreHere": "ここまで戻す",
+  "history.operation": "{0} の変更",
+  "history.confirm": "{0} の「{1}」を行う直前に戻します。\nそれより後の変更も戻ります。Ctrl+Z で、戻す前の状態に戻せます。",
+  "history.unknownFeature": "アバターの変更",
+  "history.record": "操作履歴を記録する"
 }

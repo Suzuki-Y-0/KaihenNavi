@@ -402,7 +402,7 @@ namespace Jeni.KaihenNavi
         private static void Move(FeatureContext ctx, Transform target, Vector3 direction)
         {
             var undoName = L10n.Tr("undo.transformMove");
-            ctx.BeginEdit();
+            ctx.BeginEdit("transform-move");
             UndoHelper.Begin("transform-move", undoName);
             Undo.RecordObject(target, undoName);
             target.position += direction.normalized * Steps[_stepIndex];
@@ -421,7 +421,7 @@ namespace Jeni.KaihenNavi
         private static void Rotate(FeatureContext ctx, Transform target, Vector3 axis, float degrees)
         {
             var undoName = L10n.Tr("undo.transformRotate");
-            ctx.BeginEdit();
+            ctx.BeginEdit("transform-rotate");
             UndoHelper.Begin("transform-rotate", undoName);
             Undo.RecordObject(target, undoName);
             target.rotation = Quaternion.AngleAxis(degrees, axis) * target.rotation;
@@ -431,7 +431,7 @@ namespace Jeni.KaihenNavi
         private static void Resize(FeatureContext ctx, Transform target, Baseline baseline, float percent)
         {
             var undoName = L10n.Tr("undo.transformScale");
-            ctx.BeginEdit();
+            ctx.BeginEdit("transform-scale");
             UndoHelper.Begin("transform-scale", undoName);
             Undo.RecordObject(target, undoName);
             target.localScale = baseline.LocalScale * (percent / 100f);

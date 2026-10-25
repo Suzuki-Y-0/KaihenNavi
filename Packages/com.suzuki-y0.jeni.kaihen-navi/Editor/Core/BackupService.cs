@@ -27,8 +27,8 @@ namespace Jeni.KaihenNavi
 
     /// <summary>
     /// 自動バックアップと「元に戻す」。
-    /// 「やりたいこと」を選んで最初に何かを変える直前に、アバター全体の状態を 1 件保存する。
-    /// 同じ「やりたいこと」の中で続けて操作している間は追加で保存しない（1 操作のまとまり＝1 件）。
+    /// 各 Undo 操作の直前を保存し、同じ機能を続けて使った分を作業のまとまりとして表示する。
+    /// 復元も Undo の 1 手にし、履歴のファイルは消さずに表示状態を Undo で切り替える。
     /// </summary>
     internal sealed class BackupService
     {
@@ -47,43 +47,125 @@ namespace Jeni.KaihenNavi
 
         private string _sessionKey;
         private BackupSnapshot _current;
+        private BackupSnapshot _pending;
+        private BackupSnapshot _restoredTarget;
+        private VRCAvatarDescriptor _editingAvatar;
+        private long _sessionTicks;
+        private int _lastGroup = -1;
+        private static long _lastTicks;
+        private readonly HashSet<BackupSnapshot> _liveSteps = new HashSet<BackupSnapshot>();
+
+        /// <summary>同じ時刻に操作が重なっても、履歴の順番とまとまりを取り違えない。</summary>
+        private static long NextTicks()
+        {
+            _lastTicks = Math.Max(DateTime.Now.Ticks, _lastTicks + 1);
+            return _lastTicks;
+        }
 
         /// <summary>バックアップが増えた・減ったときに呼ばれる。</summary>
         public event Action Changed;
 
         /// <summary>変更の直前に呼ぶ。必要ならバックアップを取る。</summary>
-        public void BeginEdit(VRCAvatarDescriptor avatar, string featureId)
+        public void BeginEdit(VRCAvatarDescriptor avatar, string featureId, string mergeKey = null)
         {
             if (avatar == null) return;
             var key = AvatarId(avatar) + "|" + featureId;
-            if (_sessionKey == key && _current != null) return;
+            if (_sessionKey != key)
+            {
+                EndSession();
+                _sessionKey = key;
+                _sessionTicks = NextTicks();
+            }
+            // ResetAll のように、同じ操作の中で BeginEdit が重なる場合も 1 手にする。
+            if (_pending != null) return;
+            if (_current != null && UndoHelper.WillMerge(mergeKey)) return;
 
-            _current = Capture(avatar, featureId);
-            _sessionKey = key;
-            Prune(avatar);
+            _editingAvatar = avatar;
+            _pending = Capture(avatar, featureId);
+            _pending.sessionTicks = _sessionTicks;
+            _pending.hiddenFromHistory = true;
+            // Undo グループ名は操作側がこの後で付けるため、入力処理の終了後に読み取る。
+            EditorApplication.delayCall += CompletePending;
+        }
+
+        /// <summary>操作が付けた Undo グループ名で、変更前の状態を履歴に載せる。</summary>
+        public void CompletePending()
+        {
+            CompletePending(Undo.GetCurrentGroup());
+        }
+
+        /// <summary>内側で別グループを使ってからまとめた操作は、まとめ先を明示する。</summary>
+        public void CompletePending(int group)
+        {
+            EditorApplication.delayCall -= CompletePending;
+            if (_pending == null) return;
+            var snapshot = _pending;
+            _pending = null;
+            if (_editingAvatar == null) { ReleaseUnsaved(snapshot); return; }
+            if (_current != null && group == _lastGroup)
+            {
+                foreach (var path in snapshot.createdPaths)
+                    if (!_current.createdPaths.Contains(path)) _current.createdPaths.Add(path);
+                SaveMetadata(_current);
+                ReleaseUnsaved(snapshot);
+                return;
+            }
+            snapshot.operationName = Undo.GetCurrentGroupName();
+            snapshot.operationKey = L10n.UndoKey(snapshot.operationName);
+            SaveSnapshot(_editingAvatar, snapshot);
+            // アバターと履歴の表示状態を同じ Undo グループに入れる。Redo でも履歴が戻る。
+            var undoName = string.IsNullOrEmpty(snapshot.operationName) ?
+                L10n.Tr("history.operation", L10n.Tr("feature." + snapshot.featureId + ".nav")) : snapshot.operationName;
+            Undo.RecordObject(snapshot, undoName);
+            snapshot.hiddenFromHistory = false;
+            _current = snapshot;
+            _liveSteps.Add(snapshot);
+            _lastGroup = group;
+            Prune(_editingAvatar);
+            Undo.SetCurrentGroupName(undoName);
+            Undo.FlushUndoRecordObjects();
+            Undo.CollapseUndoOperations(group);
+            SaveMetadata(snapshot);
             RaiseChanged();
         }
 
-        /// <summary>今の操作のまとまりを終える（別の「やりたいこと」やアバターに切り替えたとき）。</summary>
+        /// <summary>今の操作のまとまりを終える（別の機能やアバターに切り替えたとき）。</summary>
         public void EndSession()
         {
+            CompletePending();
             _sessionKey = null;
             _current = null;
+            _editingAvatar = null;
+            _lastGroup = -1;
+        }
+
+        /// <summary>Undo 後は、戻した状態から新しいまとまりとして操作を始める。</summary>
+        public void OnUndoRedo()
+        {
+            // Undo の通知中に記録を追加しない。
+            EditorApplication.delayCall -= CompletePending;
+            if (_pending != null) ReleaseUnsaved(_pending);
+            _pending = null;
+            _sessionKey = null;
+            _current = null;
+            _editingAvatar = null;
+            _lastGroup = -1;
+            RaiseChanged();
         }
 
         /// <summary>ツールがオブジェクトを作ったら呼ぶ。元に戻すときに削除される。</summary>
         public void NoteCreated(VRCAvatarDescriptor avatar, GameObject created)
         {
-            if (_current == null || avatar == null || created == null) return;
+            var snapshot = _pending ?? _current;
+            if (snapshot == null || avatar == null || created == null) return;
             var path = HierarchyPath.Get(avatar.transform, created.transform);
-            if (path == null || _current.createdPaths.Contains(path)) return;
-            _current.createdPaths.Add(path);
-            EditorUtility.SetDirty(_current);
-            AssetDatabase.SaveAssetIfDirty(_current);
+            if (path == null || snapshot.createdPaths.Contains(path)) return;
+            snapshot.createdPaths.Add(path);
+            if (snapshot != _pending) SaveMetadata(snapshot);
         }
 
         /// <summary>このアバターのバックアップ（新しい順）。</summary>
-        public List<BackupSnapshot> List(VRCAvatarDescriptor avatar)
+        public List<BackupSnapshot> List(VRCAvatarDescriptor avatar, bool includeHidden = false)
         {
             var result = new List<BackupSnapshot>();
             if (avatar == null || !AssetDatabase.IsValidFolder(WorkFolders.Root)) return result;
@@ -92,7 +174,7 @@ namespace Jeni.KaihenNavi
             foreach (var guid in AssetDatabase.FindAssets("t:BackupSnapshot", new[] { WorkFolders.Root }))
             {
                 var snapshot = AssetDatabase.LoadAssetAtPath<BackupSnapshot>(AssetDatabase.GUIDToAssetPath(guid));
-                if (snapshot != null && SameAvatar(snapshot, id, avatar.name)) result.Add(snapshot);
+                if (snapshot != null && (includeHidden || !snapshot.hiddenFromHistory) && SameAvatar(snapshot, id, avatar.name)) result.Add(snapshot);
             }
 
             result.Sort((a, b) => b.createdTicks.CompareTo(a.createdTicks));
@@ -120,9 +202,23 @@ namespace Jeni.KaihenNavi
             RaiseChanged();
         }
 
+        /// <summary>Undo・Redo で変わった履歴の表示状態も、ドメインリロード前に保存する。</summary>
+        public void SaveHistory(VRCAvatarDescriptor avatar)
+        {
+            foreach (var snapshot in List(avatar, true)) AssetDatabase.SaveAssetIfDirty(snapshot);
+        }
+
         public int Count(VRCAvatarDescriptor avatar)
         {
-            return List(avatar).Count;
+            return List(avatar).Select(s => s.SessionTicks).Distinct().Count();
+        }
+
+        /// <summary>直前の手順をこのウィンドウで Undo に載せたか。再起動後はバックアップで戻す。</summary>
+        public bool HasLiveUndo(VRCAvatarDescriptor avatar)
+        {
+            var latest = List(avatar).FirstOrDefault();
+            return (_restoredTarget != null && _restoredTarget.hiddenFromHistory) ||
+                   (latest != null && _liveSteps.Contains(latest));
         }
 
         /// <summary>いちばん新しいバックアップに戻す。</summary>
@@ -135,12 +231,13 @@ namespace Jeni.KaihenNavi
         }
 
         /// <summary>
-        /// 指定したバックアップの状態に戻す。そのバックアップと、それより新しいバックアップは使い終わったので削除する。
+        /// 指定した操作の直前に戻す。その操作と新しい操作は履歴から隠し、Ctrl+Z で表示も元に戻す。
         /// Unity の Undo（Ctrl+Z）でも、元に戻す前の状態に戻れる。
         /// </summary>
         public void Restore(VRCAvatarDescriptor avatar, BackupSnapshot target)
         {
             if (avatar == null || target == null) return;
+            EndSession();
 
             // 新しい順に適用すると、間の操作で作られたオブジェクトもすべて消せる
             var newer = List(avatar).Where(s => s.createdTicks >= target.createdTicks).ToList();
@@ -153,11 +250,18 @@ namespace Jeni.KaihenNavi
             RestoreExtras(avatar, target);
             Apply(avatar, target);
 
+            foreach (var snapshot in newer)
+            {
+                Undo.RecordObject(snapshot, L10n.Tr("undo.restore"));
+                snapshot.hiddenFromHistory = true;
+                EditorUtility.SetDirty(snapshot);
+            }
+            Undo.FlushUndoRecordObjects();
             Undo.CollapseUndoOperations(group);
             UndoHelper.Separate();
 
             EndSession();
-            foreach (var snapshot in newer) AssetDatabase.DeleteAsset(AssetDatabase.GetAssetPath(snapshot));
+            _restoredTarget = target;
             AssetDatabase.SaveAssets();
             RaiseChanged();
         }
@@ -189,7 +293,7 @@ namespace Jeni.KaihenNavi
             var snapshot = ScriptableObject.CreateInstance<BackupSnapshot>();
             snapshot.avatarId = AvatarId(avatar);
             snapshot.avatarName = avatar.name;
-            snapshot.createdTicks = DateTime.Now.Ticks;
+            snapshot.createdTicks = NextTicks();
             snapshot.featureId = featureId;
             snapshot.viewPosition = avatar.ViewPosition;
 
@@ -247,31 +351,49 @@ namespace Jeni.KaihenNavi
                 if (json != null) snapshot.extras.Add(new BackupSnapshot.ExtraState { key = participant.Key, json = json });
             }
 
-            var folder = WorkFolders.Ensure(WorkFolders.Backups(avatar.gameObject));
-            var path = AssetDatabase.GenerateUniqueAssetPath(
-                folder + "/Backup_" + DateTime.Now.ToString("yyyyMMdd_HHmmss") + ".asset");
-            AssetDatabase.CreateAsset(snapshot, path);
-
             foreach (var live in ownedMaterials)
             {
                 var saved = Object.Instantiate(live);
                 saved.name = live.name;
                 saved.hideFlags = HideFlags.HideInHierarchy;
-                AssetDatabase.AddObjectToAsset(saved, snapshot);
                 snapshot.materials.Add(new BackupSnapshot.MaterialState { live = live, saved = saved });
             }
+            return snapshot;
+        }
 
+        private static void SaveSnapshot(VRCAvatarDescriptor avatar, BackupSnapshot snapshot)
+        {
+            var folder = WorkFolders.Ensure(WorkFolders.Backups(avatar.gameObject));
+            var path = AssetDatabase.GenerateUniqueAssetPath(folder + "/Backup_" +
+                snapshot.CreatedAt.ToString("yyyyMMdd_HHmmss_fffffff") + ".asset");
+            AssetDatabase.CreateAsset(snapshot, path);
+            foreach (var material in snapshot.materials) AssetDatabase.AddObjectToAsset(material.saved, snapshot);
+            SaveMetadata(snapshot);
+        }
+
+        private static void SaveMetadata(BackupSnapshot snapshot)
+        {
             EditorUtility.SetDirty(snapshot);
             AssetDatabase.SaveAssetIfDirty(snapshot);
-            return snapshot;
+        }
+
+        private static void ReleaseUnsaved(BackupSnapshot snapshot)
+        {
+            foreach (var material in snapshot.materials)
+                if (material.saved != null) Object.DestroyImmediate(material.saved);
+            Object.DestroyImmediate(snapshot);
         }
 
         private void Prune(VRCAvatarDescriptor avatar)
         {
             var list = List(avatar);
-            for (var i = MaxBackupsPerAvatar; i < list.Count; i++)
+            var oldSessions = new HashSet<long>(list.Select(s => s.SessionTicks).Distinct().Skip(MaxBackupsPerAvatar));
+            foreach (var snapshot in list.Where(s => oldSessions.Contains(s.SessionTicks)))
             {
-                AssetDatabase.DeleteAsset(AssetDatabase.GetAssetPath(list[i]));
+                // Undo が参照するアセットを削除しない。新しい操作を Undo すれば表示件数も戻る。
+                Undo.RecordObject(snapshot, L10n.Tr("history.record"));
+                snapshot.hiddenFromHistory = true;
+                SaveMetadata(snapshot);
             }
         }
 

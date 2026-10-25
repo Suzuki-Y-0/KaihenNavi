@@ -68,6 +68,15 @@ namespace Jeni.KaihenNavi
             Sweeps[root] = root.schedule.Execute(() => ApplyBold(root, bold)).Every(100);
         }
 
+        /// <summary>補助ウィンドウを閉じたら、フォント確認の予約と画面への参照を解放する。</summary>
+        public static void Release(VisualElement root)
+        {
+            IVisualElementScheduledItem sweep;
+            if (!Sweeps.TryGetValue(root, out sweep)) return;
+            sweep.Pause();
+            Sweeps.Remove(root);
+        }
+
         private static void ApplyBold(VisualElement root, FontDefinition bold)
         {
             root.Query<UnityEngine.UIElements.TextElement>().ForEach(e =>

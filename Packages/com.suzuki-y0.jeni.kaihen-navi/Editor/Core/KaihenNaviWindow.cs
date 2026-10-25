@@ -27,7 +27,15 @@ namespace Jeni.KaihenNavi
         private FeatureBase _selected;
 
         private VisualElement _avatarArea;
+        private VisualElement _avatarThumbnail;
         private VisualElement _navigation;
+        private VisualElement _navigationList;
+        private VisualElement _navigationFooter;
+        private Button _uploadNavigationItem;
+        private Label _uploadBadge;
+        private VisualElement _saveDot;
+        private List<UploadCheck.Issue> _uploadIssues = new List<UploadCheck.Issue>();
+        private List<GameObject> _sameUploadTargets = new List<GameObject>();
         private VisualElement _workspace;
         private VisualElement _chooserArea;
         private VisualElement _chooserScroll;
@@ -46,6 +54,7 @@ namespace Jeni.KaihenNavi
         private Button _historyButton;
         private bool _scanQueued;
         private ulong _panelHierarchyHash;
+        private ulong _navigationHierarchyHash;
         private readonly Dictionary<FeatureBase, VisualElement> _navigationItems = new Dictionary<FeatureBase, VisualElement>();
 
         // 自分用アバターの案内と自動保存
@@ -57,7 +66,6 @@ namespace Jeni.KaihenNavi
         private double _seenAt;
         private int _savedGroup = -1;
         private System.DateTime _lastSavedAt;
-        private bool _lastSaveManual;
         private const double AutoSaveDelay = 1.5;
 
         // アバター選択の二択（新しく作る／前に作ったものを直す）
@@ -102,6 +110,7 @@ namespace Jeni.KaihenNavi
             EditorSceneManager.sceneClosing -= OnSceneClosing;
             _backup.Changed -= RefreshFooter;
             SaveNow();
+            FontLoader.Release(rootVisualElement);
             if (_selected != null) _selected.OnClosed();
             _backup.EndSession();
         }
@@ -145,10 +154,14 @@ namespace Jeni.KaihenNavi
             root.Add(chooserScroll);
 
             _workspace = Ui.Box("kn-workspace");
+            _navigation = Ui.Box("kn-navigation");
             var navigation = new ScrollView(ScrollViewMode.Vertical);
-            navigation.AddToClassList("kn-navigation");
-            _navigation = navigation;
-            _workspace.Add(navigation);
+            navigation.AddToClassList("kn-navigation-scroll");
+            _navigationList = navigation;
+            _navigation.Add(navigation);
+            _navigationFooter = Ui.Box("kn-navigation-footer");
+            _navigation.Add(_navigationFooter);
+            _workspace.Add(_navigation);
             var page = Ui.Box("kn-page");
             _compactArea = Ui.Box("kn-compact");
             page.Add(_compactArea);
@@ -220,10 +233,6 @@ namespace Jeni.KaihenNavi
             info.Add(_backupLabel);
             footer.Add(info);
 
-            _historyButton = Ui.Button(L10n.Tr("footer.history"), ShowHistoryMenu, "kn-button--ghost");
-            footer.Add(_historyButton);
-            _restoreButton = Ui.Button(L10n.Tr("footer.restore"), RestoreLatest, "kn-button--ghost");
-            footer.Add(_restoreButton);
             return footer;
         }
 
@@ -235,6 +244,10 @@ namespace Jeni.KaihenNavi
             _avatarActions = null;
             _avatarAdvice = null;
             _saveLabel = null;
+            _saveDot = null;
+            _avatarThumbnail = null;
+            _restoreButton = null;
+            _historyButton = null;
             _checkArea = null;
 
             var choosing = _avatar == null || _choosing;
@@ -260,21 +273,42 @@ namespace Jeni.KaihenNavi
             }
 
             var current = Ui.Box("kn-current");
+            _avatarThumbnail = Ui.Box("kn-current__thumbnail");
+            RefreshAvatarThumbnail();
+            current.Add(_avatarThumbnail);
             var texts = Ui.Box("kn-current__texts");
-            texts.Add(Ui.Text(L10n.Tr("current.label"), "kn-hint"));
             texts.Add(Ui.Text(_avatar.name, "kn-current__name"));
-            _avatarStatus = Ui.Box("kn-status-chips");
+            _avatarStatus = Ui.Box("kn-current__meta");
             texts.Add(_avatarStatus);
+            _avatarAdvice = Ui.Box("kn-avatar-advice");
+            texts.Add(_avatarAdvice);
             current.Add(texts);
             _avatarActions = Ui.Box("kn-avatar-actions");
             current.Add(_avatarActions);
             _avatarArea.Add(current);
-            _avatarAdvice = Ui.Box("kn-avatar-advice");
-            _avatarArea.Add(_avatarAdvice);
             RefreshAvatarStatus();
             _checkArea = Ui.Box("kn-upload-check");
             _avatarArea.Add(_checkArea);
             RefreshUploadCheck();
+        }
+
+        /// <summary>撮影・画像の差し替え後も、上部のサムネイルを最新にする。</summary>
+        private void OnProjectChange()
+        {
+            if (_avatarArea == null) return;
+            RefreshAvatarThumbnail();
+            RefreshUploadCheck();
+        }
+
+        private void RefreshAvatarThumbnail()
+        {
+            if (_avatarThumbnail == null || _avatar == null) return;
+            var shot = AvatarChooser.LoadThumbnail(MyAvatar.PrefabPath(_avatar));
+            _avatarThumbnail.Clear();
+            _avatarThumbnail.style.backgroundImage = new StyleBackground(shot);
+            if (shot == null)
+                _avatarThumbnail.Add(Ui.Text(string.IsNullOrEmpty(_avatar.name) ? "?" :
+                    System.Globalization.StringInfo.GetNextTextElement(_avatar.name), "kn-current__initial"));
         }
 
         private void OnAvatarPicked(VRCAvatarDescriptor avatar)
@@ -283,78 +317,93 @@ namespace Jeni.KaihenNavi
             ScanAvatars();
             if (avatar != _avatar) SelectAvatar(avatar);
             BuildAvatarArea();
+            BuildNavigation();
             BuildPanel();
             RefreshFooter();
         }
 
         // ---------------------------------------------------------------- 自分用アバター
 
-        /// <summary>アバター帯の状態チップと操作を更新する。</summary>
+        /// <summary>アバター帯の保存状態と操作を更新する。</summary>
         private void RefreshAvatarStatus()
         {
             if (_avatarStatus == null || _avatarActions == null) return;
             _avatarStatus.Clear();
             _avatarActions.Clear();
             _avatarAdvice.Clear();
-            _saveLabel = null;
             if (_avatar == null) return;
 
-            _avatarStatus.Add(Ui.Text(L10n.Tr(Edition.IsTrial ? "app.trial" : "nav.full"), "kn-status-chip"));
-            _avatarActions.Add(Ui.Button(L10n.Tr("nav.changeAvatar"), () =>
+            var kind = MyAvatar.KindOf(_avatar);
+            _saveDot = Ui.Box("kn-save-dot");
+            _avatarStatus.Add(_saveDot);
+            _saveLabel = Ui.Text("", "kn-meta-text");
+            _avatarStatus.Add(_saveLabel);
+            UpdateSaveLabel();
+            _avatarStatus.Add(Ui.Text("·", "kn-meta-separator"));
+            var id = MyAvatar.BlueprintId(_avatar.gameObject);
+            var upload = Ui.Text(L10n.Tr(id.Length == 0 ? "nav.uploadNew" : "nav.uploadUpdate"), "kn-meta-text");
+            upload.tooltip = id.Length == 0 ? L10n.Tr("upload.new") : L10n.Tr("upload.update", id);
+            _avatarStatus.Add(upload);
+            if (Edition.IsTrial)
+            {
+                _avatarStatus.Add(Ui.Text("·", "kn-meta-separator"));
+                _avatarStatus.Add(Ui.Text(L10n.Tr("app.trial"), "kn-meta-text"));
+            }
+
+            _restoreButton = Ui.IconButton("undo", L10n.Tr("footer.restore"), RestoreLatest);
+            _avatarActions.Add(_restoreButton);
+            _historyButton = Ui.IconButton("history", L10n.Tr("footer.history"), ShowHistoryMenu);
+            _avatarActions.Add(_historyButton);
+            var save = Ui.Button(L10n.Tr("nav.save"), () => SaveNow(true), "kn-button--small");
+            save.tooltip = L10n.Tr("mine.saveNow");
+            save.SetEnabled(kind == AvatarKind.Mine);
+            _avatarActions.Add(save);
+            _avatarActions.Add(Ui.IconButton("more", L10n.Tr("nav.more"), ShowAvatarMenu));
+
+            if (kind != AvatarKind.Mine)
+            {
+                var postponed = kind == AvatarKind.Original && Postponed.Contains(_avatarId);
+                var message = kind == AvatarKind.Original ? (postponed ? "mine.notYet" : "mine.suggest") : "mine.unlinked";
+                var advice = Ui.Text(L10n.Tr("nav.sceneAdvice"), "kn-avatar-advice__text");
+                advice.tooltip = L10n.Tr(message);
+                _avatarAdvice.Add(advice);
+            }
+            RefreshFooter();
+        }
+
+        /// <summary>帯の補助操作と言語をメニューにまとめる。</summary>
+        private void ShowAvatarMenu()
+        {
+            var menu = new GenericMenu();
+            menu.AddItem(new GUIContent(L10n.Tr("nav.changeAvatar")), false, () =>
             {
                 SaveNow();
                 _choosing = true;
                 _chooser.CurrentMode = AvatarChooser.Mode.Start;
                 BuildAvatarArea();
-            }, "kn-button--small", "kn-button--ghost"));
-
-            var kind = MyAvatar.KindOf(_avatar);
-            if (kind == AvatarKind.Mine)
-            {
-                _saveLabel = Ui.Text("", "kn-status-chip");
-                _avatarStatus.Add(_saveLabel);
-                UpdateSaveLabel();
-                _avatarActions.Add(Ui.Button(L10n.Tr("mine.saveNow"), () =>
-                {
-                    _savedGroup = Undo.GetCurrentGroup();
-                    SaveNow(true);
-                }, "kn-button--small"));
-                var path = MyAvatar.PrefabPath(_avatar);
-                _avatarActions.Add(Ui.Button(L10n.Tr("common.where"), () =>
+            });
+            var path = MyAvatar.PrefabPath(_avatar);
+            if (!string.IsNullOrEmpty(path))
+                menu.AddItem(new GUIContent(L10n.Tr("nav.openLocation")), false, () =>
                 {
                     var asset = AssetDatabase.LoadAssetAtPath<GameObject>(path);
                     if (asset != null) EditorGUIUtility.PingObject(asset);
-                }, "kn-button--small", "kn-button--ghost"));
-            }
-            else
+                });
+            else menu.AddDisabledItem(new GUIContent(L10n.Tr("nav.openLocation")));
+
+            var kind = MyAvatar.KindOf(_avatar);
+            if (kind != AvatarKind.Mine)
             {
-                var postponed = kind == AvatarKind.Original && Postponed.Contains(_avatarId);
-                var message = kind == AvatarKind.Original ? (postponed ? "mine.notYet" : "mine.suggest") : "mine.unlinked";
-                var chip = Ui.Text(L10n.Tr("nav.sceneOnly"), "kn-status-chip");
-                chip.tooltip = L10n.Tr(message);
-                _avatarStatus.Add(chip);
-                // 詳しい説明は折りたたみ、通常の帯の高さを保つ。
-                var advice = new Foldout { text = L10n.Tr("nav.saveAdvice"), value = false };
-                advice.Add(Ui.Notice(L10n.Tr(message), "info"));
-                var buttons = Ui.Box("kn-row");
-                buttons.Add(Ui.Button(L10n.Tr(kind == AvatarKind.Original ? "mine.create" : "mine.createUnlinked"), CreateMine, "kn-button--small"));
-                if (kind == AvatarKind.Original && !postponed)
-                    buttons.Add(Ui.Button(L10n.Tr("mine.later"), () =>
+                menu.AddItem(new GUIContent(L10n.Tr(kind == AvatarKind.Original ? "mine.create" : "mine.createUnlinked")), false, CreateMine);
+                if (kind == AvatarKind.Original && !Postponed.Contains(_avatarId))
+                    menu.AddItem(new GUIContent(L10n.Tr("mine.later")), false, () =>
                     {
                         Postponed.Add(_avatarId);
                         RefreshAvatarStatus();
-                    }, "kn-button--small", "kn-button--ghost"));
-                advice.Add(buttons);
-                _avatarAdvice.Add(advice);
+                    });
             }
-
-            var id = MyAvatar.BlueprintId(_avatar.gameObject);
-            var upload = Ui.Text(L10n.Tr(id.Length == 0 ? "nav.uploadNew" : "nav.uploadUpdate"), "kn-status-chip");
-            upload.tooltip = id.Length == 0 ? L10n.Tr("upload.new") : L10n.Tr("upload.update", id);
-            _avatarStatus.Add(upload);
-            if (id.Length > 0)
-            {
-                _avatarActions.Add(Ui.Button(L10n.Tr("upload.makeNew"), () =>
+            if (MyAvatar.BlueprintId(_avatar.gameObject).Length > 0)
+                menu.AddItem(new GUIContent(L10n.Tr("upload.makeNew")), false, () =>
                 {
                     if (!EditorUtility.DisplayDialog(L10n.Tr("app.name"), L10n.Tr("upload.makeNewConfirm"),
                             L10n.Tr("upload.makeNew"), L10n.Tr("dialog.cancel"))) return;
@@ -362,42 +411,90 @@ namespace Jeni.KaihenNavi
                     SaveNow();
                     RefreshAvatarStatus();
                     RefreshUploadCheck();
-                }, "kn-button--small", "kn-button--ghost"));
+                });
+            menu.AddSeparator("");
+            for (var i = 0; i < L10n.Codes.Length; i++)
+            {
+                var code = L10n.Codes[i];
+                menu.AddItem(new GUIContent(L10n.Tr("nav.language") + "/" + L10n.DisplayNames[i]), L10n.Current == code,
+                    () => EditorApplication.delayCall += () => L10n.Current = code);
             }
-            _avatarActions.Add(BuildLanguage());
+            menu.AddSeparator("");
+            menu.AddDisabledItem(new GUIContent(L10n.Tr(Edition.IsTrial ? "app.trial" : "nav.full")));
+            menu.ShowAsContext();
         }
 
         // ---------------------------------------------------------------- アップロード前のチェック
 
-        /// <summary>
-        /// SDK がアップロードを止めるモデルの読み込み設定（Read/Write など）を先に見つけて、アバター帯の直下に出す。
-        /// 直すと配布物の読み込み設定（.meta）が変わるので、必ず確認を出す。
-        /// </summary>
+        /// <summary>問題はナビの件数と確認ページに集約し、細い幅では上部にも案内する。</summary>
         private void RefreshUploadCheck()
         {
-            if (_checkArea == null) return;
-            _checkArea.Clear();
-            if (_avatar == null) return;
-
-            var issues = UploadCheck.Find(_avatar);
-            var same = MyAvatar.SameUploadTarget(_avatar);
-            if (same.Count > 0)
-                _checkArea.Add(Ui.Notice(L10n.Tr("upload.conflict", string.Join("、", same.Select(p => p.name).ToArray())), "warn"));
-            if (issues.Count == 0) return;
-
-            var notice = Ui.Notice(L10n.Tr("check.attention", issues.Count), "warn");
-            notice.tooltip = UploadCheck.Describe(issues);
-            _checkArea.Add(notice);
-            var fixableIssues = issues.Where(i => i.CanFix).ToList();
-            if (fixableIssues.Count == 0) return;
-            notice.Add(Ui.Button(L10n.Tr("check.fix"), () =>
+            _uploadIssues = UploadCheck.Find(_avatar);
+            _sameUploadTargets = _avatar == null ? new List<GameObject>() : MyAvatar.SameUploadTarget(_avatar);
+            var count = _uploadIssues.Count + (_sameUploadTargets.Count > 0 ? 1 : 0);
+            if (_uploadBadge != null)
             {
-                if (!EditorUtility.DisplayDialog(L10n.Tr("app.name"), L10n.Tr("check.confirm", UploadCheck.Describe(fixableIssues)),
+                _uploadBadge.text = count.ToString();
+                _uploadBadge.style.display = count > 0 ? DisplayStyle.Flex : DisplayStyle.None;
+            }
+            if (_checkArea != null)
+            {
+                _checkArea.Clear();
+                if (count > 0)
+                {
+                    var notice = Ui.Notice(L10n.Tr("check.attention", count), "warn");
+                    notice.Add(Ui.Button(L10n.Tr("nav.uploadCheck"), SelectUploadCheck, "kn-button--small", "kn-button--ghost"));
+                    _checkArea.Add(notice);
+                }
+            }
+            if (_featureId == "uploadCheck" && _panelArea != null) BuildPanel();
+        }
+
+        /// <summary>確認ページ。修正は従来どおり、対象を列挙した確認ダイアログの後にだけ実行する。</summary>
+        private void BuildUploadCheckPage()
+        {
+            var header = Ui.Box("kn-page-header__row");
+            var titles = Ui.Box("kn-page-header__texts");
+            titles.Add(Ui.Text(L10n.Tr("nav.uploadCheck"), "kn-page-title"));
+            titles.Add(Ui.Text(L10n.Tr("check.description"), "kn-page-description"));
+            header.Add(titles);
+            var refresh = Ui.Button(L10n.Tr("panel.refresh"), RefreshUploadCheck, "kn-button--small", "kn-button--ghost");
+            refresh.tooltip = L10n.Tr("panel.refreshTip");
+            header.Add(refresh);
+            _pageHeader.Add(header);
+            if (_avatar == null) return;
+            if (_uploadIssues.Count == 0 && _sameUploadTargets.Count == 0)
+            {
+                var success = Ui.Box("kn-check-success");
+                success.Add(Ui.NavigationIcon("check"));
+                success.Add(Ui.Text(L10n.Tr("check.none"), "kn-check-success__text"));
+                _panelArea.Add(success);
+                return;
+            }
+            if (_sameUploadTargets.Count > 0)
+                _panelArea.Add(Ui.Notice(L10n.Tr("upload.conflict", string.Join("、", _sameUploadTargets.Select(p => p.name).ToArray())), "warn"));
+            var list = Ui.Box("kn-list");
+            foreach (var issue in _uploadIssues)
+            {
+                var row = Ui.Box("kn-list__row", "kn-check-row");
+                var texts = Ui.Box("kn-list__texts");
+                texts.Add(Ui.Text(System.IO.Path.GetFileName(issue.ModelPath), "kn-list__title"));
+                texts.Add(Ui.Text(UploadCheck.DescribeKinds(issue), "kn-list__sub"));
+                texts.Add(Ui.Text(issue.ModelPath, "kn-list__sub"));
+                row.Add(texts);
+                list.Add(row);
+            }
+            _panelArea.Add(list);
+            var fixable = _uploadIssues.Where(i => i.CanFix).ToList();
+            if (fixable.Count == 0) return;
+            _panelArea.Add(Ui.Button(L10n.Tr("check.fixAll"), () =>
+            {
+                if (!EditorUtility.DisplayDialog(L10n.Tr("app.name"), L10n.Tr("check.confirm", UploadCheck.Describe(fixable)),
                         L10n.Tr("check.fix"), L10n.Tr("dialog.cancel"))) return;
-                var fixedCount = UploadCheck.Fix(fixableIssues);
+                var fixedCount = UploadCheck.Fix(fixable);
                 RefreshUploadCheck();
                 EditorUtility.DisplayDialog(L10n.Tr("app.name"), L10n.Tr("check.fixed", fixedCount), L10n.Tr("dialog.ok"));
-            }, "kn-button--small", "kn-button--ghost"));
+            }, "kn-button--primary"));
         }
 
         private void CreateMine()
@@ -428,9 +525,26 @@ namespace Jeni.KaihenNavi
         private void UpdateSaveLabel()
         {
             if (_saveLabel == null) return;
-            _saveLabel.text = _lastSavedAt == default(System.DateTime)
-                ? L10n.Tr("nav.autosave")
-                : L10n.Tr(_lastSaveManual ? "nav.savedManually" : "nav.savedAt", _lastSavedAt.ToString("HH:mm:ss"));
+            var sceneOnly = _avatar == null || MyAvatar.KindOf(_avatar) != AvatarKind.Mine;
+            var dirty = !sceneOnly && (MyAvatar.HasUnsaved(_avatar) || HasUnsavedMaterials());
+            _saveDot.EnableInClassList("kn-save-dot--ok", !sceneOnly && !dirty);
+            _saveDot.EnableInClassList("kn-save-dot--dirty", dirty);
+            _saveLabel.text = sceneOnly ? L10n.Tr("nav.sceneOnly") : dirty ? L10n.Tr("nav.unsaved") :
+                _lastSavedAt == default(System.DateTime) ? L10n.Tr("nav.saved") : L10n.Tr("nav.savedAt", _lastSavedAt.ToString("HH:mm"));
+        }
+
+        /// <summary>Prefab の変更に含まれない、自分用マテリアルの未保存状態も表示に反映する。</summary>
+        private bool HasUnsavedMaterials()
+        {
+            if (_avatar == null) return false;
+            foreach (var renderer in _avatar.GetComponentsInChildren<Renderer>(true))
+            {
+                foreach (var material in renderer.sharedMaterials)
+                {
+                    if (material != null && EditorUtility.IsDirty(material) && WorkFolders.IsOwnedBy(material, _avatar.gameObject)) return true;
+                }
+            }
+            return false;
         }
 
         /// <summary>
@@ -440,6 +554,7 @@ namespace Jeni.KaihenNavi
         private void AutoSaveTick()
         {
             if (_avatar == null || EditorApplication.isPlayingOrWillChangePlaymode) return;
+            UpdateSaveLabel();
             var group = Undo.GetCurrentGroup();
             var now = EditorApplication.timeSinceStartup;
             if (group != _seenGroup)
@@ -450,19 +565,19 @@ namespace Jeni.KaihenNavi
             }
 
             if (group == _savedGroup || now - _seenAt < AutoSaveDelay) return;
-            _savedGroup = group;
             SaveNow();
         }
 
         /// <summary>今すぐ保存する（ウィンドウを閉じる・シーンを閉じる・Play の前など）。</summary>
-        /// <param name="manual">「今すぐ保存」ボタンから呼んだとき true（表示を「保存しました」にする）。</param>
+        /// <param name="manual">「保存」ボタンから呼んだとき true（変更がなくても保存時刻を更新する）。</param>
         private void SaveNow(bool manual = false)
         {
             if (_avatar == null) return;
+            var materialsChanged = HasUnsavedMaterials();
             MyAvatar.SaveMaterials(_avatar);
-            if (!MyAvatar.Save(_avatar)) return;
-            _lastSavedAt = System.DateTime.Now;
-            _lastSaveManual = manual;
+            var saved = MyAvatar.Save(_avatar);
+            _savedGroup = Undo.GetCurrentGroup();
+            if (saved || materialsChanged || manual) _lastSavedAt = System.DateTime.Now;
             UpdateSaveLabel();
         }
 
@@ -478,51 +593,78 @@ namespace Jeni.KaihenNavi
 
         private void BuildNavigation()
         {
-            _navigation.Clear();
+            _navigationHierarchyHash = HierarchyHash(true);
+            _navigationList.Clear();
+            _navigationFooter.Clear();
             _navigationItems.Clear();
             _compactArea.Clear();
             _navigationFeatures = new List<FeatureBase>();
             foreach (var group in _features.GroupBy(f => f.Group))
             {
-                _navigation.Add(Ui.Text(L10n.Tr("nav.group." + group.Key), "kn-nav-group"));
+                _navigationList.Add(Ui.Text(L10n.Tr("nav.group." + group.Key), "kn-nav-group"));
                 foreach (var feature in group)
                 {
                     var f = feature;
                     _navigationFeatures.Add(f);
                     var item = new Button(() => SelectFeature(f));
                     item.AddToClassList("kn-nav-item");
-                    item.tooltip = f.Description;
-                    item.Add(Ui.NavigationIcon(f.Group));
-                    item.Add(Ui.Text(f.Title, "kn-nav-item__title"));
+                    item.tooltip = f.Title + "\n" + f.Description;
+                    item.Add(Ui.Box("kn-nav-item__indicator"));
+                    item.Add(Ui.NavigationIcon(f.Id));
+                    item.Add(Ui.Text(f.NavTitle, "kn-nav-item__title"));
+                    // 件数の検出はナビを組み直すときだけ行う。
+                    var badge = f.NavBadge(_avatar);
+                    if (!string.IsNullOrEmpty(badge)) item.Add(Ui.Text(badge, "kn-nav-badge"));
+                    if (f.IsDone(_avatar))
+                    {
+                        var done = Ui.NavigationIcon("check");
+                        done.AddToClassList("kn-nav-done");
+                        item.Add(done);
+                    }
                     // Unity のアイコン取得に依存せず、製品版の表示を常に保証する。
                     if (f.Locked) item.Add(Ui.Text(L10n.Tr("card.full"), "kn-nav-item__lock"));
-                    _navigation.Add(item);
+                    _navigationList.Add(item);
                     _navigationItems[f] = item;
                 }
             }
 
+            _uploadNavigationItem = new Button(SelectUploadCheck);
+            _uploadNavigationItem.AddToClassList("kn-nav-item");
+            _uploadNavigationItem.Add(Ui.Box("kn-nav-item__indicator"));
+            _uploadNavigationItem.Add(Ui.NavigationIcon("uploadCheck"));
+            _uploadNavigationItem.Add(Ui.Text(L10n.Tr("nav.uploadCheck"), "kn-nav-item__title"));
+            _uploadBadge = Ui.Text("", "kn-nav-badge", "kn-nav-badge--warn");
+            _uploadNavigationItem.Add(_uploadBadge);
+            _navigationFooter.Add(_uploadNavigationItem);
+
             _featureChoices = new List<string> { L10n.Tr("nav.chooseFeature") };
-            _featureChoices.AddRange(_navigationFeatures.Select(f => L10n.Tr("nav.group." + f.Group) + " / " + f.Title +
+            _featureChoices.AddRange(_navigationFeatures.Select(f => L10n.Tr("nav.group." + f.Group) + " / " + f.NavTitle +
                 (f.Locked ? " (" + L10n.Tr("card.full") + ")" : "")));
+            _featureChoices.Add(L10n.Tr("nav.uploadCheck"));
             _featurePopup = new PopupField<string>(_featureChoices, 0);
             _featurePopup.AddToClassList("kn-feature-popup");
             _featurePopup.tooltip = L10n.Tr("nav.chooseFeature");
             _featurePopup.RegisterValueChangedCallback(e =>
             {
                 var index = _featureChoices.IndexOf(e.newValue) - 1;
-                if (index >= 0) SelectFeature(_navigationFeatures[index]);
+                if (index == _navigationFeatures.Count) SelectUploadCheck();
+                else if (index >= 0) SelectFeature(_navigationFeatures[index]);
                 else UpdateNavigationSelection();
             });
             _compactArea.Add(_featurePopup);
             UpdateNavigationSelection();
+            RefreshUploadCheck();
         }
 
         private void UpdateNavigationSelection()
         {
             foreach (var pair in _navigationItems)
                 pair.Value.EnableInClassList("kn-nav-item--selected", pair.Key == _selected);
+            if (_uploadNavigationItem != null)
+                _uploadNavigationItem.EnableInClassList("kn-nav-item--selected", _featureId == "uploadCheck");
             if (_featurePopup != null)
-                _featurePopup.SetValueWithoutNotify(_featureChoices[_navigationFeatures.IndexOf(_selected) + 1]);
+                _featurePopup.SetValueWithoutNotify(_featureChoices[_featureId == "uploadCheck" ?
+                    _featureChoices.Count - 1 : _navigationFeatures.IndexOf(_selected) + 1]);
         }
 
         private void BuildPanel()
@@ -531,7 +673,12 @@ namespace Jeni.KaihenNavi
             _panelHierarchyHash = HierarchyHash();
             _panelArea.Clear();
             _pageHeader.Clear();
-            _panelArea.EnableInClassList("kn-panel--empty", _selected == null);
+            _panelArea.EnableInClassList("kn-panel--empty", _selected == null && _featureId != "uploadCheck");
+            if (_featureId == "uploadCheck")
+            {
+                BuildUploadCheckPage();
+                return;
+            }
             if (_selected == null)
             {
                 _panelArea.Add(Ui.Text(L10n.Tr(_compact ? "nav.emptyCompact" : "nav.empty"), "kn-empty"));
@@ -566,7 +713,11 @@ namespace Jeni.KaihenNavi
                 Avatar = _avatar,
                 Backup = _backup,
                 FeatureId = _selected.Id,
-                Rebuild = BuildPanel,
+                Rebuild = () =>
+                {
+                    BuildNavigation();
+                    BuildPanel();
+                },
                 SelectAvatar = a =>
                 {
                     ScanAvatars();
@@ -595,10 +746,11 @@ namespace Jeni.KaihenNavi
         private void RefreshFooter()
         {
             if (_backupLabel == null) return;
-            var count = _avatar == null ? 0 : _backup.Count(_avatar);
-            _backupLabel.text = L10n.Tr("footer.backups", count);
-            _restoreButton.SetEnabled(count > 0);
-            _historyButton.SetEnabled(count > 0);
+            var list = _backup.List(_avatar);
+            _backupLabel.text = list.Count == 0 ? L10n.Tr("footer.backups", 0) :
+                L10n.Tr("footer.status", list.Count, list[0].CreatedAt.ToString("HH:mm"));
+            if (_restoreButton != null) _restoreButton.SetEnabled(list.Count > 0);
+            if (_historyButton != null) _historyButton.SetEnabled(list.Count > 0);
         }
 
         // ---------------------------------------------------------------- 選択
@@ -613,20 +765,34 @@ namespace Jeni.KaihenNavi
             _avatar = avatar;
             _avatarId = avatar == null ? null : BackupService.AvatarId(avatar);
             _lastSavedAt = default(System.DateTime);
+            _seenGroup = Undo.GetCurrentGroup();
+            _seenAt = EditorApplication.timeSinceStartup;
+            _savedGroup = MyAvatar.HasUnsaved(_avatar) || HasUnsavedMaterials() ? -1 : _seenGroup;
             RefreshAvatarStatus();
+            BuildNavigation();
             BuildPanel();
             RefreshFooter();
         }
 
         private void SelectFeature(FeatureBase feature)
         {
-            if (feature == _selected) return;
+            SelectPage(feature, feature.Id);
+        }
+
+        private void SelectUploadCheck()
+        {
+            SelectPage(null, "uploadCheck");
+        }
+
+        private void SelectPage(FeatureBase feature, string id)
+        {
+            if (_featureId == id) return;
             SaveNow();
             if (_selected != null) _selected.OnClosed();
             _backup.EndSession();
             UndoHelper.Separate();
             _selected = feature;
-            _featureId = feature.Id;
+            _featureId = id;
             UpdateNavigationSelection();
             BuildPanel();
         }
@@ -658,9 +824,9 @@ namespace Jeni.KaihenNavi
         /// 非表示も含めた構成だけを見る。位置・回転・大きさ・表示状態やコンポーネントの値は含めない。
         /// 識別子も含め、同じ名前のオブジェクトに入れ替わった場合も候補の参照を取り直す。
         /// </summary>
-        private ulong HierarchyHash()
+        private ulong HierarchyHash(bool forNavigation = false)
         {
-            if (_avatar == null || _selected == null || !_selected.RefreshOnHierarchyChange) return 0;
+            if (_avatar == null || (!forNavigation && (_selected == null || !_selected.RefreshOnHierarchyChange))) return 0;
             unchecked
             {
                 var hash = 14695981039346656037UL;
@@ -707,8 +873,9 @@ namespace Jeni.KaihenNavi
                 BuildPanel();
             }
 
-            // アクセや服を足したときも、アップロードを止める設定がないか見直す
-            RefreshUploadCheck();
+            // 位置だけの変更では件数を数え直さず、服やアクセの構成が変わったときだけナビを更新する。
+            if (HierarchyHash(true) != _navigationHierarchyHash || current != _avatar) BuildNavigation();
+            else RefreshUploadCheck();
         }
 
         // ---------------------------------------------------------------- 元に戻す
@@ -731,6 +898,7 @@ namespace Jeni.KaihenNavi
 
             if (_selected != null) _selected.OnClosed();
             _backup.Restore(_avatar, latest);
+            BuildNavigation();
             BuildPanel();
             RefreshFooter();
         }
@@ -764,6 +932,7 @@ namespace Jeni.KaihenNavi
 
             if (_selected != null) _selected.OnClosed();
             _backup.Restore(_avatar, snapshot);
+            BuildNavigation();
             BuildPanel();
             RefreshFooter();
         }
@@ -778,7 +947,9 @@ namespace Jeni.KaihenNavi
         {
             if (_panelArea == null) return;
             UndoHelper.Separate();
+            BuildNavigation();
             BuildPanel();
+            UpdateSaveLabel();
             RefreshFooter();
         }
     }

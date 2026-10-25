@@ -140,6 +140,15 @@ namespace Jeni.KaihenNavi
             return count;
         }
 
+        /// <summary>モデルの問題だけを一行で表示する。</summary>
+        public static string DescribeKinds(Issue issue)
+        {
+            return string.Join(" / ", issue.Kinds.OrderBy(k => k).Select(k =>
+                k == Kind.ReadWrite ? L10n.Tr("check.kind.readWrite") :
+                k == Kind.BlendShapeNormals ? L10n.Tr("check.kind.normals") :
+                L10n.Tr("check.kind.normalsUnknown")).ToArray());
+        }
+
         /// <summary>画面と確認ダイアログに出す一覧（「Assets/」を省いたファイル名と、問題の内容）。</summary>
         public static string Describe(IEnumerable<Issue> issues)
         {
@@ -151,10 +160,7 @@ namespace Jeni.KaihenNavi
                 var slash = path.LastIndexOf('/');
                 var name = slash < 0 ? path : path.Substring(slash + 1);
                 var folder = slash < 0 ? "" : path.Substring(0, slash);
-                var what = string.Join(" / ", issue.Kinds.OrderBy(k => k).Select(k =>
-                    k == Kind.ReadWrite ? L10n.Tr("check.kind.readWrite") :
-                    k == Kind.BlendShapeNormals ? L10n.Tr("check.kind.normals") :
-                    L10n.Tr("check.kind.normalsUnknown")).ToArray());
+                var what = DescribeKinds(issue);
                 lines.Add("・" + name + "：" + what);
                 if (folder.Length > 0) lines.Add("　　" + L10n.Tr("check.folder", folder));
             }

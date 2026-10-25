@@ -218,8 +218,7 @@ namespace Jeni.KaihenNavi
         {
             var row = Ui.Box("kn-list__row", "kn-avatar-row");
             // サムネイルを撮ってあれば、それを見せる（Prefab のプレビューより見分けやすい）
-            var shot = AssetDatabase.LoadAssetAtPath<Texture2D>(
-                System.IO.Path.GetDirectoryName(AssetDatabase.GetAssetPath(prefab)).Replace('\\', '/') + "/Thumbnail.png");
+            var shot = LoadThumbnail(AssetDatabase.GetAssetPath(prefab));
             row.Add(shot != null ? Ui.Image(shot, "kn-avatar-row__thumb") : Ui.Thumbnail(prefab, "kn-avatar-row__thumb"));
 
             var texts = Ui.Box("kn-list__texts");
@@ -301,6 +300,15 @@ namespace Jeni.KaihenNavi
             texts.Add(buttons);
             row.Add(texts);
             return row;
+        }
+
+        /// <summary>アバターの Prefab と同じフォルダに保存した画像を探す。</summary>
+        internal static Texture2D LoadThumbnail(string prefabPath)
+        {
+            if (string.IsNullOrEmpty(prefabPath)) return null;
+            var directory = Path.GetDirectoryName(prefabPath);
+            if (string.IsNullOrEmpty(directory)) return null;
+            return AssetDatabase.LoadAssetAtPath<Texture2D>(directory.Replace('\\', '/') + "/Thumbnail.png");
         }
 
         private void Pick(VRCAvatarDescriptor avatar)

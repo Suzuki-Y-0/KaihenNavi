@@ -580,5 +580,10 @@
   "history.confirm": "恢复到 {0} 执行“{1}”之前的状态吗？\n之后的修改也会撤销。按 Ctrl+Z 可撤销本次恢复。",
   "history.unknownFeature": "虚拟形象的修改",
   "history.record": "记录操作历史",
-  "library.tryEnglish": "用假名找不到时，请试试英文名称（例如“sweet”）。"
+  "library.tryEnglish": "用假名找不到时，请试试英文名称（例如“sweet”）。",
+  "outfit.remove": "移除",
+  "undo.outfitRemove": "移除衣服",
+  "outfit.removed": "已移除衣服。按 Ctrl+Z 可以撤销。",
+  "color.colorize": "给白色、黑色、灰色的衣服也上色",
+  "color.colorizeHint": "黑色或白色的衣服，移动色调也不会变色（没有颜色的地方无法偏移）。打开后，会保留明暗，涂上色调滑块的颜色。深色衣服会变成深色。"
 }

@@ -73,8 +73,9 @@ namespace nadena.dev.modular_avatar.core
     public class AvatarObjectReference
     {
         public string referencePath;
-        public void Set(GameObject target) { }
-        public GameObject Get(Component container) { return null; }
+        private GameObject _target;
+        public void Set(GameObject target) { _target = target; }
+        public GameObject Get(Component container) { return _target; }
     }
 
     public class ModularAvatarMenuInstaller : AvatarTagComponent { }

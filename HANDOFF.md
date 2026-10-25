@@ -296,6 +296,41 @@ Assets/KaihenNavi/
 - 装着はインスタンス生成・MA の処理・バックアップへの追加パスの記録・自分用 Prefab への保存まで同じ Undo グループにまとめる。`MyAvatar.Save` の Apply を UserAction に変更し、保存の取り消しも記録する。服の操作内で保存することで、後の自動保存が装着の Undo を分けないようにした。
 - `bash tools/check.sh`: NoMA / WithMA / Full のコンパイル、4言語543キー、KonoAsset の60検証が成功。検索・結合、アーカイブ読取、衝突拒否、追加ファイルと GUID・台帳の Undo/Redo 用ファイル復元を検証。Unity の JsonUtility・実 Undo・MA 実行はスタブでは確認できない。
 - **Unity で確認すること**: 行の選択だけでは服が増えないこと／検索と「すべて」の切り替え／画像と狭い幅・両スキン・4言語／装着後に1.5秒待つ・ページ切り替え・保存・ウィンドウ再起動を挟んだ Ctrl+Z と Redo（MA の部品も戻ること）／取り込みの完了・キャンセル・失敗・スクリプトによるドメインリロード後の詳細復元／取り込み Undo で新規ファイル・.meta・台帳が一緒に戻り、Redo で GUID が保たれること／元アセットのハッシュが不変なこと。
+## 4.13 アクセ・脱ぎ着と Ctrl+Z（2026-10-25・Unity 実機は未確認）
+
+### 原因と修正
+
+- `MyAvatar.Save` が `ApplyPrefabInstance(..., AutomatedAction)` を使っていた。シーンの追加物が Prefab に適用される一方、その適用自体は Undo に記録されないため、装着時／メニュー作成時のシーンの Undo だけでは保存先も含めた状態を戻せなかった。`Undo.ClearAll` などで履歴を明示的に消す処理は対象経路にはなかった。
+- アクセの装着では最初の親変更に通常の `SetParent` を使い、最終位置の直接代入の記録とグループの確定も不足。メニュー削除には `CollapseUndoOperations` が無かった。作成は既にグループ化されていたが、後から行う保存がそのグループの外だった。
+- 対象機能は変更 → `FlushUndoRecordObjects` → `UserAction` で自分用 Prefab に保存 → 元の編集グループに Collapse、までを操作内で行う。アクセのスライダーはドラッグ終了／数値欄のフォーカス終了までを1手として、その間のタイマー保存を待たせる。Scene の移動などは `postprocessModifications` で記録した編集グループに保存をまとめる。
+- `KaihenNaviWindow.OnUndoRedo` は画面の再構築だけだった。Undo 後のグループ番号変化を自動保存が新しい変更と誤認すると、再保存が Redo を消すため、新しい編集の記録または明示的な保存まで自動保存を待たせる。再構築自体はモデルを変更しない。未確定のスライダー保存も Undo 時に破棄する。
+- `BackupService.BeginEdit`／`NoteCreated` はバックアップ用アセットの保存であり、アバターへの Prefab 適用は行っていなかった。Undo 後はバックアップの操作区切りを終了する。`InnerColorAssetUndo` の復元コールバックだけは、新しい Undo を作らないよう `Save(avatar, false)` を使う。
+- 根拠: [Unity 2022.3 の ApplyPrefabInstance 実装](https://github.com/Unity-Technologies/UnityCsReference/blob/2022.3/Editor/Mono/Prefabs/PrefabUtility.cs)、[UserAction の説明](https://docs.unity3d.com/2022.3/Documentation/ScriptReference/InteractionMode.UserAction.html)。実機の Undo／Prefab インポートはスタブでは再現できないため、下記の確認を必ず行う。
+
+### アクセの変更
+
+- 「つけたアクセ」一覧に「調整」「外す」を追加。以前の「どれを直しますか？」の欄と矢印は同じ調整パネルに統合した。装着直後は調整パネルをページ先頭に表示する。
+- 骨の localPosition を親のスケール込みの cm で表示（Y＝上下、Z＝前後、X＝左右）。通常の範囲は身長の ±25%、既に範囲外にある値はその周囲まで広げる。骨の軸はアバターによって向きが違う。回転は localEulerAngles の3軸、大きさは推定時の localScale に対する一様な倍率（10〜300%）。
+- 初期位置の判断: 元アバター名の先頭語（3文字以上）がアクセの Prefab 名／フォルダパスに入る、またはアクセの Renderer.bounds の中心が骨から身長の20%以内なら、足元基準で置いたワールド位置を保って骨の子にする。それ以外は見た目の中心を骨へ寄せ、頭なら身長の6%上、首なら2%前へ補正する。Renderer が無い場合はアクセの原点を寄せる。
+- 推定値は `KaihenNavi_AttachBaseline`（EditorOnly の空オブジェクト）の Transform に記録。独自コンポーネントを残さず、Prefab 保存・再読み込み後も「推定した位置に戻す」が使える。以前からあるアクセでは最初に調整欄を開いた値を基準にする。
+- 「シーンで動かす」は Selection、`SceneView.Frame(bounds, false)`、`Tools.current = Move`。外すときはアクセ全体を `Undo.DestroyObjectImmediate`。アバター自身や体の骨を含むものは削除しない。
+
+### 服が消えた理由と変更
+
+- 旧 `CreateMenu` は対象をすべて `SetActive(false)` にしており、MA のプレビューで見えていても実際の `activeSelf` は false だった。旧 `RemoveMenu` は作成前の状態の代わりに `Menu Item.isDefault` を使っていたため、初期値を変更した場合などに作成前へ戻せなかった。保存により旧メニューが復活／削除が完全に戻らない問題も重なり得る。作者の実際の操作順と MA の競合状態は、この環境では再現できていない。
+- MA 1.18.7 の `FindObjectToggles` は対象の `activeSelf` を制御が無い側の状態として使い、`BuildConditions` は `Menu Item.isDefault` に基づく条件を別に扱う。オンの対象に Active=true を置くだけではオフにできない。そのため、メニュー親に常時 OFF の MA Object Toggle を置き、子の項目が ON のときだけ後から ON で上書きする。服本体を非表示にする処理は削除した。
+- 作成前の `activeSelf` は、項目内の `KaihenNavi_OriginalVisibility`（EditorOnly の空オブジェクト）の `activeSelf` に保存。作り直しでは最初の状態とメニュー初期値を引き継ぎ、残す対象の現在の表示は変えない。チェックを外した対象とメニュー削除時は、最初の表示状態に戻す。バックアップの MenuData にも元の状態を含める。
+- 古いメニュー／古いバックアップには元の表示状態が無いため、互換処理では従来の `isDefault` を使う。過去に既定値を変更していた場合の本当の作成前状態は復元できない。
+- 削除ボタンは「脱ぎ着の切り替えを消す（元に戻す）」。対象が全て失われていても削除可能。4言語の文言と説明書も更新。
+- 根拠: [MA 1.18.7 の対象・条件の読み取り](https://github.com/bdunderscore/modular-avatar/blob/1.18.7/Editor/ReactiveObjects/AnimationGeneration/ReactiveObjectAnalyzer.LocateReactions.cs)、[初期状態の解決](https://github.com/bdunderscore/modular-avatar/blob/1.18.7/Editor/ReactiveObjects/AnimationGeneration/ReactiveObjectAnalyzer.cs)、[Object Toggle の優先順位](https://modular-avatar.nadena.dev/ja/docs/reference/reaction/object-toggle)。
+
+### 検証と Unity での確認手順
+
+- `tools/check.sh`: NoMA / WithMA / Full のコンパイル、4言語535キー、既存の34項目、新しい29項目の回帰チェックが通過。新しいチェックは作成・作り直し・削除での状態復元、明示的な OFF 設定、旧データ、対象消失、保存先制限、Undo API の選択・グループ指定、スライダー終了時の保存・Undo時の中止を確認する。**Unity の Undo の実処理、Prefab の再インポート、MA のプレビュー／ビルドの検証ではない**。
+- Unity 2022.3: 改変アバターと通常のシーン上アバターで、アクセ装着 → 数秒待つ → Ctrl+Z 1回 → Redo、外す → Undo、再起動後の一覧／推定値復元を確認。元 Prefab のハッシュも比較する。
+- アクセ: 原点中心の小物／足元基準で作られたアバター用アクセ、移動・回転・拡縮済みのアバター、頭・首・手首で初期位置を見る。位置3軸・回転3軸・大きさのドラッグと直接入力、Scene の Move、推定位置へ戻すをそれぞれ1回の Undo／Redoで確認。
+- 脱ぎ着: activeSelf が true／false の対象を混ぜ、作成 → 作り直し（名前変更・対象追加／除外）→ 削除の各段階で Undo／Redo。MA 初期値だけを手動変更しても削除時に最初の状態へ戻るか確認。自動保存待ち・「今すぐ保存」・ページ切り替え・ウィンドウ開閉のあとにも繰り返す。
+- Gesture Manager と NDMF ビルドで ON/OFF の両側と初期値、対象同士に親子関係がある場合、別の MA Object Toggle と対象が重なる場合の見た目を確認。EditorOnly の目印がビルド結果に残らないことも確認する。
 
 ## 5. 設計の要点
 

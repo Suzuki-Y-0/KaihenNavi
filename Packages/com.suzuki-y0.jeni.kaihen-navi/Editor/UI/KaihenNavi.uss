@@ -321,3 +321,7 @@
 .kn-history__steps { padding-left: 12px; }
 .kn-history__step { flex-wrap: wrap; }
 .kn-history__step .kn-list__texts { min-width: 130px; }
+
+/* 持っている服・アクセの検索欄 */
+.kn-search { margin: 2px 0 8px 0; }
+.kn-search > .unity-text-field__input { min-height: 26px; padding: 0 8px; border-radius: 4px; }

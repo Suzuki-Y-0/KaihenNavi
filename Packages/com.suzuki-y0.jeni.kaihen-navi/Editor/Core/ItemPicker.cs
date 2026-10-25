@@ -175,12 +175,18 @@ namespace Jeni.KaihenNavi
         internal static List<string> Keywords(VRCAvatarDescriptor avatar)
         {
             var names = new List<string> { avatar.name };
+            var konoNames = new List<string>();
             var path = MyAvatar.PrefabPath(avatar);
             if (path != null)
             {
                 var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(path);
                 var original = MyAvatar.IsMinePath(path) || MyAvatar.IsBasePath(path) ? MyAvatar.OriginalOf(prefab) : prefab;
-                if (original != null) names.Add(original.name);
+                if (original != null)
+                {
+                    names.Add(original.name);
+                    // KonoAsset の対応アバター欄は「カザリス」のような日本語の呼び名なので、それも加える
+                    if (KonoAssetLink.IsAvailable) konoNames.AddRange(KonoAssetLink.AvatarNamesFor(AssetDatabase.GetAssetPath(original)));
+                }
             }
 
             var result = new List<string>();
@@ -191,6 +197,7 @@ namespace Jeni.KaihenNavi
                 if (head != null && head.Length >= 2) result.Add(head.ToLowerInvariant());
             }
 
+            result.AddRange(konoNames);
             return result.Distinct().ToList();
         }
 

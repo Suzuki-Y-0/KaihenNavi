@@ -363,6 +363,44 @@ namespace Jeni.KaihenNavi
             return match;
         }
 
+        /// <summary>
+        /// プロジェクト内のアバターの置き場所（Assets/Cazalis/... など）から、KonoAsset のアバター商品を探し、
+        /// 対応アバター欄で使われている呼び名（「カザリス」など）を返す。英語のフォルダ名だけでは、
+        /// 日本語で書かれた対応アバター欄と照合できないため。
+        /// </summary>
+        public static List<string> AvatarNamesFor(string assetPath)
+        {
+            EnsureLoaded();
+            var result = new List<string>();
+            if (string.IsNullOrEmpty(assetPath)) return result;
+            var parts = assetPath.Replace('\\', '/').Split('/');
+            KonoAssetItem product = null;
+            for (var i = 1; i < parts.Length - 1 && product == null; i++)
+            {
+                var found = FindByFolderName(parts[i]);
+                if (found != null && found.sourceFile == "avatars.json") product = found;
+            }
+
+            if (product == null || product.description == null) return result;
+            // 服の対応アバター欄に出てくる呼び名のうち、アバター商品の名前・タグに入っているもの
+            var vocabulary = ById.Values.Where(v => v.supportedAvatars != null).SelectMany(v => v.supportedAvatars)
+                .Where(n => !string.IsNullOrEmpty(n) && n != "ALL").Distinct().ToList();
+            var text = Normalize(product.description.name + " " + string.Join(" ", product.description.tags ?? new string[0]));
+            foreach (var name in vocabulary)
+            {
+                var key = Normalize(name);
+                if (key.Length >= 2 && text.Contains(key)) result.Add(name);
+            }
+
+            return result;
+        }
+
+        /// <summary>対応アバター欄が「ALL」（どのアバターでも使える）か。</summary>
+        public static bool SupportsAll(KonoAssetItem item)
+        {
+            return item != null && item.supportedAvatars != null && item.supportedAvatars.Any(a => string.Equals(a, "ALL", StringComparison.OrdinalIgnoreCase));
+        }
+
         public static bool SupportsAvatar(KonoAssetItem item, IEnumerable<string> keywords)
         {
             if (item == null || item.supportedAvatars == null || keywords == null) return false;

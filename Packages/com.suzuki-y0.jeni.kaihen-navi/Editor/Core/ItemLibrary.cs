@@ -27,10 +27,17 @@ namespace Jeni.KaihenNavi
                 Names.Concat(Paths).Any(n => KonoAssetLink.Contains(n, query));
         }
 
-        public bool ForAvatar(IEnumerable<string> keywords)
+        /// <summary>このアバター向けとはっきり書かれているか（対応アバター欄・置き場所の名前）。</summary>
+        public bool ForAvatarExactly(IEnumerable<string> keywords)
         {
             return KonoAssetLink.SupportsAvatar(Product, keywords) ||
                 Paths.Any(p => keywords.Any(k => KonoAssetLink.Contains(p, k)));
+        }
+
+        /// <summary>このアバターで使えそうか（「ALL」＝どのアバターでも使える、も含める）。</summary>
+        public bool ForAvatar(IEnumerable<string> keywords)
+        {
+            return ForAvatarExactly(keywords) || KonoAssetLink.SupportsAll(Product);
         }
     }
 
@@ -55,6 +62,8 @@ namespace Jeni.KaihenNavi
             foreach (var package in packages.Where(p => p != null))
             {
                 var product = ItemLedger.KonoItem(package);
+                // アバター本体の商品は、服やアクセとして出さない
+                if (product != null && product.sourceFile == "avatars.json") continue;
                 var key = product != null ? "kono:" + product.id : "folder:" + (package.commonFolder ?? package.packageName);
                 foreach (var entry in package.prefabs ?? new List<LedgerPrefab>())
                 {
@@ -81,7 +90,10 @@ namespace Jeni.KaihenNavi
             root.Add(Ui.Heading(L10n.Tr(kind == ItemKind.Outfit ? "library.outfits" : "library.accessories")));
             var prefix = "KaihenNavi.Library." + kind + ".";
             var keywords = ItemPicker.Keywords(avatar);
-            var query = new TextField { label = L10n.Tr("library.search"), value = SessionState.GetString(prefix + "query", "") };
+            // ラベルを横に置くと入力欄が狭くなるので、説明は上に小さく出す
+            root.Add(Ui.Text(L10n.Tr("library.search"), "kn-hint"));
+            var query = new TextField { value = SessionState.GetString(prefix + "query", "") };
+            query.AddToClassList("kn-search");
             root.Add(query);
             var filter = new VisualElement();
             root.Add(filter);
@@ -124,7 +136,8 @@ namespace Jeni.KaihenNavi
             render = () =>
             {
                 results.Clear();
-                var matches = items.Where(i => i.Matches(query.value) && (!onlyAvatar || i.ForAvatar(keywords))).ToList();
+                var matches = items.Where(i => i.Matches(query.value) && (!onlyAvatar || i.ForAvatar(keywords)))
+                    .OrderByDescending(i => i.ForAvatarExactly(keywords)).ThenByDescending(i => i.Paths.Count > 0).ToList();
                 if (matches.Count == 0)
                 {
                     results.Add(Ui.Text(L10n.Tr("library.empty"), "kn-hint"));

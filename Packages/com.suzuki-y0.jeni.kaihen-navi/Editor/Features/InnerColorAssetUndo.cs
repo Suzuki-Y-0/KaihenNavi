@@ -129,9 +129,8 @@ namespace Jeni.KaihenNavi
             journal.avatar = avatar;
             journal.before = Snapshot.Capture(avatar);
             journal.order = DateTime.UtcNow.Ticks;
-            journal.Track(InnerColorState.PathFor(avatar));
-            var state = InnerColorState.Load(avatar);
-            if (state != null) journal.Track(AssetDatabase.GetAssetPath(state));
+            // 既存台帳と既存アセットの値は Unity の Undo だけに任せる。
+            if (InnerColorState.Load(avatar) == null) journal.Track(InnerColorState.PathFor(avatar));
             return journal;
         }
 
@@ -143,6 +142,12 @@ namespace Jeni.KaihenNavi
 
         internal void Commit(string undoName)
         {
+            if (oldFiles.Count == 0)
+            {
+                // 調整だけならファイルの再インポートや参照の再設定は不要。
+                DestroyImmediate(this);
+                return;
+            }
             AssetDatabase.SaveAssets();
             after = Snapshot.Capture(avatar);
             newFiles = oldFiles.Select(f => FileState.Read(f.path)).ToList();

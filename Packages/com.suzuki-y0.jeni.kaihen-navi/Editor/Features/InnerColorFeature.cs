@@ -283,14 +283,19 @@ namespace Jeni.KaihenNavi
                 var undoName = L10n.Tr("undo.innerColor"); Undo.SetCurrentGroupName(undoName);
                 journal = InnerColorAssetUndo.Begin(ctx.Avatar);
                 var candidates = InnerColorAssets.Candidates(ctx.Avatar, state);
-                candidates.Remove(InnerColorState.PathFor(ctx.Avatar));
-                if (state != null) candidates.Remove(AssetDatabase.GetAssetPath(state));
+                KeepState(ctx.Avatar, state, candidates);
                 state = InnerColorState.Load(ctx.Avatar, true);
                 Undo.RecordObject(state, undoName);
                 RestoreAll(ctx.Avatar, state, undoName);
                 state.data = new InnerColorState.Data { hasSettings = true, color = _color,
                     range = _range, height = _height, brightness = _brightness };
                 foreach (var surface in surfaces) ApplySurface(ctx.Avatar, surface, state, journal, undoName);
+                // 今使っている生成物は片付け候補から外す。通常の調整でプロジェクト全体を調べ直さない。
+                foreach (var entry in state.data.meshes)
+                {
+                    candidates.Remove(entry.meshPath);
+                    candidates.Remove(entry.materialPath);
+                }
                 EditorUtility.SetDirty(state);
                 Finish(ctx, journal, candidates, undoName, group);
                 journal = null;
@@ -307,19 +312,33 @@ namespace Jeni.KaihenNavi
             }
         }
 
-        /// <summary>保存済みの生成物は書き換えない。過去の履歴や別バージョンが参照する形と色を守る。</summary>
+        /// <summary>生成済みの中身を Undo 付きで更新する。調整のたびに複製ファイルを増やさない。</summary>
         internal void ApplySurface(VRCAvatarDescriptor avatar, Surface surface, InnerColorState state,
             InnerColorAssetUndo journal, string undoName)
         {
             var r = surface.renderer;
-            var key = Guid.NewGuid().ToString("N");
+            var rendererPath = HierarchyPath.Get(avatar.transform, r.transform);
+            var rendererIndex = Array.IndexOf(r.GetComponents<Renderer>(), r);
+            var meshKey = "mesh:" + rendererPath + ":" + rendererIndex;
             var meshFolder = WorkFolders.Ensure(WorkFolders.ForAvatar(avatar.gameObject) + "/Meshes");
             var materialFolder = WorkFolders.Ensure(WorkFolders.Materials(avatar.gameObject));
-            var meshPath = InnerColorAssets.StablePath(meshFolder, r.name, "_InnerColor.asset", key);
+            var meshPath = InnerColorAssets.StablePath(meshFolder, r.name, "_InnerColor.asset", meshKey);
             var source = surface.materials[surface.slot];
-            var materialPath = InnerColorAssets.StablePath(materialFolder, source.name, "_InnerColor.mat", key);
-            journal.Track(meshPath); journal.Track(materialPath);
-            var mesh = Object.Instantiate(surface.original);
+            var materialKey = "material:" + InnerColorState.AssetRef.Of(source).Key;
+            var materialPath = InnerColorAssets.StablePath(materialFolder, source.name, "_InnerColor.mat", materialKey);
+            var mesh = AssetDatabase.LoadAssetAtPath<Mesh>(meshPath);
+            var createMesh = mesh == null;
+            if (createMesh)
+            {
+                journal.Track(meshPath);
+                mesh = Object.Instantiate(surface.original);
+            }
+            else
+            {
+                Undo.RegisterCompleteObjectUndo(mesh, undoName);
+                // 元メッシュが差し替わった場合も UV・ボーン・シェイプキーを元にそろえる。
+                EditorUtility.CopySerialized(surface.original, mesh);
+            }
             mesh.name = surface.original.name + "_InnerColor";
             try
             {
@@ -333,23 +352,34 @@ namespace Jeni.KaihenNavi
                 for (var i = 0; i < surface.split.outer.Length; i++) mesh.SetTriangles(surface.split.outer[i], i);
                 mesh.SetTriangles(surface.split.inner, count);
                 if (extras > 0) mesh.SetTriangles(surface.original.GetTriangles(count - 1), count + 1);
-                AssetDatabase.CreateAsset(mesh, meshPath);
+                if (createMesh) AssetDatabase.CreateAsset(mesh, meshPath);
+                EditorUtility.SetDirty(mesh);
             }
             catch { if (!EditorUtility.IsPersistent(mesh)) Object.DestroyImmediate(mesh); throw; }
-            InnerColorAssets.Mark(meshPath, key);
-            var material = Object.Instantiate(source);
+            if (createMesh) InnerColorAssets.Mark(meshPath, meshKey);
+            var material = AssetDatabase.LoadAssetAtPath<Material>(materialPath);
+            var createMaterial = material == null;
+            if (createMaterial)
+            {
+                journal.Track(materialPath);
+                material = Object.Instantiate(source);
+            }
+            else
+            {
+                Undo.RecordObject(material, undoName);
+                EditorUtility.CopySerialized(source, material);
+            }
             material.name = source.name + "_InnerColor";
             try
             {
                 ConfigureMaterial(material, _color, _brightness);
-                AssetDatabase.CreateAsset(material, materialPath);
+                if (createMaterial) AssetDatabase.CreateAsset(material, materialPath);
             }
             catch { if (!EditorUtility.IsPersistent(material)) Object.DestroyImmediate(material); throw; }
-            InnerColorAssets.Mark(materialPath, key);
+            if (createMaterial) InnerColorAssets.Mark(materialPath, materialKey);
             var assignment = new InnerColorState.Assignment
             {
-                rendererPath = HierarchyPath.Get(avatar.transform, r.transform),
-                rendererIndex = Array.IndexOf(r.GetComponents<Renderer>(), r),
+                rendererPath = rendererPath, rendererIndex = rendererIndex,
             };
             state.data.meshes.Add(new InnerColorState.MeshEntry { assignment = assignment,
                 originalMesh = InnerColorState.AssetRef.Of(surface.original), meshPath = meshPath, materialPath = materialPath,
@@ -385,7 +415,7 @@ namespace Jeni.KaihenNavi
 
         private static void Finish(FeatureContext ctx, InnerColorAssetUndo journal, HashSet<string> candidates, string undoName, int group)
         {
-            // 片付けより先に履歴を保存し、操作前のメッシュへの参照も保護する。
+            // Undo を確定して自分用 Prefab の参照を更新してから、未使用の生成物を片付ける。
             ctx.Backup.CompletePending(group);
             AssetDatabase.SaveAssets();
             Undo.FlushUndoRecordObjects();
@@ -400,6 +430,7 @@ namespace Jeni.KaihenNavi
             if (ctx.Avatar == null || EditorApplication.isPlayingOrWillChangePlaymode) return;
             var state = InnerColorState.Load(ctx.Avatar);
             var candidates = InnerColorAssets.Candidates(ctx.Avatar, state);
+            KeepState(ctx.Avatar, state, candidates);
             if (state == null && candidates.Count == 0) return;
             ctx.BeginEdit(); UndoHelper.Separate();
             Undo.IncrementCurrentGroup(); var group = Undo.GetCurrentGroup();
@@ -421,6 +452,13 @@ namespace Jeni.KaihenNavi
                 _status.text = L10n.Tr("innerColor.failed", e.Message); Debug.LogException(e); return;
             }
             _preview = false; _status.text = L10n.Tr("innerColor.restored"); SceneView.RepaintAll();
+        }
+
+        /// <summary>空の台帳は残す。調整の Undo が参照するオブジェクトを削除・再作成しない。</summary>
+        private static void KeepState(VRCAvatarDescriptor avatar, InnerColorState state, HashSet<string> candidates)
+        {
+            candidates.Remove(InnerColorState.PathFor(avatar));
+            if (state != null) candidates.Remove(AssetDatabase.GetAssetPath(state));
         }
 
         private static void RestoreAll(VRCAvatarDescriptor avatar, InnerColorState state, string undoName)

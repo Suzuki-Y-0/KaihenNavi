@@ -2,8 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Security.Cryptography;
-using System.Text;
 using System.Text.RegularExpressions;
 using UnityEditor;
 using UnityEngine;
@@ -15,25 +13,23 @@ namespace Jeni.KaihenNavi
     {
         internal const string Tag = "KaihenNavi.InnerColor:";
 
-        internal static string Hash(string key)
-        {
-            using (var hash = SHA256.Create())
-                return BitConverter.ToString(hash.ComputeHash(Encoding.UTF8.GetBytes(key))).Replace("-", "").ToLowerInvariant();
-        }
-
-        // 同名の別商品や別の選択範囲は区別する。未知の既存ファイルは上書きしない。
+        /// <summary>同じ髪・元マテリアルには同じ名前を使う。同名の別の髪だけ番号で区別する。</summary>
         internal static string StablePath(string folder, string name, string suffix, string key)
         {
+            // 先に所有者が一致するファイルを探す。別の髪の削除で若い番号が空いても作り直さない。
+            if (Directory.Exists(folder))
+                foreach (var existing in Directory.GetFiles(folder, "*" + suffix).OrderBy(p => p, StringComparer.Ordinal))
+                {
+                    var path = existing.Replace('\\', '/');
+                    var importer = AssetImporter.GetAtPath(path);
+                    if (importer != null && importer.userData == Tag + key) return path;
+                }
             var stem = folder + "/" + WorkFolders.Sanitize(name);
-            var path = stem + suffix;
-            if (Available(path, key)) return path;
-            var hash = Hash(key);
-            for (var length = 10; length <= hash.Length; length += 2)
+            for (var index = 0; ; index++)
             {
-                path = stem + "_" + hash.Substring(0, length) + suffix;
+                var path = stem + (index == 0 ? "" : " " + (index + 1)) + suffix;
                 if (Available(path, key)) return path;
             }
-            throw new InvalidOperationException("InnerColor asset identity collision");
         }
 
         private static bool Available(string path, string key)
@@ -89,7 +85,10 @@ namespace Jeni.KaihenNavi
         // FindAssets で種類を絞った結果から、参照元にできるパスだけを残す（候補同士の参照は除外）。
         internal static string[] ReferenceRoots(IEnumerable<string> paths, HashSet<string> candidates)
         {
-            return paths.Where(p => WorkFolders.IsToolPath(p) && !candidates.Contains(p))
+            // バックアップ内のサブマテリアルが検索に含まれても、履歴だけの参照では残さない。
+            return paths.Where(p => !string.IsNullOrEmpty(p) && !candidates.Contains(p) &&
+                (p.EndsWith(".mat", StringComparison.OrdinalIgnoreCase) ||
+                 (WorkFolders.IsToolPath(p) && p.EndsWith(".prefab", StringComparison.OrdinalIgnoreCase))))
                 .Distinct().OrderBy(p => p, StringComparer.Ordinal).ToArray();
         }
 
@@ -124,14 +123,11 @@ namespace Jeni.KaihenNavi
                             references.Add(AssetDatabase.GetAssetPath(material.GetTexture(property)));
                     }
                 }
-                // 購入アセットは直接変更しないため、ツール外のアセットがツール製のマスクやコピーを
-                // 参照することはない。全プロジェクトを走査せず、ツール内の参照元だけを調べる。
-                // 改変アバター・ベース・別バージョン・自動バックアップと、直接参照し得る .mat が対象。
+                // 自分用 Prefab と、手作業で参照を追加されたマテリアルも保護する。
+                // 履歴・復元台帳の参照は片付けを妨げない（消えた髪は履歴復元時に元へ戻す）。
                 EditorUtility.DisplayProgressBar(title, message, 0.2f);
-                var roots = AssetDatabase.IsValidFolder(WorkFolders.Root)
-                    ? ReferenceRoots(AssetDatabase.FindAssets("t:Prefab t:ScriptableObject t:Material", new[] { WorkFolders.Root })
-                        .Select(AssetDatabase.GUIDToAssetPath), candidates)
-                    : new string[0];
+                var roots = ReferenceRoots(AssetDatabase.FindAssets("t:Prefab t:Material", new[] { "Assets" })
+                    .Select(AssetDatabase.GUIDToAssetPath), candidates);
                 const int batchSize = 32;
                 for (var i = 0; i < roots.Length; i += batchSize)
                 {

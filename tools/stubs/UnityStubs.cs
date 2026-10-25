@@ -922,6 +922,8 @@ namespace UnityEditor
         public static Action<Object> RecordForTests;
         public static void RecordObject(Object o, string name) { if (RecordForTests != null) RecordForTests(o); }
         public static void ReplayForTests() { if (undoRedoPerformed != null) undoRedoPerformed(); }
+        public static Action<Object> CompleteRecordForTests;
+        public static void RegisterCompleteObjectUndo(Object o, string name) { if (CompleteRecordForTests != null) CompleteRecordForTests(o); }
         public static void RegisterFullObjectHierarchyUndo(Object o, string name) { }
         public static Action<int> CollapseForTests;
         public static Action<Object> DestroyForTests;

@@ -471,6 +471,8 @@ namespace Jeni.KaihenNavi
                 PrefabUtility.RecordPrefabInstancePropertyModifications(r);
             }
 
+            InnerColorBackup.RestoreMissingMeshes(avatar, snapshot, undoName);
+
             foreach (var state in snapshot.blendShapes)
             {
                 var t = HierarchyPath.Find(root, state.path);

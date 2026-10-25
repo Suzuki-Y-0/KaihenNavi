@@ -58,14 +58,17 @@ namespace Jeni.KaihenNavi
             Check(Classify(Face(new Vector3(0, -10, 1), Vector3.back), 0.2f).inner.Length == 3,
                 "Vertical head direction must be weakened by 70% before normalization");
             var top = Face(new Vector3(0, 0.5f, 1), Vector3.back);
-            Check(Classify(top, 0.15f, 0).inner.Length == 3 && Classify(top, 0.15f, 0.1f).inner.Length == 0,
-                "Height zero must include inner faces above the center; nonzero height must filter them");
+            Check(Classify(top, 0.15f, 0).inner.Length == 0 && Classify(top, 0.15f, 0.1f).inner.Length == 0,
+                "Faces above the head center are never inner (ahoge tips)");
+            var belowTop = Face(new Vector3(0, -0.5f, 1), Vector3.back);
+            Check(Classify(belowTop, 0.15f, 0).inner.Length == 3, "Inward faces below the head center stay inner");
             var tips = Face(new Vector3(0, -2, 1), Vector3.back);
             var middle = Face(new Vector3(0, -0.5f, 1), Vector3.back);
             var levels = tips.Concat(middle).Concat(top).ToArray();
             var all = Classify(levels);
             var half = Classify(levels, 0.15f, 0.5f);
-            Check(all.inner.Length == 9 && half.inner.SequenceEqual(new[] { 0, 1, 2 }), "Height must select centroids below lowest selected vertex times its coefficient");
+            // top（頭の中心より上）は常に内側にしない
+            Check(all.inner.Length == 6 && half.inner.SequenceEqual(new[] { 0, 1, 2 }), "Height must select centroids below lowest selected vertex times its coefficient");
             Check(Classify(levels, 0.15f, 1).inner.Length == 0, "Maximum height must stop below the lowest vertex");
             var selected = InnerColorTriangles.Classify(levels,
                 new[] { new[] { 0, 1, 2 }, new[] { 3, 4, 5 }, new[] { 6, 7, 8 } }, new[] { false, true, false },

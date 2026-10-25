@@ -198,6 +198,37 @@ namespace Jeni.KaihenNavi
             var state = InnerColorState.Load(avatar);
             return state == null ? null : JsonUtility.ToJson(state.data);
         }
+        /// <summary>片付け済みの生成物を履歴が指していたら、その髪は元のメッシュと枠に戻す。</summary>
+        internal static void RestoreMissingMeshes(VRCAvatarDescriptor avatar, BackupSnapshot snapshot, string undoName)
+        {
+            var saved = snapshot.extras.FirstOrDefault(e => e.key == "inner-color");
+            if (saved == null || string.IsNullOrEmpty(saved.json)) return;
+            var data = JsonUtility.FromJson<InnerColorState.Data>(saved.json);
+            if (data == null || data.meshes == null) return;
+            foreach (var entry in data.meshes)
+            {
+                var renderer = InnerColorState.RendererFor(avatar, entry.assignment) as SkinnedMeshRenderer;
+                if (renderer == null) continue;
+                var mesh = AssetDatabase.LoadAssetAtPath<Mesh>(entry.meshPath);
+                var material = AssetDatabase.LoadAssetAtPath<Material>(entry.materialPath);
+                // 同じ名前で作り直した後も、古い GUID の Missing 参照は元の髪へ戻す。
+                if (mesh != null && material != null && renderer.sharedMesh == mesh &&
+                    renderer.sharedMaterials.Contains(material)) continue;
+                Undo.RecordObject(renderer, undoName);
+                renderer.sharedMesh = entry.originalMesh.Load<Mesh>();
+                renderer.sharedMaterials = entry.originalMaterials.Select(m => m.Load<Material>()).ToArray();
+                PrefabUtility.RecordPrefabInstancePropertyModifications(renderer);
+                EditorUtility.SetDirty(renderer);
+                var state = InnerColorState.Load(avatar);
+                if (state == null) continue;
+                Undo.RecordObject(state, undoName);
+                state.data.meshes.RemoveAll(e => e.assignment.rendererPath == entry.assignment.rendererPath &&
+                    e.assignment.rendererIndex == entry.assignment.rendererIndex);
+                if (state.data.meshes.Count == 0 && state.data.entries.Count == 0) state.data.hasSettings = false;
+                EditorUtility.SetDirty(state);
+            }
+        }
+
         public void Restore(VRCAvatarDescriptor avatar, string json, string undoName)
         {
             var state = InnerColorState.Load(avatar, !string.IsNullOrEmpty(json));

@@ -16,6 +16,7 @@ namespace Jeni.KaihenNavi
     internal static class InnerColorAssetTests
     {
         private static int checks;
+        private static int referenceQueries, imports;
         private static readonly Dictionary<string, Object> assets = new Dictionary<string, Object>();
         private static readonly Dictionary<string, Object> deleted = new Dictionary<string, Object>();
         private static readonly Dictionary<string, AssetImporter> importers = new Dictionary<string, AssetImporter>();
@@ -55,6 +56,7 @@ namespace Jeni.KaihenNavi
             if (!guids.ContainsKey(path)) guids[path] = Guid.NewGuid().ToString("N");
             File.WriteAllText(path, "asset:" + asset.name);
             File.WriteAllText(path + ".meta", guids[path]);
+            Check(!assets.ContainsKey(path), "CreateAsset must never overwrite an existing asset");
             assets[path] = asset; paths[asset] = path;
             var backup = asset as BackupSnapshot;
             if (backup != null)
@@ -64,6 +66,7 @@ namespace Jeni.KaihenNavi
         }
         private static void Import(string path)
         {
+            imports++;
             if (assets.ContainsKey(path)) return;
             Object previous;
             if (deleted.TryGetValue(path, out previous))
@@ -108,8 +111,20 @@ namespace Jeni.KaihenNavi
             };
             EditorUtility.CopyForTests = (source, target) =>
             {
-                ((Material)target).values = new Dictionary<string, object>(((Material)source).values);
-                ((Material)target).keywords = new HashSet<string>(((Material)source).keywords);
+                var mesh = source as Mesh;
+                if (mesh != null)
+                {
+                    var copy = (Mesh)target;
+                    copy.vertices = mesh.vertices.ToArray(); copy.uv = mesh.uv; copy.normals = mesh.normals;
+                    copy.bindposes = mesh.bindposes; copy.blendShapeCount = mesh.blendShapeCount;
+                    copy.subMeshCount = mesh.subMeshCount;
+                    for (var i = 0; i < mesh.subMeshCount; i++) copy.SetTriangles(mesh.GetTriangles(i).ToArray(), i);
+                }
+                else
+                {
+                    ((Material)target).values = new Dictionary<string, object>(((Material)source).values);
+                    ((Material)target).keywords = new HashSet<string>(((Material)source).keywords);
+                }
             };
             JsonUtility.SerializeForTests = value =>
             {
@@ -128,11 +143,14 @@ namespace Jeni.KaihenNavi
             EditorUtility.PersistentForTests = asset => paths.ContainsKey(asset);
             AssetDatabase.FindForTests = (filter, folders) =>
             {
-                if (filter == "t:Prefab t:ScriptableObject t:Material")
-                    Check(folders.SequenceEqual(new[] { WorkFolders.Root }), "Reference search must stay within the tool root");
+                if (filter == "t:Prefab t:Material")
+                {
+                    referenceQueries++;
+                    Check(folders.SequenceEqual(new[] { "Assets" }), "Reference search must also protect manually linked materials");
+                }
                 return assets.Where(pair => File.Exists(pair.Key) && folders.Any(f => pair.Key.StartsWith(f + "/", StringComparison.Ordinal)) &&
                     (filter == "" || pair.Key.EndsWith(".prefab", StringComparison.Ordinal) ||
-                        pair.Value is ScriptableObject || pair.Value is Material) &&
+                        (filter != "t:Prefab t:Material" && pair.Value is ScriptableObject) || pair.Value is Material) &&
                     (filter != "t:BackupSnapshot" || pair.Value is BackupSnapshot))
                     .Select(pair => guids[pair.Key]).ToArray();
             };
@@ -190,7 +208,8 @@ namespace Jeni.KaihenNavi
                 WorkFolders.Root + "/Avatars/Other/Backups/backup.asset", WorkFolders.Root + "/Avatars/Other/Materials/Hair.mat",
                 WorkFolders.Root + "/candidate.mat", "Assets/Purchased/Hair.mat", null
             }, new HashSet<string> { WorkFolders.Root + "/candidate.mat" });
-            Check(roots.Length == 3, "Reference roots must exclude candidates and purchased assets and deduplicate");
+            Check(roots.Length == 3 && !roots.Any(p => p.Contains("Backups")) && roots.Contains("Assets/Purchased/Hair.mat"),
+                "Reference roots must exclude history and candidates, include other materials, and deduplicate");
             var go = new GameObject("TestAvatar") { scene = new UnityEngine.SceneManagement.Scene { validForTests = true, isLoaded = true } };
             var avatar = go.AddComponent<VRCAvatarDescriptor>();
             var hair = go.AddComponent<SkinnedMeshRenderer>();
@@ -267,34 +286,60 @@ namespace Jeni.KaihenNavi
             SkinnedMeshRenderer.BakeForTests = null;
             journal.Commit("test");
             var firstGuid = AssetDatabase.AssetPathToGUID(first.meshPath);
-            var nextJournal = InnerColorAssetUndo.Begin(avatar);
-            RestoreMeshes(avatar, state);
-            Check(hair.sharedMesh == originalMesh && hair.sharedMaterials.SequenceEqual(new[] { source, source }), "Reset must restore the exact original assignments");
-            state.data = new InnerColorState.Data();
-            feature.ApplySurface(avatar, surface, state, nextJournal, "test");
-            var second = state.data.meshes.Single();
-            Check(second.meshPath != first.meshPath && second.materialPath != first.materialPath && hair.sharedMesh.subMeshCount == 3,
-                "Repeated application must start at the original mesh and preserve previously saved assets");
-            Check(firstMesh.GetTriangles(2).SequenceEqual(new[] { 1, 2, 3 }) && firstMaterial.GetColor("_Color").r == 1,
-                "Previously generated mesh and material must not be overwritten");
-            nextJournal.Commit("test");
-            Replay(nextJournal, false);
-            Check(hair.sharedMesh == firstMesh && hair.sharedMaterials[2] == firstMaterial && state.data.meshes.Single().meshPath == first.meshPath,
-                "Undo must restore mesh, materials and state together");
-            Replay(nextJournal, true);
-            Check(AssetDatabase.GetAssetPath(hair.sharedMesh) == second.meshPath && state.data.meshes.Single().meshPath == second.meshPath,
-                "Redo must restore the adjusted mesh and matching state");
-            // 履歴はメッシュを直接参照し、内容の上書きなしで過去の面を復元する。
+            Check(first.meshPath == folder + "/Meshes/TestAvatar_InnerColor.asset" &&
+                first.materialPath == folder + "/Materials/Hair_InnerColor.mat", "Generated names must be fixed and contain no key");
+            // 調整を 3 回行い、ファイルとインスタンスを再利用する。値の Undo 登録は変更前かも確認する。
+            for (var adjustment = 0; adjustment < 3; adjustment++)
+            {
+                var nextJournal = InnerColorAssetUndo.Begin(avatar);
+                RestoreMeshes(avatar, state);
+                Check(hair.sharedMesh == originalMesh && hair.sharedMaterials.SequenceEqual(new[] { source, source }),
+                    "Before adjustment the exact original assignments must be available");
+                state.data = new InnerColorState.Data();
+                var oldMesh = CopyMesh(firstMesh);
+                var oldMaterial = new Material(firstMaterial);
+                Mesh undoMesh = null;
+                Material undoMaterial = null;
+                Undo.CompleteRecordForTests = value => { if (ReferenceEquals(value, firstMesh)) undoMesh = CopyMesh((Mesh)value); };
+                Undo.RecordForTests = value => { if (ReferenceEquals(value, firstMaterial)) undoMaterial = new Material((Material)value); };
+                typeof(InnerColorFeature).GetField("_color", Private).SetValue(feature, new Color(0.2f * adjustment, 0.4f, 0.6f));
+                typeof(InnerColorFeature).GetField("_brightness", Private).SetValue(feature, adjustment + 2f);
+                surface.split = new InnerColorTriangles.Split { outer = new[] { new[] { 1, 2, 3 }, new[] { 0, 2, 3 } }, inner = new[] { 0, 1, 2 } };
+                feature.ApplySurface(avatar, surface, state, nextJournal, "test");
+                Undo.CompleteRecordForTests = null; Undo.RecordForTests = null;
+                Check(hair.sharedMesh == firstMesh && hair.sharedMaterials[2] == firstMaterial &&
+                    state.data.meshes.Single().meshPath == first.meshPath && state.data.meshes.Single().materialPath == first.materialPath,
+                    "Every adjustment must reuse the same mesh/material instances and paths");
+                Check(undoMesh != null && undoMesh.GetTriangles(2).SequenceEqual(oldMesh.GetTriangles(2)) &&
+                    undoMaterial != null && undoMaterial.GetColor("_Color").r == oldMaterial.GetColor("_Color").r,
+                    "Complete mesh Undo and material Undo must capture the previous values before mutation");
+                Check(firstMesh.GetTriangles(2).SequenceEqual(new[] { 0, 1, 2 }) && firstMaterial.GetColor("_Color").r == 0.2f * adjustment &&
+                    firstMaterial.GetVector("_MainTexHSVG").w == 1f / (adjustment + 2), "Adjustment must update triangles, tint and brightness in place");
+                var adjustedMesh = CopyMesh(firstMesh); var adjustedMaterial = new Material(firstMaterial);
+                nextJournal.Commit("test");
+                var files = (IList)typeof(InnerColorAssetUndo).GetField("oldFiles", Private).GetValue(nextJournal);
+                Check(files.Count == 0 && !(bool)typeof(InnerColorAssetUndo).GetField("applied", Private).GetValue(nextJournal),
+                    "Adjustment must not record existing files or add a file replay to Undo");
+                // ネイティブ Undo の代わりに、API に渡された時点の値を戻す。Undo 通知で上書きされないことを調べる。
+                EditorUtility.CopySerialized(undoMesh, firstMesh); EditorUtility.CopySerialized(undoMaterial, firstMaterial);
+                Undo.ReplayForTests();
+                Check(firstMesh.GetTriangles(2).SequenceEqual(oldMesh.GetTriangles(2)) && firstMaterial.GetColor("_Color").r == oldMaterial.GetColor("_Color").r,
+                    "Undo notification must leave native-restored values intact");
+                EditorUtility.CopySerialized(adjustedMesh, firstMesh); EditorUtility.CopySerialized(adjustedMaterial, firstMaterial);
+                Undo.ReplayForTests();
+                Check(Directory.GetFiles(folder + "/Meshes", "*_InnerColor.asset").Length == 1 &&
+                    Directory.GetFiles(folder + "/Materials", "*_InnerColor.mat").Length == 1,
+                    "Apply, three adjustments and native Undo/Redo must not grow the generated file count");
+            }
             context.Backup.BeginEdit(avatar, "innerColor");
             context.Backup.CompletePending();
             var backup = assets.Values.OfType<BackupSnapshot>().Last();
             Check(backup.renderers[0].hasMesh && backup.renderers[0].mesh == hair.sharedMesh && backup.renderers[1].rendererIndex == 1,
                 "History must save mesh references and distinguish renderers on the same object");
-            var savedMesh = hair.sharedMesh;
             hair.sharedMesh = originalMesh;
             typeof(BackupService).GetMethod("Apply", Private).Invoke(null, new object[] { avatar, backup });
-            Check(hair.sharedMesh == savedMesh, "History restore must apply mesh even when materials have not changed");
-            // 別の未保存アバター、保存済み Prefab とバックアップが使うメッシュを消さない。
+            Check(hair.sharedMesh == firstMesh, "History restore must apply an existing mesh even when materials have not changed");
+            // 別の未保存アバター、保存済み Prefab、他のマテリアルの参照を守る。
             other.sharedMesh = firstMesh;
             var protectedJournal = InnerColorAssetUndo.Begin(avatar);
             InnerColorAssets.Cleanup(new HashSet<string> { first.meshPath }, protectedJournal);
@@ -303,40 +348,105 @@ namespace Jeni.KaihenNavi
             var otherPrefab = folder + "/Other.prefab";
             Add(new GameObject("SavedAvatar"), otherPrefab);
             dependencies[otherPrefab] = new[] { first.meshPath, first.materialPath };
+            RestoreMeshes(avatar, state);
             InnerColorAssets.Cleanup(new HashSet<string> { first.meshPath, first.materialPath }, protectedJournal);
             Check(File.Exists(first.meshPath) && File.Exists(first.materialPath), "Saved avatar dependencies must protect mesh and material");
             dependencies.Remove(otherPrefab);
-            // 実際のカードの「元に戻す」と、削除ファイルを再読み込みする Undo / Redo。
+            var linkedMaterial = "Assets/HandEdited/Linked.mat";
+            Add(new Material(source), linkedMaterial);
+            dependencies[linkedMaterial] = new[] { first.materialPath };
+            InnerColorAssets.Cleanup(new HashSet<string> { first.materialPath }, protectedJournal);
+            Check(File.Exists(first.materialPath), "Another material outside the tool folder must protect a generated material");
+            dependencies.Remove(linkedMaterial);
+            // 旧版のキー付き生成物も、台帳から外れていても片付ける。
+            var legacyMesh = folder + "/Meshes/Hair_00aebcffc2_InnerColor.asset";
+            var legacyMaterial = folder + "/Materials/Hair_00aebcffc2_InnerColor.mat";
+            Add(CopyMesh(firstMesh), legacyMesh); InnerColorAssets.Mark(legacyMesh, "old-key");
+            Add(new Material(firstMaterial), legacyMaterial); InnerColorAssets.Mark(legacyMaterial, "old-key");
+            hair.sharedMesh = firstMesh; hair.sharedMaterials = new[] { source, source, firstMaterial };
             typeof(InnerColorFeature).GetMethod("Reset", Private).Invoke(feature, new object[] { context });
             var resetJournal = transient.OfType<InnerColorAssetUndo>().Last();
-            Check(hair.sharedMesh == originalMesh && hair.sharedMaterials.Length == 2 && File.Exists(second.meshPath) && File.Exists(second.materialPath),
-                "Card reset must restore originals and protect files needed by saved history");
+            Check(hair.sharedMesh == originalMesh && hair.sharedMaterials.Length == 2 &&
+                Directory.GetFiles(folder + "/Meshes", "*_InnerColor.asset").Length == 0 &&
+                Directory.GetFiles(folder + "/Materials", "*_InnerColor.mat").Length == 0,
+                "Apply, three adjustments and reset must leave zero inner-color files, including old keyed files and history-only references");
             var refreshedAfterImport = false;
-            Action refresh = () => refreshedAfterImport = AssetDatabase.GetAssetPath(hair.sharedMesh) == second.meshPath &&
+            Action refresh = () => refreshedAfterImport = AssetDatabase.GetAssetPath(hair.sharedMesh) == first.meshPath &&
                 InnerColorState.Load(avatar).data.meshes.Count == 1;
             InnerColorAssetUndo.Replayed += refresh;
             Replay(resetJournal, false);
             InnerColorAssetUndo.Replayed -= refresh;
-            Check(refreshedAfterImport, "UI refresh must be notified after file import and state/renderer references have been restored");
-            Check(AssetDatabase.GetAssetPath(hair.sharedMesh) == second.meshPath && hair.sharedMaterials.Length == 3 &&
-                hair.sharedMaterials[2] != null && File.Exists(second.meshPath) && InnerColorState.Load(avatar).data.meshes.Count == 1,
+            Check(refreshedAfterImport, "UI refresh must follow file import and state/renderer reference restoration");
+            Check(AssetDatabase.GetAssetPath(hair.sharedMesh) == first.meshPath && hair.sharedMaterials.Length == 3 &&
+                hair.sharedMaterials[2] != null && File.Exists(first.meshPath) && InnerColorState.Load(avatar).data.meshes.Count == 1,
                 "Undo reset must reconnect freshly imported mesh and material with state");
-            Check(AssetDatabase.AssetPathToGUID(first.meshPath) == firstGuid && hair.sharedMesh.GetTriangles(2).SequenceEqual(new[] { 1, 2, 3 }),
-                "Undo must retain GUID and split triangles after import");
+            Check(AssetDatabase.AssetPathToGUID(first.meshPath) == firstGuid && hair.sharedMesh.GetTriangles(2).SequenceEqual(new[] { 0, 1, 2 }) &&
+                hair.sharedMaterials[2].GetColor("_Color").r == 0.4f && File.Exists(legacyMesh) && File.Exists(legacyMaterial),
+                "Undo reset must retain GUID, adjusted triangles/tint and the old keyed files");
             Replay(resetJournal, true);
-            Check(hair.sharedMesh == originalMesh && hair.sharedMaterials.Length == 2, "Redo reset must restore original assignments again");
-            // 履歴にもシーンにも参照がないファイルは消し、Undo で GUID と内容をつなぎ直す。
-            dependencies.Clear();
-            var unusedJournal = InnerColorAssetUndo.Begin(avatar);
-            InnerColorAssets.Cleanup(new HashSet<string> { second.meshPath, second.materialPath }, unusedJournal);
-            unusedJournal.Commit("test");
-            Check(!File.Exists(second.meshPath) && !File.Exists(second.materialPath), "Unused generated mesh and material must be deleted");
-            Replay(unusedJournal, false);
-            Check(File.Exists(second.meshPath) && File.Exists(second.materialPath) &&
-                AssetDatabase.LoadAssetAtPath<Mesh>(second.meshPath).GetTriangles(2).SequenceEqual(new[] { 1, 2, 3 }),
-                "Undo deletion must restore the generated files and triangles");
-            Replay(unusedJournal, true);
-            Check(!File.Exists(second.meshPath), "Redo deletion must remove an unreferenced generated mesh");
+            Check(hair.sharedMesh == originalMesh && hair.sharedMaterials.Length == 2 && !File.Exists(first.meshPath) && !File.Exists(first.materialPath),
+                "Redo reset must restore originals and delete generated files again");
+            // 履歴側の参照は Unity では Missing になる。欠損を含む復元は元の髪へ戻す。
+            backup.renderers[0].mesh = null; backup.renderers[0].materials = new[] { source, source, (Material)null };
+            typeof(BackupService).GetMethod("RestoreExtras", Private).Invoke(null, new object[] { avatar, backup });
+            typeof(BackupService).GetMethod("Apply", Private).Invoke(null, new object[] { avatar, backup });
+            Check(hair.sharedMesh == originalMesh && hair.sharedMaterials.SequenceEqual(new[] { source, source }) && state.data.meshes.Count == 0,
+                "History referencing deleted inner-color files must restore the original hair and remove stale ledger entries");
+            Check(!File.Exists(first.meshPath) && !File.Exists(first.materialPath), "History fallback must not regenerate deleted files");
+            // 画面の反映処理を通し、同名の髪 2 つと共有マテリアルでも増えないことを確認する。
+            typeof(InnerColorFeature).GetField("_avatar", Private).SetValue(feature, avatar);
+            other.enabled = true;
+            SkinnedMeshRenderer.BakeForTests = (renderer, mesh, scale) => mesh.vertices = renderer.sharedMesh.vertices.ToArray();
+            typeof(InnerColorFeature).GetMethod("Preview", Private).Invoke(feature, new object[] { context });
+            var createJournal = transient.OfType<InnerColorAssetUndo>().Last();
+            Replay(createJournal, false);
+            Check(hair.sharedMesh == originalMesh && other.sharedMesh == originalMesh && state.data.meshes.Count == 0 &&
+                Directory.GetFiles(folder + "/Meshes", "*_InnerColor.asset").Length == 0 &&
+                Directory.GetFiles(folder + "/Materials", "*_InnerColor.mat").Length == 0,
+                "Undo initial application must restore originals and remove newly created files");
+            Replay(createJournal, true);
+            Check(state.data.meshes.Count == 2 && hair.sharedMaterials[2] != null && other.sharedMaterials[2] != null,
+                "Redo initial application must recreate files and reconnect both hair renderers");
+            var sharedMaterial = hair.sharedMaterials[2];
+            var sharedMesh = hair.sharedMesh;
+            var otherMesh = other.sharedMesh;
+            Check(state.data.meshes.Count == 2 && sharedMesh != otherMesh && sharedMaterial == other.sharedMaterials[2],
+                "Two same-name hair renderers must have separate meshes and share one material from the same source");
+            var queriesBeforeAdjustment = referenceQueries;
+            var importsBeforeAdjustment = imports;
+            for (var adjustment = 0; adjustment < 3; adjustment++)
+            {
+                typeof(InnerColorFeature).GetField("_range", Private).SetValue(feature, 25f * adjustment);
+                typeof(InnerColorFeature).GetField("_brightness", Private).SetValue(feature, 2f + adjustment);
+                typeof(InnerColorFeature).GetMethod("Preview", Private).Invoke(feature, new object[] { context });
+                Check(state.data.meshes.Count == 2 && hair.sharedMesh == sharedMesh && other.sharedMesh == otherMesh &&
+                    hair.sharedMaterials[2] == sharedMaterial && other.sharedMaterials[2] == sharedMaterial &&
+                    Directory.GetFiles(folder + "/Meshes", "*_InnerColor.asset").Length == 2 &&
+                    Directory.GetFiles(folder + "/Materials", "*_InnerColor.mat").Length == 1,
+                    "The actual Preview flow must keep one mesh per hair and one shared material through three adjustments");
+            }
+            Check(referenceQueries == queriesBeforeAdjustment && imports == importsBeforeAdjustment,
+                "Routine adjustments must neither reimport files nor rescan all references");
+            // 同名の一方を外した後も、残った髪を空いたファイル名へ移して作り直さない。
+            var excluded = (HashSet<SkinnedMeshRenderer>)typeof(InnerColorFeature).GetField("_excluded", Private).GetValue(feature);
+            excluded.Add(hair);
+            typeof(InnerColorFeature).GetMethod("Preview", Private).Invoke(feature, new object[] { context });
+            typeof(InnerColorFeature).GetMethod("Preview", Private).Invoke(feature, new object[] { context });
+            Check(hair.sharedMesh == originalMesh && other.sharedMesh == otherMesh && other.sharedMaterials[2] == sharedMaterial &&
+                Directory.GetFiles(folder + "/Meshes", "*_InnerColor.asset").Length == 1 &&
+                Directory.GetFiles(folder + "/Materials", "*_InnerColor.mat").Length == 1,
+                "Removing a same-name hair must not recreate or rename the remaining generated mesh");
+            excluded.Remove(hair);
+            typeof(InnerColorFeature).GetMethod("Preview", Private).Invoke(feature, new object[] { context });
+            Check(other.sharedMesh == otherMesh && state.data.meshes.Count == 2,
+                "Re-enabling the other hair must keep existing generated instances");
+            typeof(InnerColorFeature).GetMethod("Reset", Private).Invoke(feature, new object[] { context });
+            Check(hair.sharedMesh == originalMesh && other.sharedMesh == originalMesh &&
+                hair.sharedMaterials.SequenceEqual(new[] { source, source }) && other.sharedMaterials.SequenceEqual(new[] { source, source }) &&
+                Directory.GetFiles(folder + "/Meshes", "*_InnerColor.asset").Length == 0 &&
+                Directory.GetFiles(folder + "/Materials", "*_InnerColor.mat").Length == 0,
+                "Actual Preview, three adjustments and Reset must restore both hair renderers and leave zero files");
+            SkinnedMeshRenderer.BakeForTests = null;
             // 色の明るさは暗い髪を補正し、非 lilToon では色だけにとどめる。
             var bright = new Material(source);
             InnerColorFeature.ConfigureMaterial(bright, Color.white, 4);

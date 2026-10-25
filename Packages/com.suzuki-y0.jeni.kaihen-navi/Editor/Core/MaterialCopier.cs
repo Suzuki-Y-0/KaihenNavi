@@ -32,28 +32,6 @@ namespace Jeni.KaihenNavi
             return copy;
         }
 
-        /// <summary>選んだ髪専用の固定パスのコピー。全レンダラーの差し替えは呼び出し側で行う。</summary>
-        internal static Material EnsureInnerColorCopy(Material original, string path, string key, string undoName)
-        {
-            if (!WorkFolders.IsToolPath(path)) throw new System.InvalidOperationException("Invalid InnerColor material path");
-            var copy = AssetDatabase.LoadAssetAtPath<Material>(path);
-            if (copy == null)
-            {
-                copy = Object.Instantiate(original);
-                copy.name = original.name + "_InnerColor";
-                AssetDatabase.CreateAsset(copy, path);
-                InnerColorAssets.Mark(path, key);
-            }
-            else
-            {
-                Undo.RecordObject(copy, undoName);
-                // Ctrl+Z で残った未使用コピーも再利用し、変更前の値にそろえる。
-                EditorUtility.CopySerialized(original, copy);
-                copy.name = original.name + "_InnerColor";
-            }
-            return copy;
-        }
-
         /// <summary>アバター内の original をすべて replacement に差し替える。</summary>
         public static void Replace(VRCAvatarDescriptor avatar, Material original, Material replacement, string undoName)
         {

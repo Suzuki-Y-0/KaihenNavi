@@ -138,10 +138,29 @@ namespace UnityEngine
         public Transform[] bones;
         public float GetBlendShapeWeight(int i) { return 0; }
         public void SetBlendShapeWeight(int i, float v) { }
-        public void BakeMesh(Mesh m, bool useScale) { }
+        public static Action<SkinnedMeshRenderer, Mesh, bool> BakeForTests;
+        public void BakeMesh(Mesh m, bool useScale) { if (BakeForTests != null) BakeForTests(this, m, useScale); }
     }
 
-    public class Mesh : Object { public Vector2[] uv, uv2; public int subMeshCount; public int[] GetTriangles(int submesh) { return new int[0]; } public bool isReadable; public int blendShapeCount; public Vector3[] vertices; public Vector3[] normals; public int[] triangles; public int vertexCount { get { return vertices == null ? 0 : vertices.Length; } } public UnityEngine.Rendering.IndexFormat indexFormat; public void SetTriangles(int[] triangles, int submesh) { } public void RecalculateNormals() { } public void RecalculateBounds() { } public string GetBlendShapeName(int i) { return ""; } public int GetBlendShapeIndex(string name) { return -1; } }
+    public class Mesh : Object
+    {
+        public Vector2[] uv, uv2;
+        public int subMeshCount;
+        public readonly Dictionary<int, int[]> submeshes = new Dictionary<int, int[]>();
+        public int[] GetTriangles(int submesh) { int[] value; return submeshes.TryGetValue(submesh, out value) ? value : new int[0]; }
+        public bool isReadable;
+        public int blendShapeCount;
+        public Matrix4x4[] bindposes;
+        public Vector3[] vertices = new Vector3[0], normals;
+        public int[] triangles;
+        public int vertexCount { get { return vertices == null ? 0 : vertices.Length; } }
+        public UnityEngine.Rendering.IndexFormat indexFormat;
+        public void SetTriangles(int[] value, int submesh) { submeshes[submesh] = value; }
+        public void RecalculateNormals() { }
+        public void RecalculateBounds() { }
+        public string GetBlendShapeName(int i) { return ""; }
+        public int GetBlendShapeIndex(string name) { return -1; }
+    }
     public class Collider : Component { }
     public class MeshCollider : Collider { public Mesh sharedMesh; }
     public struct RaycastHit { public Collider collider; }
@@ -218,16 +237,7 @@ namespace UnityEngine
     }
 
     public class Shader : Object { public bool isSupported; public static Shader Find(string name) { return null; } }
-    public static class GL { public static Matrix4x4 GetGPUProjectionMatrix(Matrix4x4 p, bool texture) { return p; } }
-    public static class Graphics { public static void ExecuteCommandBuffer(UnityEngine.Rendering.CommandBuffer buffer) { } public static void Blit(Texture source, RenderTexture dest) { } }
-    public static class SystemInfo
-    {
-        public static UnityEngine.Rendering.GraphicsDeviceType graphicsDeviceType;
-        public static int maxTextureSize;
-        public static bool SupportsRenderTextureFormat(RenderTextureFormat f) { return false; }
-        public static bool SupportsBlendingOnRenderTextureFormat(RenderTextureFormat f) { return false; }
-        public static bool SupportsTextureFormat(TextureFormat f) { return false; }
-    }
+    public static class Graphics { public static void Blit(Texture source, RenderTexture dest) { } }
     public class RuntimeAnimatorController : Object { }
 
     public class Material : Object
@@ -301,7 +311,8 @@ namespace UnityEngine
     public class Animator : Behaviour
     {
         public bool isHuman;
-        public Transform GetBoneTransform(HumanBodyBones b) { return null; }
+        public Func<HumanBodyBones, Transform> BoneForTests;
+        public Transform GetBoneTransform(HumanBodyBones b) { return BoneForTests == null ? null : BoneForTests(b); }
     }
 
     public enum HumanBodyBones
@@ -333,24 +344,25 @@ namespace UnityEngine
     {
         public float x, y, z;
         public Vector3(float x, float y, float z) { this.x = x; this.y = y; this.z = z; }
-        public float this[int i] { get { return x; } set { } }
-        public float sqrMagnitude { get { return 0; } }
-        public Vector3 normalized { get { return this; } }
-        public static Vector3 zero, one, up, down, forward, back;
-        public static Vector3 operator +(Vector3 a, Vector3 b) { return a; }
-        public static Vector3 operator -(Vector3 a) { return a; }
-        public static Vector3 operator -(Vector3 a, Vector3 b) { return a; }
-        public static Vector3 operator *(Vector3 a, float d) { return a; }
-        public static Vector3 operator *(float d, Vector3 a) { return a; }
-        public static float Distance(Vector3 a, Vector3 b) { return 0f; }
-        public static Vector3 Cross(Vector3 a, Vector3 b) { return a; }
+        public float this[int i] { get { return i == 0 ? x : i == 1 ? y : z; } set { if (i == 0) x = value; else if (i == 1) y = value; else z = value; } }
+        public float sqrMagnitude { get { return Dot(this, this); } }
+        public Vector3 normalized { get { var m = (float)Math.Sqrt(sqrMagnitude); return m > 1e-5f ? this * (1f / m) : zero; } }
+        public static Vector3 zero = new Vector3(0, 0, 0), one = new Vector3(1, 1, 1), up = new Vector3(0, 1, 0),
+            down = new Vector3(0, -1, 0), forward = new Vector3(0, 0, 1), back = new Vector3(0, 0, -1);
+        public static Vector3 operator +(Vector3 a, Vector3 b) { return new Vector3(a.x + b.x, a.y + b.y, a.z + b.z); }
+        public static Vector3 operator -(Vector3 a) { return a * -1; }
+        public static Vector3 operator -(Vector3 a, Vector3 b) { return a + -b; }
+        public static Vector3 operator *(Vector3 a, float d) { return new Vector3(a.x * d, a.y * d, a.z * d); }
+        public static Vector3 operator *(float d, Vector3 a) { return a * d; }
+        public static float Distance(Vector3 a, Vector3 b) { return (float)Math.Sqrt((a - b).sqrMagnitude); }
+        public static float Dot(Vector3 a, Vector3 b) { return a.x * b.x + a.y * b.y + a.z * b.z; }
+        public static Vector3 Cross(Vector3 a, Vector3 b) { return new Vector3(a.y * b.z - a.z * b.y, a.z * b.x - a.x * b.z, a.x * b.y - a.y * b.x); }
         public static implicit operator Vector2(Vector3 v) { return new Vector2(v.x, v.y); }
-        public static bool operator ==(Vector3 a, Vector3 b) { return true; }
-        public static bool operator !=(Vector3 a, Vector3 b) { return false; }
-        public override bool Equals(object o) { return false; }
-        public override int GetHashCode() { return 0; }
+        public static bool operator ==(Vector3 a, Vector3 b) { return (a - b).sqrMagnitude < 1e-10f; }
+        public static bool operator !=(Vector3 a, Vector3 b) { return !(a == b); }
+        public override bool Equals(object o) { return o is Vector3 && this == (Vector3)o; }
+        public override int GetHashCode() { return x.GetHashCode() ^ y.GetHashCode() ^ z.GetHashCode(); }
     }
-
     public struct Vector4
     {
         public float x, y, z, w;
@@ -408,13 +420,13 @@ namespace UnityEngine
         public static float DeltaAngle(float current, float target) { return target - current; }
         public const float PI = 3.14159265f;
         public const float Deg2Rad = PI / 180f;
-        public static float Max(float a, float b) { return a; }
-        public static int Max(int a, int b) { return a; }
-        public static float Min(float a, float b) { return a; }
-        public static int Min(int a, int b) { return a; }
-        public static float Clamp(float v, float a, float b) { return v; }
-        public static float Clamp01(float v) { return v; }
-        public static float Abs(float v) { return v; }
+        public static float Max(float a, float b) { return Math.Max(a, b); }
+        public static int Max(int a, int b) { return Math.Max(a, b); }
+        public static float Min(float a, float b) { return Math.Min(a, b); }
+        public static int Min(int a, int b) { return Math.Min(a, b); }
+        public static float Clamp(float v, float a, float b) { return Math.Min(b, Math.Max(a, v)); }
+        public static float Clamp01(float v) { return Clamp(v, 0, 1); }
+        public static float Abs(float v) { return Math.Abs(v); }
         public static float Tan(float v) { return v; }
         public static float Sin(float v) { return v; }
         public static float Cos(float v) { return v; }
@@ -522,6 +534,7 @@ namespace UnityEngine.UIElements
         public void Add(StyleSheet s) { }
     }
 
+    public enum TrickleDown { NoTrickleDown, TrickleDown }
     public abstract class EventBase { public object target; }
     public class MouseDownEvent : EventBase { public int clickCount; }
     public class FocusOutEvent : EventBase { }
@@ -621,7 +634,7 @@ namespace UnityEngine.UIElements
         public void RemoveFromClassList(string c) { }
         public void EnableInClassList(string c, bool enable) { }
         public void SetEnabled(bool value) { }
-        public void RegisterCallback<T>(EventCallback<T> callback) where T : EventBase { }
+        public void RegisterCallback<T>(EventCallback<T> callback, TrickleDown trickleDown = TrickleDown.NoTrickleDown) where T : EventBase { }
         public void UnregisterCallback<T>(EventCallback<T> callback) where T : EventBase { }
     }
 
@@ -909,6 +922,8 @@ namespace UnityEditor
         public static Action<Object> RecordForTests;
         public static void RecordObject(Object o, string name) { if (RecordForTests != null) RecordForTests(o); }
         public static void ReplayForTests() { if (undoRedoPerformed != null) undoRedoPerformed(); }
+        public static Action<Object> CompleteRecordForTests;
+        public static void RegisterCompleteObjectUndo(Object o, string name) { if (CompleteRecordForTests != null) CompleteRecordForTests(o); }
         public static void RegisterFullObjectHierarchyUndo(Object o, string name) { }
         public static Action<int> CollapseForTests;
         public static Action<Object> DestroyForTests;
@@ -1006,10 +1021,7 @@ namespace UnityEditor
         public static float GetHandleSize(Vector3 p) { return 1f; }
     }
 
-    public static class ShaderUtil
-    {
-        public static bool ShaderHasError(Shader s) { return false; }
-    }
+    public static class ShaderUtil { public static bool ShaderHasError(Shader s) { return false; } }
 
     public class GenericMenu
     {
@@ -1066,15 +1078,4 @@ namespace UnityEngine.Rendering
 {
     public enum IndexFormat { UInt16, UInt32 }
     public enum CompareFunction { Disabled, Never, Less, Equal, LessEqual, Greater, NotEqual, GreaterEqual, Always }
-    public enum GraphicsDeviceType { Null, Direct3D11, OpenGLCore, Metal, Vulkan }
-    public class CommandBuffer
-    {
-        public string name;
-        public void SetRenderTarget(UnityEngine.RenderTexture target) { }
-        public void ClearRenderTarget(bool depth, bool color, UnityEngine.Color value) { }
-        public void DrawMesh(UnityEngine.Mesh mesh, UnityEngine.Matrix4x4 matrix, UnityEngine.Material material, int submesh, int pass) { }
-        public void Blit(UnityEngine.Texture source, UnityEngine.RenderTexture dest, UnityEngine.Material material, int pass) { }
-        public void Clear() { }
-        public void Release() { }
-    }
 }

@@ -65,7 +65,9 @@ namespace Jeni.KaihenNavi
                     var length = (float)Math.Sqrt(n.sqrMagnitude);
                     var d = center - p;
                     d -= up * Vector3.Dot(d, up) * 0.7f;
-                    var inside = length > 1e-12f && d.sqrMagnitude > 1e-12f &&
+                    // 頭の中心より上の面は内側にしない。頭頂の内側は外から見えず、アホ毛のように上へ伸びた毛の先だけに色が付いてしまうため（実際に撮って確かめた）。
+                    var aboveHead = Vector3.Dot(p - center, up) > 0f;
+                    var inside = !aboveHead && length > 1e-12f && d.sqrMagnitude > 1e-12f &&
                         Vector3.Dot(n * (1f / length), d.normalized) > threshold &&
                         (height <= 0 || Vector3.Dot(p - center, up) < lowest * Mathf.Clamp01(height));
                     var target = inside ? inner : keep;

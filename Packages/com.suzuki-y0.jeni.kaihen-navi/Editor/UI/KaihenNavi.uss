@@ -280,7 +280,9 @@
 .kn-figure__part { margin: 0 4px 4px 0; }
 .kn-figure__part--selected { background-color: var(--kn-selected); color: var(--kn-accent); }
 .kn-figure__controls { margin-top: 8px; }
-.kn-compact-window .kn-figure__canvas { width: 100%; margin: 0 0 8px 0; }
+.kn-compact-window .kn-figure { flex-direction: column; align-items: stretch; }
+.kn-compact-window .kn-figure__canvas { width: auto; margin: 0 0 8px 0; }
+.kn-compact-window .kn-figure__side { flex-shrink: 0; }
 .kn-thumb-preview { width: 100%; max-width: 480px; height: 270px; border-radius: 6px; border-width: 1px; border-color: var(--kn-border); -unity-background-scale-mode: scale-to-fit; margin-bottom: 8px; }
 .kn-issue { margin: 8px 0; padding: 8px; border-radius: 6px; border-width: 1px; border-color: var(--kn-border); background-color: var(--kn-surface); }
 .kn-menu__row--hidden { opacity: 0.55; }

@@ -15,22 +15,26 @@ Shader "Hidden/KaihenNavi/InnerColorVisibility"
         float4 _MainTex_ST;
         float4x4 _KNView, _KNVP, _KNUVProjection, _KNHeadSpace;
         float _KNCutoff, _KNAlpha, _KNRear, _KNLowest, _KNEpsilon, _KNCameraSize;
+        float4 _KNDir; // 頭からカメラへ向かう向き（ワールド）
         struct Input
         {
             float4 vertex : POSITION;
             float2 uv : TEXCOORD0;
             float2 sourceUV : TEXCOORD1;
+            float3 normal : NORMAL;
         };
         struct Varying
         {
             float4 vertex : SV_POSITION;
             float2 uv : TEXCOORD0;
             float3 world : TEXCOORD1;
+            float3 normal : TEXCOORD2;
         };
         Varying CameraVertex(Input v)
         {
             Varying o;
             o.world = v.vertex.xyz; // Bake 済みのワールド座標だけを受け取る。
+            o.normal = v.normal;
             o.vertex = mul(_KNVP, v.vertex);
             o.uv = TRANSFORM_TEX(v.uv, _MainTex);
             return o;
@@ -39,6 +43,7 @@ Shader "Hidden/KaihenNavi/InnerColorVisibility"
         {
             Varying o;
             o.world = v.vertex.xyz;
+            o.normal = v.normal;
             o.vertex = mul(_KNUVProjection, float4(v.uv, 0, 1));
             o.uv = v.sourceUV; // 透明部分は元の拡縮・移動を適用した座標で読む。
             return o;
@@ -75,7 +80,10 @@ Shader "Hidden/KaihenNavi/InnerColorVisibility"
             // UV カメラ画像からの逆引き。カメラの画素に入らない細い毛も、UV の全テクセルで照合する。
             float visible = inside * seen.a * step(1e-12, abs(determinant)) * step(depth, seen.b + _KNEpsilon);
             AlphaTest(i.uv);
-            return float4(visible, visible * _KNRear, 1, _KNRear);
+            // 面がこのカメラの方を向いているときだけ数える。向こう側を向いた面は、外側の面でも見えないのが当たり前なので、
+            // 全方向で割ると外側の面まで「見えにくい＝内側」と判定されてしまう（まだらに色がつく原因）。
+            float facing = step(0.05, dot(normalize(i.normal), _KNDir.xyz));
+            return float4(visible * facing, visible * facing * _KNRear, facing, facing * _KNRear);
         }
         float4 ScopeFragment(Varying i) : SV_Target
         {

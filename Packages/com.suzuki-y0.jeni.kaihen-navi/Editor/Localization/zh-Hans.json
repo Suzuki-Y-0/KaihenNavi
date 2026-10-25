@@ -579,5 +579,6 @@
   "history.operation": "{0}的修改",
   "history.confirm": "恢复到 {0} 执行“{1}”之前的状态吗？\n之后的修改也会撤销。按 Ctrl+Z 可撤销本次恢复。",
   "history.unknownFeature": "虚拟形象的修改",
-  "history.record": "记录操作历史"
+  "history.record": "记录操作历史",
+  "library.tryEnglish": "用假名找不到时，请试试英文名称（例如“sweet”）。"
 }

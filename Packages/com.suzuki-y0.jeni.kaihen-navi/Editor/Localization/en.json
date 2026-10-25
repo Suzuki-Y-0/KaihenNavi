@@ -579,5 +579,6 @@
   "history.operation": "Changes to {0}",
   "history.confirm": "Return to just before “{1}” at {0}?\nLater changes will also be reverted. Press Ctrl+Z to undo this restoration.",
   "history.unknownFeature": "Avatar changes",
-  "history.record": "Record edit history"
+  "history.record": "Record edit history",
+  "library.tryEnglish": "If nothing is found with kana, try the English name too (e.g. \"sweet\")."
 }

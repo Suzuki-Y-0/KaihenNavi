@@ -254,6 +254,7 @@ namespace Jeni.KaihenNavi
                         draw.probe.SetMatrix("_KNVP", vp); draw.probe.SetMatrix("_KNView", view);
                         draw.probe.SetTexture("_KNViewTexture", camera);
                         draw.probe.SetFloat("_KNRear", Math.Max(0, -directions[i].z));
+                        draw.probe.SetVector("_KNDir", new Vector4(direction.x, direction.y, direction.z, 0f));
                         buffer.SetRenderTarget(viewVotes); buffer.ClearRenderTarget(false, true, Color.clear);
                         buffer.DrawMesh(draw.mesh, Matrix4x4.identity, draw.probe, 0, 1);
                         buffer.Blit(viewVotes, accumulator[pair.Key], add, 3);
@@ -295,7 +296,7 @@ namespace Jeni.KaihenNavi
         /// <summary>各三角形をタイル単位で複製する。頂点ごとの frac は継ぎ目を横切って伸びるので使わない。</summary>
         private static Mesh UVGeometry(List<Source> sources, Material material)
         {
-            var positions = new List<Vector3>(); var uv = new List<Vector2>(); var sourceUV = new List<Vector2>();
+            var positions = new List<Vector3>(); var uv = new List<Vector2>(); var sourceUV = new List<Vector2>(); var normals = new List<Vector3>();
             foreach (var source in sources)
                 for (var slot = 0; slot < source.materials.Length; slot++)
                 {
@@ -315,11 +316,15 @@ namespace Jeni.KaihenNavi
                         var minY = Math.Floor(corners.Min(p => p.y)); var maxY = Math.Floor(corners.Max(p => p.y));
                         if ((maxX - minX + 1) * (maxY - minY + 1) > 64 || Math.Abs(minX) > 1000000 || Math.Abs(minY) > 1000000)
                             throw new InvalidOperationException(L10n.Tr("innerColor.wideUV"));
+                        // 三角形の表の向き（ワールド）。面がカメラを向いている方向だけを数えるために使う。
+                        var p0 = g.positions[triangles[t]]; var p1 = g.positions[triangles[t + 1]]; var p2 = g.positions[triangles[t + 2]];
+                        var faceNormal = Vector3.Cross(p1 - p0, p2 - p0).normalized;
                         for (var y = (int)minY; y <= maxY; y++)
                             for (var x = (int)minX; x <= maxX; x++)
                                 for (var j = 0; j < 3; j++)
                                 {
                                     positions.Add(g.positions[triangles[t + j]]);
+                                    normals.Add(faceNormal);
                                     uv.Add(new Vector2(corners[j].x - x, corners[j].y - y));
                                     // Clamp や Mirror の透明部分は、タイル移動前の座標で読む。
                                     sourceUV.Add(corners[j]);
@@ -329,7 +334,7 @@ namespace Jeni.KaihenNavi
             var mesh = new Mesh { hideFlags = HideFlags.HideAndDontSave, indexFormat = IndexFormat.UInt32 };
             try
             {
-                mesh.vertices = positions.ToArray(); mesh.uv = uv.ToArray(); mesh.uv2 = sourceUV.ToArray();
+                mesh.vertices = positions.ToArray(); mesh.uv = uv.ToArray(); mesh.uv2 = sourceUV.ToArray(); mesh.normals = normals.ToArray();
                 mesh.triangles = Enumerable.Range(0, positions.Count).ToArray(); mesh.RecalculateBounds();
                 return mesh;
             }

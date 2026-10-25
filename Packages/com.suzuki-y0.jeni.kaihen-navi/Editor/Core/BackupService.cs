@@ -77,6 +77,7 @@ namespace Jeni.KaihenNavi
             if (_current == null || avatar == null || created == null) return;
             var path = HierarchyPath.Get(avatar.transform, created.transform);
             if (path == null || _current.createdPaths.Contains(path)) return;
+            Undo.RecordObject(_current, Undo.GetCurrentGroupName());
             _current.createdPaths.Add(path);
             EditorUtility.SetDirty(_current);
             AssetDatabase.SaveAssetIfDirty(_current);

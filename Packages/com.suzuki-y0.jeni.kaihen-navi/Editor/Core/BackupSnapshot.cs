@@ -25,6 +25,10 @@ namespace Jeni.KaihenNavi
         {
             public string path;
             public Material[] materials;
+            /// <summary>旧バックアップでは false。面を分けた後もメッシュは直接書き換えない。</summary>
+            public bool hasMesh;
+            public Mesh mesh;
+            public int rendererIndex;
         }
 
         /// <summary>ツールが作った複製マテリアルの中身。複製は直接書き換えるため、値ごと保存しておく。</summary>

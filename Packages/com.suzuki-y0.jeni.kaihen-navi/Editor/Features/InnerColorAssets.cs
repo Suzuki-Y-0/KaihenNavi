@@ -57,6 +57,11 @@ namespace Jeni.KaihenNavi
             if (state != null)
             {
                 result.Add(AssetDatabase.GetAssetPath(state));
+                foreach (var entry in state.data.meshes)
+                {
+                    result.Add(entry.meshPath);
+                    result.Add(entry.materialPath);
+                }
                 foreach (var entry in state.data.entries)
                 {
                     if (!string.IsNullOrEmpty(entry.key)) result.Add(entry.materialPath);
@@ -107,6 +112,10 @@ namespace Jeni.KaihenNavi
                     var renderer = renderers[i];
                     if (EditorUtility.IsPersistent(renderer) || !renderer.gameObject.scene.IsValid() ||
                         !renderer.gameObject.scene.isLoaded) continue;
+                    var skinned = renderer as SkinnedMeshRenderer;
+                    var filter = renderer.GetComponent<MeshFilter>();
+                    var mesh = skinned != null ? skinned.sharedMesh : filter == null ? null : filter.sharedMesh;
+                    if (mesh != null) references.Add(AssetDatabase.GetAssetPath(mesh));
                     foreach (var material in renderer.sharedMaterials)
                     {
                         if (material == null) continue;

@@ -9,7 +9,7 @@ using VRC.SDK3.Avatars.Components;
 namespace Jeni.KaihenNavi
 {
     /// <summary>
-    /// AssetDatabase の削除・PNG の上書きは Unity Undo の対象外なので、内容と .meta を記録する。
+    /// AssetDatabase の作成・削除は Unity Undo の対象外なので、内容と .meta を記録する。
     /// Assets 内にごみ箱は作らない。Editor 内のオブジェクトだけで保持し、同じ GUID で戻す。
     /// Undo 後はインポートで失われた参照もパス・local ID からつなぎ直す。
     /// </summary>
@@ -42,6 +42,7 @@ namespace Jeni.KaihenNavi
         {
             public Renderer renderer;
             public InnerColorState.AssetRef[] materials;
+            public InnerColorState.AssetRef mesh;
         }
         [Serializable]
         private sealed class MaterialState
@@ -62,7 +63,8 @@ namespace Jeni.KaihenNavi
                 result.stateJson = state == null ? null : JsonUtility.ToJson(state.data);
                 foreach (var renderer in avatar.GetComponentsInChildren<Renderer>(true))
                     result.renderers.Add(new RendererState { renderer = renderer,
-                        materials = renderer.sharedMaterials.Select(InnerColorState.AssetRef.Of).ToArray() });
+                        materials = renderer.sharedMaterials.Select(InnerColorState.AssetRef.Of).ToArray(),
+                        mesh = renderer is SkinnedMeshRenderer ? InnerColorState.AssetRef.Of(((SkinnedMeshRenderer)renderer).sharedMesh) : null });
                 var paths = result.renderers.SelectMany(r => r.materials).Select(m => m.path);
                 if (state != null) paths = paths.Concat(state.data.entries.Select(e => e.materialPath));
                 foreach (var path in paths.Distinct().Where(WorkFolders.IsToolPath))
@@ -79,6 +81,9 @@ namespace Jeni.KaihenNavi
                 {
                     if (saved.renderer == null) continue;
                     saved.renderer.sharedMaterials = saved.materials.Select(m => m.Load<Material>()).ToArray();
+                    var skinned = saved.renderer as SkinnedMeshRenderer;
+                    if (skinned != null && saved.mesh != null) skinned.sharedMesh = saved.mesh.Load<Mesh>();
+                    PrefabUtility.RecordPrefabInstancePropertyModifications(saved.renderer);
                     EditorUtility.SetDirty(saved.renderer);
                 }
                 foreach (var saved in materials)
@@ -105,6 +110,9 @@ namespace Jeni.KaihenNavi
         [SerializeField] private long order;
         [NonSerialized] private bool observed;
 
+        /// <summary>ファイルの再読み込みと参照の復元が終わった後に、画面へ知らせる。</summary>
+        internal static event Action Replayed;
+
         static InnerColorAssetUndo() { Undo.undoRedoPerformed += Replay; }
         private void OnEnable() { observed = applied; }
 
@@ -116,6 +124,8 @@ namespace Jeni.KaihenNavi
             journal.before = Snapshot.Capture(avatar);
             journal.order = DateTime.UtcNow.Ticks;
             journal.Track(InnerColorState.PathFor(avatar));
+            var state = InnerColorState.Load(avatar);
+            if (state != null) journal.Track(AssetDatabase.GetAssetPath(state));
             return journal;
         }
 
@@ -152,6 +162,7 @@ namespace Jeni.KaihenNavi
                     journal.applied ? journal.newFiles : journal.oldFiles);
                 journal.observed = journal.applied;
             }
+            if (journals.Count > 0 && Replayed != null) Replayed();
         }
 
         private void Apply(Snapshot snapshot, List<FileState> files)

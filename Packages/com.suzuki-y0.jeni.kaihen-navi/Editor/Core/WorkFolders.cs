@@ -23,6 +23,7 @@ namespace Jeni.KaihenNavi
     ///       改変アバター名.prefab    改変アバター（ベースのプレハブバリアント）
     ///       avatar.json              ほかのツール向けの説明（元アバター、作った日時など）
     ///       Materials/               色変えなどで複製したマテリアル
+    ///       Meshes/                  面を分けた複製メッシュ（必要になったときだけ）
     ///       Textures/                作ったテクスチャ（必要になったときだけ）
     ///       Menus/                   メニュー整理で使う空のメニュー（必要になったときだけ）
     ///       Backups/                 自動バックアップ
@@ -138,6 +139,7 @@ namespace Jeni.KaihenNavi
                 "  <name>.prefab   Edited avatar (Prefab Variant of the base) / 改変アバター\n" +
                 "  avatar.json     Info for other tools (format " + ManifestFormat + ") / ほかのツール向けの説明\n" +
                 "  Materials/      Copied materials / 複製したマテリアル\n" +
+                "  Meshes/         Copied meshes, when needed / 複製したメッシュ（必要なときだけ）\n" +
                 "  Textures/       Generated textures, when needed / 作ったテクスチャ（必要なときだけ）\n" +
                 "  Menus/          Empty root menu for menu tidying, when needed / メニュー整理用（必要なときだけ）\n" +
                 "  Backups/        Automatic backups / 自動バックアップ\n" +

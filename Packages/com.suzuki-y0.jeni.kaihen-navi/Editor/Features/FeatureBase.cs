@@ -85,6 +85,9 @@ namespace Jeni.KaihenNavi
         public BackupService Backup;
         public string FeatureId;
 
+        /// <summary>Undo/Redo 後の保存待ちを、新しい編集で解除する。</summary>
+        public Action Editing;
+
         /// <summary>操作エリアを作り直す（一覧の中身が変わったときなど）。</summary>
         public Action Rebuild;
 
@@ -97,7 +100,23 @@ namespace Jeni.KaihenNavi
         /// <summary>何かを変える直前に呼ぶ。最初の 1 回だけ自動バックアップを取る。</summary>
         public void BeginEdit()
         {
+            if (Editing != null) Editing();
             Backup.BeginEdit(Avatar, FeatureId);
+        }
+
+        /// <summary>保存による Prefab の変更も含めて、編集を Ctrl+Z 1 回分にまとめる。</summary>
+        public void CompleteEdit(int group)
+        {
+            // RecordObject の差分を確定してから Prefab 側の Undo を登録する。
+            UnityEditor.Undo.FlushUndoRecordObjects();
+            try
+            {
+                MyAvatar.Save(Avatar);
+            }
+            finally
+            {
+                UnityEditor.Undo.CollapseUndoOperations(group);
+            }
         }
 
         public void NoteCreated(GameObject created)

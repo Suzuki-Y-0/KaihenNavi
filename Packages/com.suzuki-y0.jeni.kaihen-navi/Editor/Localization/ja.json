@@ -579,5 +579,6 @@
   "history.operation": "{0} の変更",
   "history.confirm": "{0} の「{1}」を行う直前に戻します。\nそれより後の変更も戻ります。Ctrl+Z で、戻す前の状態に戻せます。",
   "history.unknownFeature": "アバターの変更",
-  "history.record": "操作履歴を記録する"
+  "history.record": "操作履歴を記録する",
+  "library.tryEnglish": "かなで見つからないときは、英語の名前でも探してみてください（例：「スイート」→「sweet」）。"
 }

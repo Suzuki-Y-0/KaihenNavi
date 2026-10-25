@@ -57,7 +57,7 @@ namespace Jeni.KaihenNavi
                 // KonoAsset の分類で、服の一覧には服だけ、アクセの一覧には身につける小物だけを出す（テクスチャやギミックは出さない）
                 if (!CategoryFits(product.category, kind)) continue;
                 items["kono:" + product.id] = new LibraryItem { Key = "kono:" + product.id, Product = product,
-                    Name = product.description.name ?? "", Shop = product.description.creator ?? "" };
+                    Name = Clean(product.description.name), Shop = Clean(product.description.creator) };
             }
             var ledgerKind = kind == ItemKind.Outfit ? LedgerItemKind.Outfit : LedgerItemKind.Accessory;
             var seen = new HashSet<string>(StringComparer.Ordinal);
@@ -66,16 +66,19 @@ namespace Jeni.KaihenNavi
                 var product = ItemLedger.KonoItem(package);
                 // アバター本体の商品は、服やアクセとして出さない
                 if (product != null && product.sourceFile == "avatars.json") continue;
-                var key = product != null ? "kono:" + product.id : "folder:" + (package.commonFolder ?? package.packageName);
+                var folderKey = "folder:" + (package.commonFolder ?? package.packageName);
+                // Assets の直下などに置かれた物は、まとまりの名前が「Assets」になってしまうので、Prefab ごとに分ける
+                var loose = product == null && IsLooseFolder(package.commonFolder ?? package.packageName);
                 foreach (var entry in package.prefabs ?? new List<LedgerPrefab>())
                 {
                     if (entry == null || entry.kind != ledgerKind || string.IsNullOrEmpty(entry.path) || !seen.Add(entry.path)) continue;
+                    var key = product != null ? "kono:" + product.id : loose ? "prefab:" + entry.path : folderKey;
                     LibraryItem item;
                     if (!items.TryGetValue(key, out item))
                     {
                         item = new LibraryItem { Key = key, Product = product,
-                            Name = product == null ? package.packageName : product.description.name,
-                            Shop = product == null ? "" : product.description.creator };
+                            Name = product == null ? (loose ? Path.GetFileNameWithoutExtension(entry.path) : package.packageName) : Clean(product.description.name),
+                            Shop = product == null ? "" : Clean(product.description.creator) };
                         items[key] = item;
                     }
                     item.Paths.Add(entry.path);
@@ -84,6 +87,19 @@ namespace Jeni.KaihenNavi
                 }
             }
             return items.Values.OrderBy(i => i.Name, StringComparer.OrdinalIgnoreCase).ToList();
+        }
+
+        /// <summary>商品名に入っている見えない文字（BOM など）を取り除く。フォントに無い文字の警告が出るため。</summary>
+        private static string Clean(string text)
+        {
+            return string.IsNullOrEmpty(text) ? "" : text.Replace("\uFEFF", "").Replace("\u200B", "").Trim();
+        }
+
+        private static bool IsLooseFolder(string folder)
+        {
+            if (string.IsNullOrEmpty(folder)) return true;
+            var name = folder.TrimEnd('/');
+            return name == "Assets" || name.EndsWith("/Assets") || name == "Packages";
         }
 
         private static readonly string[] AccessoryCategories = { "アクセサリー", "髪", "ヘイロー", "角・耳", "羽・翼・尻尾", "帽子", "武器", "ちびキャラ等" };
@@ -173,6 +189,9 @@ namespace Jeni.KaihenNavi
                 if (matches.Count == 0)
                 {
                     results.Add(Ui.Text(L10n.Tr("library.empty"), "kn-hint"));
+                    // 商品名は英語のことが多い（「Sweet Devil」をカタカナの「スイート」では探せない）
+                    if (!string.IsNullOrEmpty(query.value) && query.value.Any(c => c >= '\u3040' && c <= '\u30FF'))
+                        results.Add(Ui.Text(L10n.Tr("library.tryEnglish"), "kn-hint"));
                     return;
                 }
                 page = Math.Min(page, (matches.Count - 1) / PageSize);

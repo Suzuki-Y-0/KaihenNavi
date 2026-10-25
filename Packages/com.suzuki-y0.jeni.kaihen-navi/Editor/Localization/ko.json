@@ -579,5 +579,6 @@
   "history.operation": "{0} 변경",
   "history.confirm": "{0}의 “{1}” 직전으로 돌아갈까요?\n그 이후의 변경도 되돌립니다. Ctrl+Z로 복원 전 상태로 돌아갈 수 있습니다.",
   "history.unknownFeature": "아바타 변경",
-  "history.record": "작업 기록 저장"
+  "history.record": "작업 기록 저장",
+  "library.tryEnglish": "가나로 찾을 수 없으면 영어 이름으로도 찾아 보세요(예: \"sweet\")."
 }

@@ -54,6 +54,8 @@ namespace Jeni.KaihenNavi
             {
                 if (product == null || product.description == null || string.IsNullOrEmpty(product.id) ||
                     product.sourceFile == "avatars.json" || product.sourceFile == "worldObjects.json") continue;
+                // KonoAsset の分類で、服の一覧には服だけ、アクセの一覧には身につける小物だけを出す（テクスチャやギミックは出さない）
+                if (!CategoryFits(product.category, kind)) continue;
                 items["kono:" + product.id] = new LibraryItem { Key = "kono:" + product.id, Product = product,
                     Name = product.description.name ?? "", Shop = product.description.creator ?? "" };
             }
@@ -82,6 +84,30 @@ namespace Jeni.KaihenNavi
                 }
             }
             return items.Values.OrderBy(i => i.Name, StringComparer.OrdinalIgnoreCase).ToList();
+        }
+
+        private static readonly string[] AccessoryCategories = { "アクセサリー", "髪", "ヘイロー", "角・耳", "羽・翼・尻尾", "帽子", "武器", "ちびキャラ等" };
+
+        /// <summary>KonoAsset の分類が、この一覧（服 / アクセ）に合うか。分類が無いものはどちらにも出す。</summary>
+        internal static bool CategoryFits(string category, ItemKind kind)
+        {
+            if (string.IsNullOrEmpty(category)) return true;
+            if (kind == ItemKind.Outfit) return category == "服";
+            if (kind == ItemKind.Accessory) return Array.IndexOf(AccessoryCategories, category) >= 0;
+            return true;
+        }
+
+        /// <summary>アバター本体の置き場所（Assets/Cazalis など）。ここだけにある物はアバターの一部なので一覧に出さない。</summary>
+        private static string AvatarFolder(VRCAvatarDescriptor avatar)
+        {
+            var path = MyAvatar.PrefabPath(avatar);
+            if (path == null) return null;
+            var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(path);
+            var original = MyAvatar.IsMinePath(path) || MyAvatar.IsBasePath(path) ? MyAvatar.OriginalOf(prefab) : prefab;
+            var originalPath = original == null ? null : AssetDatabase.GetAssetPath(original);
+            if (string.IsNullOrEmpty(originalPath)) return null;
+            var parts = originalPath.Split('/');
+            return parts.Length >= 3 ? parts[0] + "/" + parts[1] + "/" : null;
         }
 
         public static VisualElement Build(VRCAvatarDescriptor avatar, ItemKind kind, Action<GameObject> onUse)
@@ -114,6 +140,12 @@ namespace Jeni.KaihenNavi
             // 発見は読み取りのみ。検索・服の装着では台帳ファイルを変更しない。
             var packages = ItemLedger.ProjectItems();
             var items = Collect(KonoAssetLink.All, packages, kind);
+            var avatarFolder = AvatarFolder(avatar);
+            if (avatarFolder != null)
+            {
+                items = items.Where(i => i.Product != null || i.Paths.Count == 0 ||
+                    !i.Paths.All(p => p.StartsWith(avatarFolder, StringComparison.Ordinal))).ToList();
+            }
             foreach (var item in items) item.Paths.RemoveAll(p => AssetDatabase.LoadAssetAtPath<GameObject>(p) == null);
             items.RemoveAll(i => i.Product == null && i.Paths.Count == 0);
             var results = Ui.Box("kn-list");

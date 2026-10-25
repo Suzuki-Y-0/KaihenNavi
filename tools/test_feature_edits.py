@@ -58,6 +58,7 @@ internal static class FeatureEditChecks
     }
     public static void Main()
     {
+        ScriptableObject.CreateForTests = t => (ScriptableObject)System.Activator.CreateInstance(t);
         var root = new GameObject("Avatar");
         var avatar = root.AddComponent<VRCAvatarDescriptor>();
         var visible = Child(root, "Visible", true);

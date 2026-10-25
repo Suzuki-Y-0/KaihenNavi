@@ -209,7 +209,7 @@ namespace Jeni.KaihenNavi
             var brightness = _brightness.value;
             var undoName = L10n.Tr("undo.color");
 
-            ctx.BeginEdit();
+            ctx.BeginEdit("color:" + _part);
             UndoHelper.Begin("color:" + _part, undoName);
 
             foreach (var entry in Selected().ToList())

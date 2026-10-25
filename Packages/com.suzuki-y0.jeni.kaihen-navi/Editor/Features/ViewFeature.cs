@@ -82,7 +82,7 @@ namespace Jeni.KaihenNavi
         private void Set(FeatureContext ctx, Vector3 value, string undoName)
         {
             var avatar = ctx.Avatar;
-            ctx.BeginEdit();
+            ctx.BeginEdit("view");
             UndoHelper.Begin("view", undoName);
             Undo.RecordObject(avatar, undoName);
             avatar.ViewPosition = value;

@@ -569,5 +569,13 @@
   "transform.localX": "좌우 (X, cm)",
   "transform.rotationX": "X축 회전 (°)",
   "transform.rotationY": "Y축 회전 (°)",
-  "transform.rotationZ": "Z축 회전 (°)"
+  "transform.rotationZ": "Z축 회전 (°)",
+  "history.close": "닫기",
+  "history.hint": "작업 이름을 열면 세부 단계를 볼 수 있습니다. “여기까지 되돌리기”는 해당 단계 직전으로 돌아갑니다.",
+  "history.session": "{0} · {1}단계 ▾",
+  "history.restoreHere": "여기까지 되돌리기",
+  "history.operation": "{0} 변경",
+  "history.confirm": "{0}의 “{1}” 직전으로 돌아갈까요?\n그 이후의 변경도 되돌립니다. Ctrl+Z로 복원 전 상태로 돌아갈 수 있습니다.",
+  "history.unknownFeature": "아바타 변경",
+  "history.record": "작업 기록 저장"
 }

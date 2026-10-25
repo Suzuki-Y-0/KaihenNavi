@@ -186,7 +186,7 @@ namespace Jeni.KaihenNavi
             box.Add(Ui.Slider(Pretty(name), 0f, 100f, body.GetBlendShapeWeight(index), v =>
             {
                 var undoName = L10n.Tr("undo.skin");
-                ctx.BeginEdit();
+                ctx.BeginEdit("skin:" + index);
                 UndoHelper.Begin("skin:" + index, undoName);
                 Undo.RecordObject(body, undoName);
                 body.SetBlendShapeWeight(index, v);

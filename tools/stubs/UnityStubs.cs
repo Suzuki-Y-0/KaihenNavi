@@ -6,6 +6,7 @@ using System.Collections.Generic;
 
 namespace UnityEngine
 {
+    public enum KeyCode { Escape }
     public enum FontStyle { Normal, Bold, Italic, BoldAndItalic }
 
     public struct Rect
@@ -463,7 +464,8 @@ namespace UnityEngine.UIElements
 
     public struct StyleEnum<T> where T : struct
     {
-        public static implicit operator StyleEnum<T>(T v) { return default(StyleEnum<T>); }
+        public T value;
+        public static implicit operator StyleEnum<T>(T v) { return new StyleEnum<T> { value = v }; }
     }
 
     public struct FontDefinition
@@ -506,6 +508,7 @@ namespace UnityEngine.UIElements
         public UnityEngine.Vector3 localPosition;
         public int pointerId;
     }
+    public class KeyDownEvent : EventBase { public UnityEngine.KeyCode keyCode; public void StopPropagation() { } }
     public class PointerDownEvent : PointerEventBase { }
     public class PointerMoveEvent : PointerEventBase { }
     public class PointerUpEvent : PointerEventBase { }
@@ -568,6 +571,8 @@ namespace UnityEngine.UIElements
 
     public class VisualElement
     {
+        public static Func<IStyle> StyleForTests;
+        public VisualElement() { if (StyleForTests != null) style = StyleForTests(); }
         public UnityEngine.Rect layout;
         public IStyle style;
         public IPanel panel;
@@ -576,7 +581,12 @@ namespace UnityEngine.UIElements
         public bool ClassListContains(string c) { return false; }
         public UnityEngine.Rect contentRect;
         public Action<MeshGenerationContext> generateVisualContent;
-        public void MarkDirtyRepaint() { }
+        public int childCount;
+        public bool focusable;
+        public void Focus() { }
+        public void RemoveFromHierarchy() { }
+        public Action RepaintForTests;
+        public void MarkDirtyRepaint() { if (RepaintForTests != null) RepaintForTests(); }
         public void CapturePointer(int id) { }
         public void ReleasePointer(int id) { }
         public string tooltip;
@@ -599,33 +609,46 @@ namespace UnityEngine.UIElements
 
     public abstract class BaseField<T> : VisualElement
     {
-        public T value;
+        private T _value;
         public EventCallback<ChangeEvent<T>> ChangedForTests;
-        public void SetValueWithoutNotify(T v) { value = v; }
+        public T value
+        {
+            get { return _value; }
+            set
+            {
+                if (EqualityComparer<T>.Default.Equals(_value, value)) return;
+                var previous = _value;
+                _value = value;
+                if (ChangedForTests != null) ChangedForTests(new ChangeEvent<T> { previousValue = previous, newValue = value });
+            }
+        }
+        public void SetValueWithoutNotify(T v) { _value = v; }
         public void SendValueForTests(T next)
         {
-            var old = value;
-            value = next;
+            var old = _value;
+            _value = next;
             if (ChangedForTests != null) ChangedForTests(new ChangeEvent<T> { previousValue = old, newValue = next });
         }
     }
 
     public static class INotifyValueChangedExtensions
     {
-        public static bool RegisterValueChangedCallback<T>(this BaseField<T> control, EventCallback<ChangeEvent<T>> callback)
-        { control.ChangedForTests += callback; return true; }
+        public static bool RegisterValueChangedCallback<T>(this BaseField<T> control, EventCallback<ChangeEvent<T>> callback) { control.ChangedForTests += callback; return true; }
     }
 
     public class TextElement : VisualElement { public string text; }
-    public class Label : TextElement { public Label() { } public Label(string text) { } }
-    public class Button : TextElement { public Action clicked; public Button() { } public Button(Action clickEvent) { } }
+    public class Label : TextElement { public Label() { } public Label(string text) { this.text = text; } }
+    public class Button : TextElement { public Action clicked; public Button() { } public Button(Action clickEvent) { clicked = clickEvent; } }
     public class Foldout : BaseField<bool> { public string text; }
     public class Toggle : BaseField<bool> { public Toggle() { } public Toggle(string label) { } }
     public class TextField : BaseField<string> { public string label; }
     public class Slider : BaseField<float>
     {
-        public Slider(string label, float start, float end) { }
-        public float lowValue, highValue;
+        public Slider(string label, float start, float end) { this.label = label; _low = start; _high = end; }
+        public string label;
+        private float _low, _high;
+        public float lowValue { get { return _low; } set { _low = value; if (this.value < value) this.value = value; } }
+        public float highValue { get { return _high; } set { _high = value; if (this.value > value) this.value = value; } }
         public bool showInputField;
     }
 
@@ -847,6 +870,12 @@ namespace UnityEditor
 
     public static class Undo
     {
+        public static int GroupForTests;
+        public static string GroupNameForTests;
+        public static Action PerformUndoForTests;
+        public static void PerformUndo() { if (PerformUndoForTests != null) PerformUndoForTests(); }
+        public static string GetCurrentGroupName() { return GroupNameForTests; }
+        public static void FlushUndoRecordObjects() { }
         public static void RevertAllDownToGroup(int group) { }
         public static void SetTransformParent(Transform t, Transform parent, string name) { t.SetParent(parent, true); }
         public static event Action undoRedoPerformed;
@@ -856,15 +885,11 @@ namespace UnityEditor
         public static void RecordObject(Object o, string name) { if (RecordForTests != null) RecordForTests(o); }
         public static void ReplayForTests() { if (undoRedoPerformed != null) undoRedoPerformed(); }
         public static void RegisterFullObjectHierarchyUndo(Object o, string name) { }
-        public static void FlushUndoRecordObjects() { }
-        private static int _group;
-        private static string _name;
         public static Action<int> CollapseForTests;
         public static Action<Object> DestroyForTests;
-        public static void IncrementCurrentGroup() { _group++; }
-        public static int GetCurrentGroup() { return _group; }
-        public static void SetCurrentGroupName(string n) { _name = n; }
-        public static string GetCurrentGroupName() { return _name; }
+        public static void IncrementCurrentGroup() { GroupForTests++; }
+        public static int GetCurrentGroup() { return GroupForTests; }
+        public static void SetCurrentGroupName(string n) { GroupNameForTests = n; }
         public static void CollapseUndoOperations(int g) { if (CollapseForTests != null) CollapseForTests(g); }
         public static void DestroyObjectImmediate(Object o)
         {

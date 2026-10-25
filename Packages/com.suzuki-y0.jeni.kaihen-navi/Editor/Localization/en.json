@@ -569,5 +569,13 @@
   "transform.localX": "Left / right (X, cm)",
   "transform.rotationX": "X rotation (°)",
   "transform.rotationY": "Y rotation (°)",
-  "transform.rotationZ": "Z rotation (°)"
+  "transform.rotationZ": "Z rotation (°)",
+  "history.close": "Close",
+  "history.hint": "Open a task to see its steps. “Restore here” returns to just before that step.",
+  "history.session": "{0} · {1} steps ▾",
+  "history.restoreHere": "Restore here",
+  "history.operation": "Changes to {0}",
+  "history.confirm": "Return to just before “{1}” at {0}?\nLater changes will also be reverted. Press Ctrl+Z to undo this restoration.",
+  "history.unknownFeature": "Avatar changes",
+  "history.record": "Record edit history"
 }

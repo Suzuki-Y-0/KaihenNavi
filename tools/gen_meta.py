@@ -25,6 +25,14 @@ TEMPLATES = {
     ".asmdef": "AssemblyDefinitionImporter:\n  externalObjects: {}\n" + COMMON_TAIL,
     ".json": "TextScriptImporter:\n  externalObjects: {}\n" + COMMON_TAIL,
     ".md": "TextScriptImporter:\n  externalObjects: {}\n" + COMMON_TAIL,
+    ".txt": "TextScriptImporter:\n  externalObjects: {}\n" + COMMON_TAIL,
+    ".ttf": (
+        "TrueTypeFontImporter:\n  externalObjects: {}\n  serializedVersion: 4\n  fontSize: 16\n"
+        "  forceTextureCase: -2\n  characterSpacing: 0\n  characterPadding: 1\n  includeFontData: 1\n"
+        "  fontNames: []\n  fallbackFontReferences: []\n  customCharacters: \n  fontRenderingMode: 0\n"
+        "  ascentCalculationMode: 1\n  useLegacyBoundsCalculation: 0\n  shouldRoundAdvanceValue: 1\n"
+        + COMMON_TAIL
+    ),
     ".uss": (
         "ScriptedImporter:\n  internalIDToNameTable: []\n  externalObjects: {}\n  serializedVersion: 2\n"
         + COMMON_TAIL

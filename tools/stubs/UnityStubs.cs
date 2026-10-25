@@ -6,6 +6,7 @@ using System.Collections.Generic;
 
 namespace UnityEngine
 {
+    public enum KeyCode { Escape }
     public enum FontStyle { Normal, Bold, Italic, BoldAndItalic }
 
     public struct Rect
@@ -39,7 +40,7 @@ namespace UnityEngine
     {
         public GameObject gameObject;
         public Transform transform;
-        public T GetComponent<T>() { return default(T); }
+        public T GetComponent<T>() { var all = GetComponents<T>(); return all.Length > 0 ? all[0] : default(T); }
         public T[] GetComponents<T>() { return gameObject == null ? new T[0] : gameObject.GetComponents<T>(); }
         public T[] GetComponentsInChildren<T>(bool includeInactive) { return gameObject == null ? new T[0] : gameObject.GetComponentsInChildren<T>(includeInactive); }
         public T GetComponentInChildren<T>(bool includeInactive) { return default(T); }
@@ -50,21 +51,49 @@ namespace UnityEngine
 
     public class GameObject : Object
     {
-        public GameObject() { }
-        public GameObject(string name) { }
+        public GameObject() : this("") { }
+        public GameObject(string name)
+        {
+            this.name = name;
+            transform = new Transform { name = name, gameObject = this };
+            transform.transform = transform;
+        }
+        private readonly List<Component> _components = new List<Component>();
         public Transform transform;
         public UnityEngine.SceneManagement.Scene scene;
-        public bool activeSelf;
+        public bool activeSelf = true;
         public bool activeInHierarchy;
         public string tag;
         public int layer;
-        public void SetActive(bool value) { }
-        public T AddComponent<T>() where T : Component { return null; }
-        public T GetComponent<T>() { return default(T); }
+        public void SetActive(bool value) { activeSelf = value; }
+        public T AddComponent<T>() where T : Component { return (T)AddComponent(typeof(T)); }
+        public Component AddComponent(Type type)
+        {
+            var component = (Component)Activator.CreateInstance(type);
+            component.gameObject = this;
+            component.transform = transform;
+            component.name = name;
+            _components.Add(component);
+            return component;
+        }
+        public T GetComponent<T>() { var all = GetComponents<T>(); return all.Length > 0 ? all[0] : default(T); }
         public Func<Type, object[]> ComponentsForTests;
         public T[] GetComponents<T>()
-        { return ComponentsForTests == null ? new T[0] : Array.ConvertAll(ComponentsForTests(typeof(T)), o => (T)o); }
-        public T[] GetComponentsInChildren<T>(bool includeInactive) { return GetComponents<T>(); }
+        {
+            if (ComponentsForTests != null) return Array.ConvertAll(ComponentsForTests(typeof(T)), o => (T)o);
+            var result = new List<T>();
+            if (transform is T) result.Add((T)(object)transform);
+            foreach (var component in _components) if (component is T) result.Add((T)(object)component);
+            return result.ToArray();
+        }
+        public T[] GetComponentsInChildren<T>(bool includeInactive)
+        {
+            var result = new List<T>();
+            if (includeInactive || activeSelf) result.AddRange(GetComponents<T>());
+            foreach (Transform child in transform)
+                if (includeInactive || child.gameObject.activeSelf) result.AddRange(child.gameObject.GetComponentsInChildren<T>(includeInactive));
+            return result.ToArray();
+        }
         public T GetComponentInChildren<T>(bool includeInactive) { return default(T); }
     }
 
@@ -74,13 +103,20 @@ namespace UnityEngine
         public Transform parent;
         public Transform root;
         public Vector3 lossyScale;
+        public Vector3 localEulerAngles;
         public int childCount;
         public Vector3 position, localPosition, localScale, up, right, forward;
         public Quaternion rotation, localRotation;
-        public Transform GetChild(int index) { return null; }
-        public Transform Find(string n) { return null; }
-        public bool IsChildOf(Transform p) { return false; }
-        public void SetParent(Transform p, bool worldPositionStays) { }
+        private readonly List<Transform> _children = new List<Transform>();
+        public Transform GetChild(int index) { return _children[index]; }
+        public Transform Find(string n) { return _children.Find(t => t.name == n); }
+        public bool IsChildOf(Transform p) { for (var t = this; t != null; t = t.parent) if (t == p) return true; return false; }
+        public void SetParent(Transform p, bool worldPositionStays)
+        {
+            if (parent != null) { parent._children.Remove(this); parent.childCount = parent._children.Count; }
+            parent = p;
+            if (p != null) { p._children.Add(this); p.childCount = p._children.Count; }
+        }
         public int GetSiblingIndex() { return 0; }
         public void SetSiblingIndex(int i) { }
         public void SetAsLastSibling() { }
@@ -88,10 +124,10 @@ namespace UnityEngine
         public Vector3 TransformPoint(Vector3 v) { return v; }
         public Vector3 InverseTransformPoint(Vector3 v) { return v; }
         public Vector3 InverseTransformVector(Vector3 v) { return v; }
-        public System.Collections.IEnumerator GetEnumerator() { yield break; }
+        public System.Collections.IEnumerator GetEnumerator() { return _children.GetEnumerator(); }
     }
 
-    public class Renderer : Component { public Material[] sharedMaterials; public Bounds bounds; }
+    public class Renderer : Component { public Material[] sharedMaterials; public Bounds bounds; public bool enabled, forceRenderingOff; }
     public class MeshRenderer : Renderer { }
     public class MeshFilter : Component { public Mesh sharedMesh; }
     public class ParticleSystemRenderer : Renderer { public int meshCount; public int GetMeshes(Mesh[] meshes) { return 0; } }
@@ -105,7 +141,7 @@ namespace UnityEngine
         public void BakeMesh(Mesh m, bool useScale) { }
     }
 
-    public class Mesh : Object { public Vector2[] uv; public int subMeshCount; public int[] GetTriangles(int submesh) { return new int[0]; } public bool isReadable; public int blendShapeCount; public Vector3[] vertices; public Vector3[] normals; public int[] triangles; public int vertexCount { get { return vertices == null ? 0 : vertices.Length; } } public UnityEngine.Rendering.IndexFormat indexFormat; public void RecalculateNormals() { } public void RecalculateBounds() { } public string GetBlendShapeName(int i) { return ""; } }
+    public class Mesh : Object { public Vector2[] uv, uv2; public int subMeshCount; public int[] GetTriangles(int submesh) { return new int[0]; } public bool isReadable; public int blendShapeCount; public Vector3[] vertices; public Vector3[] normals; public int[] triangles; public int vertexCount { get { return vertices == null ? 0 : vertices.Length; } } public UnityEngine.Rendering.IndexFormat indexFormat; public void SetTriangles(int[] triangles, int submesh) { } public void RecalculateNormals() { } public void RecalculateBounds() { } public string GetBlendShapeName(int i) { return ""; } public int GetBlendShapeIndex(string name) { return -1; } }
     public class Collider : Component { }
     public class MeshCollider : Collider { public Mesh sharedMesh; }
     public struct RaycastHit { public Collider collider; }
@@ -120,20 +156,32 @@ namespace UnityEngine
     }
     public struct Matrix4x4
     {
+        public static Matrix4x4 identity;
+        public static Matrix4x4 TRS(Vector3 p, Quaternion q, Vector3 s) { return default(Matrix4x4); }
+        public static Matrix4x4 Scale(Vector3 s) { return default(Matrix4x4); }
+        public static Matrix4x4 Ortho(float l, float r, float b, float t, float n, float f) { return default(Matrix4x4); }
+        public static Matrix4x4 operator *(Matrix4x4 a, Matrix4x4 b) { return a; }
         public Matrix4x4 inverse { get { return this; } }
         public Matrix4x4 transpose { get { return this; } }
         public Vector3 MultiplyVector(Vector3 v) { return v; }
     }
-    public class Texture : Object { public TextureWrapMode wrapMode; }
-    public enum TextureFormat { RGBA32, RGB24 }
+    public enum FilterMode { Point, Bilinear, Trilinear }
+    public struct Hash128 { }
+    public class Texture : Object { public TextureWrapMode wrapMode; public int width; public int height; public FilterMode filterMode; public Hash128 imageContentsHash; }
+    public enum TextureFormat { RGBA32, RGB24, RGBAFloat }
     public enum TextureWrapMode { Repeat, Clamp }
     public class Texture2D : Texture
     {
+        public static Texture2D whiteTexture;
         public Texture2D(int w, int h, TextureFormat f, bool mip) { }
+        public Texture2D(int w, int h, TextureFormat f, bool mip, bool linear) { }
+        public Color[] GetPixels() { return new Color[0]; }
+        public void SetPixels(Color[] p) { }
         public void SetPixel(int x, int y, Color c) { }
         public Color32[] GetPixels32() { return new Color32[0]; }
         public void SetPixels32(Color32[] p) { }
         public void ReadPixels(Rect r, int x, int y) { }
+        public void ReadPixels(Rect r, int x, int y, bool recalculateMipMaps) { }
         public byte[] EncodeToPNG() { return new byte[0]; }
         public void Apply() { }
     }
@@ -143,13 +191,18 @@ namespace UnityEngine
         public static bool LoadImage(this Texture2D texture, byte[] data, bool markNonReadable) { return true; }
     }
 
-    public enum RenderTextureFormat { ARGB32 }
+    public enum RenderTextureFormat { ARGB32, RGFloat, ARGBFloat, Depth }
+    public enum RenderTextureReadWrite { Default, Linear, sRGB }
     public class RenderTexture : Texture
     {
         public RenderTexture(int w, int h, int depth, RenderTextureFormat f) { }
+        public RenderTexture(int w, int h, int depth, RenderTextureFormat f, RenderTextureReadWrite rw) { }
+        public bool Create() { return true; }
         public int antiAliasing;
         public static RenderTexture active;
         public void Release() { }
+        public static RenderTexture GetTemporary(int w, int h, int depth, RenderTextureFormat f, RenderTextureReadWrite rw) { return null; }
+        public static void ReleaseTemporary(RenderTexture rt) { }
     }
 
     public enum CameraClearFlags { Skybox, SolidColor }
@@ -164,12 +217,25 @@ namespace UnityEngine
         public Vector3 WorldToViewportPoint(Vector3 p) { return p; }
     }
 
-    public class Shader : Object { public bool isSupported; }
+    public class Shader : Object { public bool isSupported; public static Shader Find(string name) { return null; } }
+    public static class GL { public static Matrix4x4 GetGPUProjectionMatrix(Matrix4x4 p, bool texture) { return p; } }
+    public static class Graphics { public static void ExecuteCommandBuffer(UnityEngine.Rendering.CommandBuffer buffer) { } public static void Blit(Texture source, RenderTexture dest) { } }
+    public static class SystemInfo
+    {
+        public static UnityEngine.Rendering.GraphicsDeviceType graphicsDeviceType;
+        public static int maxTextureSize;
+        public static bool SupportsRenderTextureFormat(RenderTextureFormat f) { return false; }
+        public static bool SupportsBlendingOnRenderTextureFormat(RenderTextureFormat f) { return false; }
+        public static bool SupportsTextureFormat(TextureFormat f) { return false; }
+    }
     public class RuntimeAnimatorController : Object { }
 
     public class Material : Object
     {
         public Texture mainTexture;
+        public int renderQueue;
+        public Material(Shader s) { shader = s; }
+        public void SetMatrix(string name, Matrix4x4 value) { }
         public Color color;
         public Shader shader;
 #if INNER_COLOR_ASSET_TESTS
@@ -248,6 +314,7 @@ namespace UnityEngine
 
     public struct Bounds
     {
+        public Bounds(Vector3 center, Vector3 size) { this.center = center; max = center + size * 0.5f; }
         public Vector3 center, max;
         public void Encapsulate(Bounds b) { }
     }
@@ -292,6 +359,8 @@ namespace UnityEngine
 
     public struct Quaternion
     {
+        public float x, y, z, w;
+        public Vector3 eulerAngles { get { return new Vector3(); } }
         public static Quaternion identity;
         public static Quaternion Inverse(Quaternion q) { return q; }
         public static Quaternion AngleAxis(float a, Vector3 axis) { return default(Quaternion); }
@@ -310,7 +379,7 @@ namespace UnityEngine
         public float r, g, b, a;
         public Color(float r, float g, float b) { this.r = r; this.g = g; this.b = b; a = 1f; }
         public Color(float r, float g, float b, float a) { this.r = r; this.g = g; this.b = b; this.a = a; }
-        public static Color gray, white;
+        public static Color gray, white, clear;
         public static void RGBToHSV(Color c, out float h, out float s, out float v) { h = s = v = 0; }
         public static Color HSVToRGB(float h, float s, float v) { return default(Color); }
         public static Color HSVToRGB(float h, float s, float v, bool hdr) { return default(Color); }
@@ -336,6 +405,7 @@ namespace UnityEngine
 
     public static class Mathf
     {
+        public static float DeltaAngle(float current, float target) { return target - current; }
         public const float PI = 3.14159265f;
         public const float Deg2Rad = PI / 180f;
         public static float Max(float a, float b) { return a; }
@@ -418,7 +488,8 @@ namespace UnityEngine.UIElements
 
     public struct StyleEnum<T> where T : struct
     {
-        public static implicit operator StyleEnum<T>(T v) { return default(StyleEnum<T>); }
+        public T value;
+        public static implicit operator StyleEnum<T>(T v) { return new StyleEnum<T> { value = v }; }
     }
 
     public struct FontDefinition
@@ -454,12 +525,14 @@ namespace UnityEngine.UIElements
     public abstract class EventBase { public object target; }
     public class MouseDownEvent : EventBase { public int clickCount; }
     public class FocusOutEvent : EventBase { }
+    public class PointerCaptureOutEvent : EventBase { }
     public class DragUpdatedEvent : EventBase { }
     public abstract class PointerEventBase : EventBase
     {
         public UnityEngine.Vector3 localPosition;
         public int pointerId;
     }
+    public class KeyDownEvent : EventBase { public UnityEngine.KeyCode keyCode; public void StopPropagation() { } }
     public class PointerDownEvent : PointerEventBase { }
     public class PointerMoveEvent : PointerEventBase { }
     public class PointerUpEvent : PointerEventBase { }
@@ -522,6 +595,8 @@ namespace UnityEngine.UIElements
 
     public class VisualElement
     {
+        public static Func<IStyle> StyleForTests;
+        public VisualElement() { if (StyleForTests != null) style = StyleForTests(); }
         public UnityEngine.Rect layout;
         public IStyle style;
         public IPanel panel;
@@ -530,7 +605,12 @@ namespace UnityEngine.UIElements
         public bool ClassListContains(string c) { return false; }
         public UnityEngine.Rect contentRect;
         public Action<MeshGenerationContext> generateVisualContent;
-        public void MarkDirtyRepaint() { }
+        public int childCount;
+        public bool focusable;
+        public void Focus() { }
+        public void RemoveFromHierarchy() { }
+        public Action RepaintForTests;
+        public void MarkDirtyRepaint() { if (RepaintForTests != null) RepaintForTests(); }
         public void CapturePointer(int id) { }
         public void ReleasePointer(int id) { }
         public string tooltip;
@@ -553,25 +633,46 @@ namespace UnityEngine.UIElements
 
     public abstract class BaseField<T> : VisualElement
     {
-        public T value;
-        public void SetValueWithoutNotify(T v) { }
+        private T _value;
+        public EventCallback<ChangeEvent<T>> ChangedForTests;
+        public T value
+        {
+            get { return _value; }
+            set
+            {
+                if (EqualityComparer<T>.Default.Equals(_value, value)) return;
+                var previous = _value;
+                _value = value;
+                if (ChangedForTests != null) ChangedForTests(new ChangeEvent<T> { previousValue = previous, newValue = value });
+            }
+        }
+        public void SetValueWithoutNotify(T v) { _value = v; }
+        public void SendValueForTests(T next)
+        {
+            var old = _value;
+            _value = next;
+            if (ChangedForTests != null) ChangedForTests(new ChangeEvent<T> { previousValue = old, newValue = next });
+        }
     }
 
     public static class INotifyValueChangedExtensions
     {
-        public static bool RegisterValueChangedCallback<T>(this BaseField<T> control, EventCallback<ChangeEvent<T>> callback) { return true; }
+        public static bool RegisterValueChangedCallback<T>(this BaseField<T> control, EventCallback<ChangeEvent<T>> callback) { control.ChangedForTests += callback; return true; }
     }
 
     public class TextElement : VisualElement { public string text; }
-    public class Label : TextElement { public Label() { } public Label(string text) { } }
-    public class Button : TextElement { public Action clicked; public Button() { } public Button(Action clickEvent) { } }
+    public class Label : TextElement { public Label() { } public Label(string text) { this.text = text; } }
+    public class Button : TextElement { public Action clicked; public Button() { } public Button(Action clickEvent) { clicked = clickEvent; } }
     public class Foldout : BaseField<bool> { public string text; }
     public class Toggle : BaseField<bool> { public Toggle() { } public Toggle(string label) { } }
     public class TextField : BaseField<string> { public string label; }
     public class Slider : BaseField<float>
     {
-        public Slider(string label, float start, float end) { }
-        public float lowValue, highValue;
+        public Slider(string label, float start, float end) { this.label = label; _low = start; _high = end; }
+        public string label;
+        private float _low, _high;
+        public float lowValue { get { return _low; } set { _low = value; if (this.value < value) this.value = value; } }
+        public float highValue { get { return _high; } set { _high = value; if (this.value > value) this.value = value; } }
         public bool showInputField;
     }
 
@@ -603,6 +704,7 @@ namespace UnityEditor.UIElements
 
     public class PopupField<T> : UnityEngine.UIElements.BaseField<T>
     {
+        public string label;
         public PopupField(List<T> choices, int defaultIndex) { }
     }
 }
@@ -638,6 +740,8 @@ namespace UnityEditor
         public TextureImporterType textureType;
         public bool isReadable, sRGBTexture, mipmapEnabled;
         public TextureWrapMode wrapMode;
+        public FilterMode filterMode;
+        public int maxTextureSize;
         public TextureImporterCompression textureCompression;
     }
 
@@ -663,6 +767,7 @@ namespace UnityEditor
 
     public static class EditorPrefs
     {
+        public static bool GetBool(string key, bool fallback) { return fallback; }
         public static string GetString(string k, string d) { return d; }
         public static void SetString(string k, string v) { }
     }
@@ -681,6 +786,8 @@ namespace UnityEditor
 
     public static class AssetDatabase
     {
+        public static void ImportPackage(string path, bool interactive) { }
+        public static void Refresh() { }
         public static Func<Object, string> PathForTests;
         public static Func<string, Object> LoadForTests;
         public static Func<string, Object[]> LoadAllForTests;
@@ -723,6 +830,7 @@ namespace UnityEditor
         public static void SaveAssetIfDirty(Object o) { }
         public static bool CopyAsset(string a, string b) { return true; }
         public static void ImportAsset(string path) { if (ImportForTests != null) ImportForTests(path); }
+        public static void ImportAsset(string path, ImportAssetOptions options) { ImportAsset(path); }
         public static string AssetPathToGUID(string path) { return GuidForTests == null ? "" : GuidForTests(path); }
         public static string RenameAsset(string path, string name) { return ""; }
     }
@@ -741,13 +849,17 @@ namespace UnityEditor
     public static class PrefabUtility
     {
         public static void RecordPrefabInstancePropertyModifications(Object o) { }
-        public static bool IsPartOfPrefabInstance(Object o) { return false; }
+        public static GameObject RootForTests;
+        public static string PathForTests;
+        public static bool OverridesForTests;
+        public static Action<GameObject, InteractionMode> ApplyForTests;
+        public static bool IsPartOfPrefabInstance(Object o) { return RootForTests != null; }
         public static bool IsOutermostPrefabInstanceRoot(GameObject g) { return false; }
-        public static GameObject GetOutermostPrefabInstanceRoot(Object o) { return null; }
-        public static string GetPrefabAssetPathOfNearestInstanceRoot(Object o) { return null; }
+        public static GameObject GetOutermostPrefabInstanceRoot(Object o) { return RootForTests; }
+        public static string GetPrefabAssetPathOfNearestInstanceRoot(Object o) { return PathForTests; }
         public static GameObject SaveAsPrefabAssetAndConnect(GameObject g, string path, InteractionMode m, out bool ok) { ok = true; return g; }
-        public static bool HasPrefabInstanceAnyOverrides(GameObject g, bool includeDefault) { return false; }
-        public static void ApplyPrefabInstance(GameObject g, InteractionMode m) { }
+        public static bool HasPrefabInstanceAnyOverrides(GameObject g, bool includeDefault) { return OverridesForTests; }
+        public static void ApplyPrefabInstance(GameObject g, InteractionMode m) { if (ApplyForTests != null) ApplyForTests(g, m); }
         public static T GetCorrespondingObjectFromSource<T>(T o) where T : Object { return null; }
         public static Object InstantiatePrefab(Object o) { return null; }
         public static Object InstantiatePrefab(Object o, Transform parent) { return null; }
@@ -778,23 +890,41 @@ namespace UnityEditor
 
     public enum PlayModeStateChange { EnteredEditMode, ExitingEditMode, EnteredPlayMode, ExitingPlayMode }
 
+    public class PropertyModification { public Object target; }
+    public struct UndoPropertyModification { public PropertyModification currentValue; }
+
     public static class Undo
     {
+        public static int GroupForTests;
+        public static string GroupNameForTests;
+        public static Action PerformUndoForTests;
+        public static void PerformUndo() { if (PerformUndoForTests != null) PerformUndoForTests(); }
+        public static string GetCurrentGroupName() { return GroupNameForTests; }
+        public static void FlushUndoRecordObjects() { }
         public static void RevertAllDownToGroup(int group) { }
-        public static void SetTransformParent(Transform t, Transform parent, string name) { }
+        public static void SetTransformParent(Transform t, Transform parent, string name) { t.SetParent(parent, true); }
         public static event Action undoRedoPerformed;
+        public delegate UndoPropertyModification[] PostprocessModifications(UndoPropertyModification[] modifications);
+        public static event PostprocessModifications postprocessModifications;
         public static Action<Object> RecordForTests;
         public static void RecordObject(Object o, string name) { if (RecordForTests != null) RecordForTests(o); }
         public static void ReplayForTests() { if (undoRedoPerformed != null) undoRedoPerformed(); }
         public static void RegisterFullObjectHierarchyUndo(Object o, string name) { }
-        public static void IncrementCurrentGroup() { }
-        public static int GetCurrentGroup() { return 0; }
-        public static void SetCurrentGroupName(string n) { }
-        public static void CollapseUndoOperations(int g) { }
-        public static void DestroyObjectImmediate(Object o) { }
+        public static Action<int> CollapseForTests;
+        public static Action<Object> DestroyForTests;
+        public static void IncrementCurrentGroup() { GroupForTests++; }
+        public static int GetCurrentGroup() { return GroupForTests; }
+        public static void SetCurrentGroupName(string n) { GroupNameForTests = n; }
+        public static void CollapseUndoOperations(int g) { if (CollapseForTests != null) CollapseForTests(g); }
+        public static void DestroyObjectImmediate(Object o)
+        {
+            if (DestroyForTests != null) DestroyForTests(o);
+            var go = o as GameObject;
+            if (go != null) go.transform.SetParent(null, true);
+        }
         public static void RegisterCreatedObjectUndo(Object o, string n) { }
-        public static T AddComponent<T>(GameObject go) where T : Component { return null; }
-        public static Component AddComponent(GameObject go, Type type) { return null; }
+        public static T AddComponent<T>(GameObject go) where T : Component { return go.AddComponent<T>(); }
+        public static Component AddComponent(GameObject go, Type type) { return go.AddComponent(type); }
     }
 
     public static class EditorUtility
@@ -826,8 +956,10 @@ namespace UnityEditor
         public static Action beforeAssemblyReload;
     }
 
+    public enum ImportAssetOptions { Default, ForceUpdate, ForceSynchronousImport }
     public static class EditorApplication
     {
+        public static CallbackFunction update;
         public static double timeSinceStartup;
         public static bool isPlayingOrWillChangePlaymode;
         public static Action hierarchyChanged;
@@ -839,16 +971,22 @@ namespace UnityEditor
 
     public static class Selection
     {
+        public static Object activeObject;
         public static GameObject activeGameObject;
         public static Transform activeTransform;
     }
 
+    public enum Tool { Move }
+    public static class Tools { public static Tool current; }
+
     public class SceneView : EditorWindow
     {
         public static SceneView lastActiveSceneView;
+        public Camera camera;
         public static Action<SceneView> duringSceneGui;
         public static void RepaintAll() { }
         public bool FrameSelected() { return true; }
+        public void Frame(Bounds bounds, bool instant = true) { }
         public void LookAt(Vector3 point, Quaternion direction, float size) { }
     }
 
@@ -857,6 +995,10 @@ namespace UnityEditor
         public static Color color;
         public static void SphereHandleCap(int id, Vector3 position, Quaternion rotation, float size, EventType type) { }
         public static void DrawLine(Vector3 a, Vector3 b) { }
+        public static void DrawLine(Vector3 a, Vector3 b, float thickness) { }
+        public static void DrawWireDisc(Vector3 center, Vector3 normal, float radius, float thickness) { }
+        public static void ConeHandleCap(int id, Vector3 position, Quaternion rotation, float size, EventType type) { }
+        public static UnityEngine.Rendering.CompareFunction zTest;
     }
 
     public static class HandleUtility
@@ -920,4 +1062,19 @@ namespace UnityEngine.TextCore.Text
     }
 }
 
-namespace UnityEngine.Rendering { public enum IndexFormat { UInt16, UInt32 } }
+namespace UnityEngine.Rendering
+{
+    public enum IndexFormat { UInt16, UInt32 }
+    public enum CompareFunction { Disabled, Never, Less, Equal, LessEqual, Greater, NotEqual, GreaterEqual, Always }
+    public enum GraphicsDeviceType { Null, Direct3D11, OpenGLCore, Metal, Vulkan }
+    public class CommandBuffer
+    {
+        public string name;
+        public void SetRenderTarget(UnityEngine.RenderTexture target) { }
+        public void ClearRenderTarget(bool depth, bool color, UnityEngine.Color value) { }
+        public void DrawMesh(UnityEngine.Mesh mesh, UnityEngine.Matrix4x4 matrix, UnityEngine.Material material, int submesh, int pass) { }
+        public void Blit(UnityEngine.Texture source, UnityEngine.RenderTexture dest, UnityEngine.Material material, int pass) { }
+        public void Clear() { }
+        public void Release() { }
+    }
+}

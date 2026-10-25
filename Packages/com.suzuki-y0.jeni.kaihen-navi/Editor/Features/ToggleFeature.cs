@@ -20,6 +20,7 @@ namespace Jeni.KaihenNavi
     internal sealed class ToggleFeature : FeatureBase
     {
         public const string MenuObjectName = "KaihenNavi_Menu";
+        private const string VisibilityName = "KaihenNavi_OriginalVisibility";
         private const string ParameterPrefix = "KaihenNavi/";
         private const string ModularAvatarUrl = "https://modular-avatar.nadena.dev/ja/";
 
@@ -286,6 +287,7 @@ namespace Jeni.KaihenNavi
             public GameObject Item;
             public GameObject Target;
             public bool IsDefault;
+            public bool OriginalActive;
         }
 
         private static void BuildWithModularAvatar(FeatureContext ctx, VisualElement root, List<Candidate> candidates)
@@ -305,7 +307,6 @@ namespace Jeni.KaihenNavi
             if (candidates.Count == 0)
             {
                 root.Add(Ui.Notice(L10n.Tr("toggle.none"), "warn"));
-                return;
             }
 
             // 同期パラメータの消費量（1 項目 1 bit）。チェックを変えるたびに数え直す
@@ -339,12 +340,12 @@ namespace Jeni.KaihenNavi
                     }
 
                     CreateMenu(ctx, targets);
-                    EditorUtility.DisplayDialog(L10n.Tr("app.name"), L10n.Tr("toggle.done", targets.Count), L10n.Tr("dialog.ok"));
+                    ctx.Tell(L10n.Tr("toggle.done", targets.Count));
                     ctx.Rebuild();
                 },
                 "kn-button--primary"));
 
-            if (existing.Count > 0)
+            if (ctx.Avatar.transform.Find(MenuObjectName) != null)
             {
                 buttons.Add(Ui.Button(L10n.Tr("toggle.remove"), () =>
                 {
@@ -353,8 +354,10 @@ namespace Jeni.KaihenNavi
                     ctx.BeginEdit();
                     UndoHelper.Separate();
                     Undo.IncrementCurrentGroup();
+                    var group = Undo.GetCurrentGroup();
                     Undo.SetCurrentGroupName(L10n.Tr("undo.toggleRemove"));
                     RemoveMenu(ctx.Avatar, L10n.Tr("undo.toggleRemove"));
+                    ctx.CompleteEdit(group);
                     ctx.Rebuild();
                 }));
             }
@@ -389,7 +392,10 @@ namespace Jeni.KaihenNavi
                     if (obj.Object == null) continue;
                     var target = obj.Object.Get(toggle);
                     if (target == null) continue;
-                    result.Add(new ExistingToggle { Item = item.gameObject, Target = target, IsDefault = item.isDefault });
+                    var visibility = item.transform.Find(VisibilityName);
+                    result.Add(new ExistingToggle { Item = item.gameObject, Target = target, IsDefault = item.isDefault,
+                        // 旧版は実際の値を残していない。初期値で、旧版が強制した非表示から復旧する。
+                        OriginalActive = visibility != null ? visibility.gameObject.activeSelf : item.isDefault });
                 }
             }
 
@@ -397,13 +403,17 @@ namespace Jeni.KaihenNavi
         }
 
         /// <summary>前回作ったメニューを消し、対象の表示状態を作る前に戻す。</summary>
-        private static void RemoveMenu(VRCAvatarDescriptor avatar, string undoName)
+        private static void RemoveMenu(VRCAvatarDescriptor avatar, string undoName, bool restoreVisibility = true)
         {
-            foreach (var e in ReadExisting(avatar))
+            if (restoreVisibility)
             {
-                if (e.Target.activeSelf == e.IsDefault) continue;
-                Undo.RecordObject(e.Target, undoName);
-                e.Target.SetActive(e.IsDefault);
+                foreach (var e in ReadExisting(avatar))
+                {
+                    if (e.Target.activeSelf == e.OriginalActive) continue;
+                    Undo.RecordObject(e.Target, undoName);
+                    e.Target.SetActive(e.OriginalActive);
+                    PrefabUtility.RecordPrefabInstancePropertyModifications(e.Target);
+                }
             }
 
             var menuRoot = avatar.transform.Find(MenuObjectName);
@@ -421,35 +431,42 @@ namespace Jeni.KaihenNavi
             var group = Undo.GetCurrentGroup();
             Undo.SetCurrentGroupName(undoName);
 
-            RemoveMenu(avatar, undoName);
+            var previous = ReadExisting(avatar);
+            // チェックを外した項目は、その切り替えを削除するので元の表示に戻す。
+            foreach (var old in previous.Where(e => !targets.Any(c => c.Target == e.Target)))
+            {
+                if (old.Target.activeSelf == old.OriginalActive) continue;
+                Undo.RecordObject(old.Target, undoName);
+                old.Target.SetActive(old.OriginalActive);
+                PrefabUtility.RecordPrefabInstancePropertyModifications(old.Target);
+            }
+            // 作り直しでも現在の表示は変えず、最初に作る前の状態を引き継ぐ。
+            RemoveMenu(avatar, undoName, false);
 
             var used = new HashSet<string>();
             var data = new MenuData { menuName = L10n.Tr("toggle.menuName") };
             foreach (var c in targets)
             {
                 var label = string.IsNullOrEmpty(c.Label) ? c.Target.name : c.Label;
+                var old = previous.FirstOrDefault(e => e.Target == c.Target);
                 data.items.Add(new MenuItemData
                 {
                     label = label,
                     parameter = ParameterName(label, used),
                     targetPath = HierarchyPath.Get(avatar.transform, c.Target.transform),
                     // 今見えているものは最初から ON（着ている状態）にする
-                    isDefault = c.Target.activeSelf,
+                    isDefault = old != null ? old.IsDefault : c.Target.activeSelf,
+                    hasOriginalActive = true,
+                    originalActive = old != null ? old.OriginalActive : c.Target.activeSelf,
                 });
             }
 
             var menuRoot = BuildMenu(avatar, data, undoName);
 
-            // メニューが ON のときだけ表示する。初期状態は isDefault で決まる
-            foreach (var c in targets)
-            {
-                if (!c.Target.activeSelf) continue;
-                Undo.RecordObject(c.Target, undoName);
-                c.Target.SetActive(false);
-            }
-
+            // activeSelf は変更しない。OFF 側も MA の部品に任せる。
+            // 既定値（Menu Item.isDefault）とシーンの表示状態は別の値として扱う。
             ctx.NoteCreated(menuRoot);
-            Undo.CollapseUndoOperations(group);
+            ctx.CompleteEdit(group);
             EditorGUIUtility.PingObject(menuRoot);
         }
 
@@ -461,10 +478,15 @@ namespace Jeni.KaihenNavi
         {
             // 親：Expressions メニューに「脱ぎ着」サブメニューを追加する
             var menuRoot = new GameObject(MenuObjectName);
-            menuRoot.transform.SetParent(avatar.transform, false);
             Undo.RegisterCreatedObjectUndo(menuRoot, undoName);
+            Undo.SetTransformParent(menuRoot.transform, avatar.transform, undoName);
+            Undo.RecordObject(menuRoot.transform, undoName);
+            menuRoot.transform.localPosition = Vector3.zero;
+            menuRoot.transform.localRotation = Quaternion.identity;
+            menuRoot.transform.localScale = Vector3.one;
             Undo.AddComponent<ModularAvatarMenuInstaller>(menuRoot);
             var submenu = Undo.AddComponent<ModularAvatarMenuItem>(menuRoot);
+            Undo.RecordObject(submenu, undoName);
             submenu.Control = new VRCExpressionsMenu.Control
             {
                 name = data.menuName,
@@ -472,16 +494,34 @@ namespace Jeni.KaihenNavi
             };
             submenu.MenuSource = SubmenuSource.Children;
 
+            // MA は制御が無いと対象の activeSelf に戻るため、ON の服は Active=true だけでは脱げない。
+            // 親の OFF 設定を先に評価し、子のメニューが ON のときだけ後から上書きする。
+            // 参照: MA 1.18.7 ReactiveObjectAnalyzer.LocateReactions.cs / FindObjectToggles
+            var off = Undo.AddComponent<ModularAvatarObjectToggle>(menuRoot);
+            Undo.RecordObject(off, undoName);
+            off.Objects = new List<ToggledObject>();
+            foreach (var spec in data.items)
+            {
+                var target = HierarchyPath.Find(avatar.transform, spec.targetPath);
+                if (target == null) continue;
+                var reference = new AvatarObjectReference();
+                reference.Set(target.gameObject);
+                off.Objects.Add(new ToggledObject { Object = reference, Active = false });
+            }
+
             foreach (var spec in data.items)
             {
                 var target = HierarchyPath.Find(avatar.transform, spec.targetPath);
                 if (target == null) continue;
 
                 var itemObject = new GameObject(spec.label);
-                itemObject.transform.SetParent(menuRoot.transform, false);
                 Undo.RegisterCreatedObjectUndo(itemObject, undoName);
+                Undo.SetTransformParent(itemObject.transform, menuRoot.transform, undoName);
 
                 var item = Undo.AddComponent<ModularAvatarMenuItem>(itemObject);
+                var toggle = Undo.AddComponent<ModularAvatarObjectToggle>(itemObject);
+                Undo.RecordObject(item, undoName);
+                Undo.RecordObject(toggle, undoName);
                 item.Control = new VRCExpressionsMenu.Control
                 {
                     name = spec.label,
@@ -495,11 +535,18 @@ namespace Jeni.KaihenNavi
 
                 var reference = new AvatarObjectReference();
                 reference.Set(target.gameObject);
-                var toggle = Undo.AddComponent<ModularAvatarObjectToggle>(itemObject);
                 toggle.Objects = new List<ToggledObject>
                 {
                     new ToggledObject { Object = reference, Active = true },
                 };
+
+                // EditorOnly の空オブジェクトの activeSelf に元の表示を保存する。
+                // 独自スクリプトは追加せず、メニューと一緒に Undo・Prefab 保存・バックアップで復元できる。
+                var visibility = new GameObject(VisibilityName) { tag = "EditorOnly" };
+                Undo.RegisterCreatedObjectUndo(visibility, undoName);
+                Undo.SetTransformParent(visibility.transform, itemObject.transform, undoName);
+                Undo.RecordObject(visibility, undoName);
+                visibility.SetActive(spec.hasOriginalActive ? spec.originalActive : spec.isDefault);
             }
 
             return menuRoot;
@@ -530,6 +577,9 @@ namespace Jeni.KaihenNavi
                     parameter = item.Control != null && item.Control.parameter != null ? item.Control.parameter.name : "",
                     targetPath = HierarchyPath.Get(avatar.transform, target.transform),
                     isDefault = item.isDefault,
+                    hasOriginalActive = true,
+                    originalActive = item.transform.Find(VisibilityName) != null ?
+                        item.transform.Find(VisibilityName).gameObject.activeSelf : item.isDefault,
                 });
             }
 
@@ -597,6 +647,8 @@ namespace Jeni.KaihenNavi
         public string parameter = "";
         public string targetPath = "";
         public bool isDefault = false;
+        public bool hasOriginalActive = false;
+        public bool originalActive = false;
     }
 
     /// <summary>

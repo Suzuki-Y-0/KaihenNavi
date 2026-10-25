@@ -28,6 +28,9 @@ namespace Jeni.KaihenNavi
 
         private VisualElement _avatarArea;
         private VisualElement _avatarThumbnail;
+        private Texture2D _thumbnailImage;
+        private string _thumbnailInitial;
+        private string _checkSignature;
         private VisualElement _navigation;
         private VisualElement _navigationList;
         private VisualElement _navigationFooter;
@@ -50,8 +53,14 @@ namespace Jeni.KaihenNavi
         private bool _compact;
         private VisualElement _panelArea;
         private Label _backupLabel;
+        private Label _toast;
+        private IVisualElementScheduledItem _toastClear;
         private Button _restoreButton;
         private Button _historyButton;
+        private VisualElement _historyOverlay;
+        private bool _undoPerformed;
+        private readonly Dictionary<FeatureBase, Label> _navigationBadges = new Dictionary<FeatureBase, Label>();
+        private readonly Dictionary<FeatureBase, VisualElement> _navigationDone = new Dictionary<FeatureBase, VisualElement>();
         private bool _scanQueued;
         private ulong _panelHierarchyHash;
         private ulong _navigationHierarchyHash;
@@ -65,6 +74,9 @@ namespace Jeni.KaihenNavi
         private int _seenGroup = -1;
         private double _seenAt;
         private int _savedGroup = -1;
+        private bool _afterUndoRedo;
+        private int _saveEditGroup = -1;
+        private string _saveEditName;
         private System.DateTime _lastSavedAt;
         private const double AutoSaveDelay = 1.5;
 
@@ -90,6 +102,7 @@ namespace Jeni.KaihenNavi
             KonoAssetLink.Changed += QueueKonoRefresh;
             ItemLedger.Changed += QueueKonoRefresh;
             Undo.undoRedoPerformed += OnUndoRedo;
+            Undo.postprocessModifications += OnRecordedModifications;
             EditorApplication.hierarchyChanged += QueueScan;
             EditorApplication.playModeStateChanged += OnPlayModeChanged;
             EditorSceneManager.sceneClosing += OnSceneClosing;
@@ -103,6 +116,7 @@ namespace Jeni.KaihenNavi
             ItemLedger.Changed -= QueueKonoRefresh;
             EditorApplication.delayCall -= RefreshKono;
             Undo.undoRedoPerformed -= OnUndoRedo;
+            Undo.postprocessModifications -= OnRecordedModifications;
             EditorApplication.hierarchyChanged -= QueueScan;
             EditorApplication.delayCall -= RunQueuedScan;
             _scanQueued = false;
@@ -121,7 +135,12 @@ namespace Jeni.KaihenNavi
             EditorApplication.delayCall += RefreshKono;
         }
 
-        private void RefreshKono() { RebuildAll(); }
+        private void RefreshKono()
+        {
+            if (_avatarArea == null) return;
+            if (_avatar == null || _choosing) BuildAvatarArea();
+            else if (_selected != null && (_selected.Id == "outfit" || _selected.Id == "transform")) BuildPanel(false);
+        }
 
         private void CreateGUI()
         {
@@ -135,6 +154,7 @@ namespace Jeni.KaihenNavi
             titleContent = new GUIContent(L10n.Tr("app.name"));
 
             var root = rootVisualElement;
+            CloseHistory();
             root.Clear();
             root.AddToClassList("kn-root");
             root.EnableInClassList("kn-dark", EditorGUIUtility.isProSkin);
@@ -232,6 +252,9 @@ namespace Jeni.KaihenNavi
             _backupLabel = Ui.Text("", "kn-footer__label");
             info.Add(_backupLabel);
             footer.Add(info);
+            _toast = Ui.Text("", "kn-footer__toast");
+            _toast.style.display = DisplayStyle.None;
+            footer.Add(_toast);
 
             return footer;
         }
@@ -249,6 +272,9 @@ namespace Jeni.KaihenNavi
             _restoreButton = null;
             _historyButton = null;
             _checkArea = null;
+            _checkSignature = null;
+            _thumbnailImage = null;
+            _thumbnailInitial = null;
 
             var choosing = _avatar == null || _choosing;
             _workspace.style.display = choosing ? DisplayStyle.None : DisplayStyle.Flex;
@@ -304,11 +330,14 @@ namespace Jeni.KaihenNavi
         {
             if (_avatarThumbnail == null || _avatar == null) return;
             var shot = AvatarChooser.LoadThumbnail(MyAvatar.PrefabPath(_avatar));
+            var initial = string.IsNullOrEmpty(_avatar.name) ? "?" :
+                System.Globalization.StringInfo.GetNextTextElement(_avatar.name);
+            if (_thumbnailImage == shot && _thumbnailInitial == initial) return;
+            _thumbnailImage = shot;
+            _thumbnailInitial = initial;
             _avatarThumbnail.Clear();
             _avatarThumbnail.style.backgroundImage = new StyleBackground(shot);
-            if (shot == null)
-                _avatarThumbnail.Add(Ui.Text(string.IsNullOrEmpty(_avatar.name) ? "?" :
-                    System.Globalization.StringInfo.GetNextTextElement(_avatar.name), "kn-current__initial"));
+            if (shot == null) _avatarThumbnail.Add(Ui.Text(initial, "kn-current__initial"));
         }
 
         private void OnAvatarPicked(VRCAvatarDescriptor avatar)
@@ -437,7 +466,12 @@ namespace Jeni.KaihenNavi
                 _uploadBadge.text = count.ToString();
                 _uploadBadge.style.display = count > 0 ? DisplayStyle.Flex : DisplayStyle.None;
             }
-            if (_checkArea != null)
+            var signature = string.Join("|", _uploadIssues.Select(i => i.ModelPath + ":" + i.CanFix + ":" +
+                string.Join(",", i.Kinds.OrderBy(k => k).Select(k => k.ToString()).ToArray())).Concat(
+                    _sameUploadTargets.Select(t => t.GetInstanceID() + ":" + t.name)).ToArray());
+            var changed = signature != _checkSignature;
+            _checkSignature = signature;
+            if (_checkArea != null && changed)
             {
                 _checkArea.Clear();
                 if (count > 0)
@@ -447,21 +481,24 @@ namespace Jeni.KaihenNavi
                     _checkArea.Add(notice);
                 }
             }
-            if (_featureId == "uploadCheck" && _panelArea != null) BuildPanel();
+            if (changed && _featureId == "uploadCheck" && _panelArea != null) BuildPanel(false);
         }
 
         /// <summary>確認ページ。修正は従来どおり、対象を列挙した確認ダイアログの後にだけ実行する。</summary>
-        private void BuildUploadCheckPage()
+        private void BuildUploadCheckPage(bool rebuildHeader)
         {
-            var header = Ui.Box("kn-page-header__row");
-            var titles = Ui.Box("kn-page-header__texts");
-            titles.Add(Ui.Text(L10n.Tr("nav.uploadCheck"), "kn-page-title"));
-            titles.Add(Ui.Text(L10n.Tr("check.description"), "kn-page-description"));
-            header.Add(titles);
-            var refresh = Ui.Button(L10n.Tr("panel.refresh"), RefreshUploadCheck, "kn-button--small", "kn-button--ghost");
-            refresh.tooltip = L10n.Tr("panel.refreshTip");
-            header.Add(refresh);
-            _pageHeader.Add(header);
+            if (rebuildHeader)
+            {
+                var header = Ui.Box("kn-page-header__row");
+                var titles = Ui.Box("kn-page-header__texts");
+                titles.Add(Ui.Text(L10n.Tr("nav.uploadCheck"), "kn-page-title"));
+                titles.Add(Ui.Text(L10n.Tr("check.description"), "kn-page-description"));
+                header.Add(titles);
+                var refresh = Ui.Button(L10n.Tr("panel.refresh"), RefreshUploadCheck, "kn-button--small", "kn-button--ghost");
+                refresh.tooltip = L10n.Tr("panel.refreshTip");
+                header.Add(refresh);
+                _pageHeader.Add(header);
+            }
             if (_avatar == null) return;
             if (_uploadIssues.Count == 0 && _sameUploadTargets.Count == 0)
             {
@@ -555,6 +592,7 @@ namespace Jeni.KaihenNavi
         {
             if (_avatar == null || EditorApplication.isPlayingOrWillChangePlaymode) return;
             UpdateSaveLabel();
+            if (TransformFeature.IsAdjusting || _afterUndoRedo) return;
             var group = Undo.GetCurrentGroup();
             var now = EditorApplication.timeSinceStartup;
             if (group != _seenGroup)
@@ -572,10 +610,22 @@ namespace Jeni.KaihenNavi
         /// <param name="manual">「保存」ボタンから呼んだとき true（変更がなくても保存時刻を更新する）。</param>
         private void SaveNow(bool manual = false)
         {
-            if (_avatar == null) return;
+            if (_avatar == null || (_afterUndoRedo && !manual)) return;
+            var editGroup = _saveEditGroup;
+            var editName = _saveEditName;
+            TransformFeature.FinishAdjustment();
+            _backup.CompletePending();
+            _backup.SaveHistory(_avatar);
             var materialsChanged = HasUnsavedMaterials();
             MyAvatar.SaveMaterials(_avatar);
             var saved = MyAvatar.Save(_avatar);
+            // Scene の移動ツールからの編集も、記録されたグループに保存をまとめる。
+            if (saved && editGroup >= 0)
+            {
+                Undo.SetCurrentGroupName(editName);
+                Undo.CollapseUndoOperations(editGroup);
+            }
+            _saveEditGroup = -1;
             _savedGroup = Undo.GetCurrentGroup();
             if (saved || materialsChanged || manual) _lastSavedAt = System.DateTime.Now;
             UpdateSaveLabel();
@@ -597,6 +647,8 @@ namespace Jeni.KaihenNavi
             _navigationList.Clear();
             _navigationFooter.Clear();
             _navigationItems.Clear();
+            _navigationBadges.Clear();
+            _navigationDone.Clear();
             _compactArea.Clear();
             _navigationFeatures = new List<FeatureBase>();
             foreach (var group in _features.GroupBy(f => f.Group))
@@ -612,15 +664,13 @@ namespace Jeni.KaihenNavi
                     item.Add(Ui.Box("kn-nav-item__indicator"));
                     item.Add(Ui.NavigationIcon(f.Id));
                     item.Add(Ui.Text(f.NavTitle, "kn-nav-item__title"));
-                    // 件数の検出はナビを組み直すときだけ行う。
-                    var badge = f.NavBadge(_avatar);
-                    if (!string.IsNullOrEmpty(badge)) item.Add(Ui.Text(badge, "kn-nav-badge"));
-                    if (f.IsDone(_avatar))
-                    {
-                        var done = Ui.NavigationIcon("check");
-                        done.AddToClassList("kn-nav-done");
-                        item.Add(done);
-                    }
+                    var badge = Ui.Text("", "kn-nav-badge");
+                    item.Add(badge);
+                    _navigationBadges[f] = badge;
+                    var done = Ui.NavigationIcon("check");
+                    done.AddToClassList("kn-nav-done");
+                    item.Add(done);
+                    _navigationDone[f] = done;
                     // Unity のアイコン取得に依存せず、製品版の表示を常に保証する。
                     if (f.Locked) item.Add(Ui.Text(L10n.Tr("card.full"), "kn-nav-item__lock"));
                     _navigationList.Add(item);
@@ -653,7 +703,21 @@ namespace Jeni.KaihenNavi
             });
             _compactArea.Add(_featurePopup);
             UpdateNavigationSelection();
+            RefreshNavigationStatus();
             RefreshUploadCheck();
+        }
+
+        /// <summary>変わらないナビの文字とフォントを保ち、件数と完了の印だけ更新する。</summary>
+        private void RefreshNavigationStatus()
+        {
+            _navigationHierarchyHash = HierarchyHash(true);
+            foreach (var pair in _navigationBadges)
+            {
+                var text = pair.Key.NavBadge(_avatar);
+                pair.Value.text = text ?? "";
+                pair.Value.style.display = string.IsNullOrEmpty(text) ? DisplayStyle.None : DisplayStyle.Flex;
+                _navigationDone[pair.Key].style.display = pair.Key.IsDone(_avatar) ? DisplayStyle.Flex : DisplayStyle.None;
+            }
         }
 
         private void UpdateNavigationSelection()
@@ -667,16 +731,16 @@ namespace Jeni.KaihenNavi
                     _featureChoices.Count - 1 : _navigationFeatures.IndexOf(_selected) + 1]);
         }
 
-        private void BuildPanel()
+        private void BuildPanel(bool rebuildHeader = true)
         {
             // 手動更新や機能切り替えでも比較の基準を更新し、同じ変更で二度作り直さない。
             _panelHierarchyHash = HierarchyHash();
             _panelArea.Clear();
-            _pageHeader.Clear();
+            if (rebuildHeader) _pageHeader.Clear();
             _panelArea.EnableInClassList("kn-panel--empty", _selected == null && _featureId != "uploadCheck");
             if (_featureId == "uploadCheck")
             {
-                BuildUploadCheckPage();
+                BuildUploadCheckPage(rebuildHeader);
                 return;
             }
             if (_selected == null)
@@ -685,15 +749,18 @@ namespace Jeni.KaihenNavi
                 return;
             }
 
-            var header = Ui.Box("kn-page-header__row");
-            var titles = Ui.Box("kn-page-header__texts");
-            titles.Add(Ui.Text(_selected.Title, "kn-page-title"));
-            titles.Add(Ui.Text(_selected.Description, "kn-page-description"));
-            header.Add(titles);
-            var refresh = Ui.Button(L10n.Tr("panel.refresh"), () => BuildPanel(), "kn-button--small", "kn-button--ghost");
-            refresh.tooltip = L10n.Tr("panel.refreshTip");
-            header.Add(refresh);
-            _pageHeader.Add(header);
+            if (rebuildHeader)
+            {
+                var header = Ui.Box("kn-page-header__row");
+                var titles = Ui.Box("kn-page-header__texts");
+                titles.Add(Ui.Text(_selected.Title, "kn-page-title"));
+                titles.Add(Ui.Text(_selected.Description, "kn-page-description"));
+                header.Add(titles);
+                var refresh = Ui.Button(L10n.Tr("panel.refresh"), () => BuildPanel(), "kn-button--small", "kn-button--ghost");
+                refresh.tooltip = L10n.Tr("panel.refreshTip");
+                header.Add(refresh);
+                _pageHeader.Add(header);
+            }
 
             if (_selected.Locked)
             {
@@ -713,10 +780,11 @@ namespace Jeni.KaihenNavi
                 Avatar = _avatar,
                 Backup = _backup,
                 FeatureId = _selected.Id,
+                Editing = () => _afterUndoRedo = false,
                 Rebuild = () =>
                 {
-                    BuildNavigation();
-                    BuildPanel();
+                    RefreshNavigationStatus();
+                    BuildPanel(false);
                 },
                 SelectAvatar = a =>
                 {
@@ -725,6 +793,7 @@ namespace Jeni.KaihenNavi
                     // 一覧に新しいアバターを加え、選んだ状態で作り直す
                     BuildAvatarArea();
                 },
+                Notify = ShowToast,
                 OpenFeature = id =>
                 {
                     var feature = _features.FirstOrDefault(f => f.Id == id);
@@ -743,14 +812,25 @@ namespace Jeni.KaihenNavi
             }
         }
 
+        /// <summary>下のステータスに、終わったことを数秒だけ出す。</summary>
+        private void ShowToast(string message)
+        {
+            if (_toast == null) return;
+            _toast.text = "✓ " + message;
+            _toast.style.display = DisplayStyle.Flex;
+            if (_toastClear != null) _toastClear.Pause();
+            _toastClear = _toast.schedule.Execute(() => _toast.style.display = DisplayStyle.None).StartingIn(6000);
+        }
+
         private void RefreshFooter()
         {
             if (_backupLabel == null) return;
             var list = _backup.List(_avatar);
-            _backupLabel.text = list.Count == 0 ? L10n.Tr("footer.backups", 0) :
-                L10n.Tr("footer.status", list.Count, list[0].CreatedAt.ToString("HH:mm"));
-            if (_restoreButton != null) _restoreButton.SetEnabled(list.Count > 0);
-            if (_historyButton != null) _historyButton.SetEnabled(list.Count > 0);
+            var count = list.Select(s => s.SessionTicks).Distinct().Count();
+            _backupLabel.text = count == 0 ? L10n.Tr("footer.backups", 0) :
+                L10n.Tr("footer.status", count, list[0].CreatedAt.ToString("HH:mm"));
+            if (_restoreButton != null) _restoreButton.SetEnabled(list.Count > 0 || _backup.HasLiveUndo(_avatar));
+            if (_historyButton != null) _historyButton.SetEnabled(_avatar != null);
         }
 
         // ---------------------------------------------------------------- 選択
@@ -758,11 +838,15 @@ namespace Jeni.KaihenNavi
         private void SelectAvatar(VRCAvatarDescriptor avatar)
         {
             if (avatar == _avatar) return;
+            CloseHistory();
+            _backup.CompletePending();
             SaveNow();
             if (_selected != null) _selected.OnClosed();
             _backup.EndSession();
             UndoHelper.Separate();
             _avatar = avatar;
+            _saveEditGroup = -1;
+            _afterUndoRedo = false;
             _avatarId = avatar == null ? null : BackupService.AvatarId(avatar);
             _lastSavedAt = default(System.DateTime);
             _seenGroup = Undo.GetCurrentGroup();
@@ -787,6 +871,8 @@ namespace Jeni.KaihenNavi
         private void SelectPage(FeatureBase feature, string id)
         {
             if (_featureId == id) return;
+            CloseHistory();
+            _backup.CompletePending();
             SaveNow();
             if (_selected != null) _selected.OnClosed();
             _backup.EndSession();
@@ -870,12 +956,12 @@ namespace Jeni.KaihenNavi
                      HierarchyHash() != _panelHierarchyHash)
             {
                 // ツール自身のスライダーなどで通知されても、構成が同じなら入力を保つ。
-                BuildPanel();
+                BuildPanel(false);
             }
 
-            // 位置だけの変更では件数を数え直さず、服やアクセの構成が変わったときだけナビを更新する。
-            if (HierarchyHash(true) != _navigationHierarchyHash || current != _avatar) BuildNavigation();
-            else RefreshUploadCheck();
+            // 構成が変わっても、左ナビと見出しを作り直さない。
+            if (HierarchyHash(true) != _navigationHierarchyHash || current != _avatar) RefreshNavigationStatus();
+            RefreshUploadCheck();
         }
 
         // ---------------------------------------------------------------- 元に戻す
@@ -883,72 +969,174 @@ namespace Jeni.KaihenNavi
         private void RestoreLatest()
         {
             if (_avatar == null) return;
-            var list = _backup.List(_avatar);
-            if (list.Count == 0) return;
-
-            var latest = list[0];
-            if (!EditorUtility.DisplayDialog(
-                    L10n.Tr("restore.title"),
-                    L10n.Tr("restore.message", latest.CreatedAt.ToString("M/d HH:mm"), FeatureTitle(latest.featureId)),
-                    L10n.Tr("restore.ok"),
-                    L10n.Tr("dialog.cancel")))
+            CloseHistory();
+            _backup.CompletePending();
+            // このウィンドウで記録した手順は Unity と同じ直前の 1 手。
+            // 再起動後など、Undo との対応が分からない履歴は最新のバックアップ 1 件で戻す。
+            _undoPerformed = false;
+            if (_backup.HasLiveUndo(_avatar)) Undo.PerformUndo();
+            if (!_undoPerformed)
             {
-                return;
+                var latest = _backup.List(_avatar).FirstOrDefault();
+                if (latest != null) RestoreFromHistory(latest);
             }
-
-            if (_selected != null) _selected.OnClosed();
-            _backup.Restore(_avatar, latest);
-            BuildNavigation();
-            BuildPanel();
-            RefreshFooter();
         }
 
+        /// <summary>履歴はウィンドウ内に重ねる。日付の / がメニュー階層になる問題も避ける。</summary>
         private void ShowHistoryMenu()
         {
             if (_avatar == null) return;
-            var menu = new GenericMenu();
+            if (_historyOverlay != null) { CloseHistory(); return; }
+            _backup.CompletePending();
+            _historyOverlay = Ui.Box("kn-history-overlay");
+            var dismiss = Ui.Button("", CloseHistory, "kn-history-dismiss");
+            dismiss.tooltip = L10n.Tr("history.close");
+            _historyOverlay.Add(dismiss);
+            var panel = Ui.Box("kn-history");
+            var header = Ui.Box("kn-row", "kn-history__header");
+            header.Add(Ui.Heading(L10n.Tr("footer.history")));
+            header.Add(Ui.Button(L10n.Tr("history.close"), CloseHistory, "kn-button--small", "kn-button--ghost"));
+            panel.Add(header);
+            panel.Add(Ui.Text(L10n.Tr("history.hint"), "kn-hint"));
+            var scroll = new ScrollView(ScrollViewMode.Vertical);
+            scroll.AddToClassList("kn-history__scroll");
             var list = _backup.List(_avatar);
-            foreach (var snapshot in list)
+            foreach (var session in list.GroupBy(item => item.SessionTicks))
             {
-                var s = snapshot;
-                var label = L10n.Tr("history.item", s.CreatedAt.ToString("M/d HH:mm:ss"), FeatureTitle(s.featureId));
-                menu.AddItem(new GUIContent(label), false, () => RestoreFromHistory(s));
+                var entries = session.OrderByDescending(item => item.createdTicks).ToList();
+                var latest = entries[0];
+                var section = Ui.Box("kn-history__session");
+                var title = Ui.Button("", null, "kn-history__summary");
+                title.Add(Ui.Text(FeatureTitle(latest.featureId), "kn-list__title"));
+                title.Add(Ui.Text(L10n.Tr("history.session", latest.CreatedAt.ToString("M/d HH:mm:ss"), entries.Count), "kn-list__sub"));
+                var details = Ui.Box("kn-history__steps");
+                details.style.display = DisplayStyle.None;
+                var expanded = false;
+                title.clicked += () =>
+                {
+                    expanded = !expanded;
+                    details.style.display = expanded ? DisplayStyle.Flex : DisplayStyle.None;
+                    title.EnableInClassList("kn-history__summary--open", expanded);
+                    if (expanded && details.childCount == 0)
+                        foreach (var entry in entries) details.Add(BuildHistoryStep(entry));
+                };
+                section.Add(title);
+                section.Add(details);
+                scroll.Add(section);
             }
+            if (list.Count == 0) scroll.Add(Ui.Text(L10n.Tr("history.empty"), "kn-hint"));
+            panel.Add(scroll);
+            _historyOverlay.Add(panel);
+            _historyOverlay.RegisterCallback<KeyDownEvent>(e =>
+            {
+                if (e.keyCode != KeyCode.Escape) return;
+                CloseHistory();
+                e.StopPropagation();
+            });
+            rootVisualElement.Add(_historyOverlay);
+            panel.focusable = true;
+            panel.Focus();
+        }
 
-            if (list.Count == 0) menu.AddDisabledItem(new GUIContent(L10n.Tr("history.empty")));
-            menu.ShowAsContext();
+        private VisualElement BuildHistoryStep(BackupSnapshot snapshot)
+        {
+            var row = Ui.Box("kn-list__row", "kn-history__step");
+            var texts = Ui.Box("kn-list__texts");
+            texts.Add(Ui.Text(OperationTitle(snapshot), "kn-list__title"));
+            texts.Add(Ui.Text(snapshot.CreatedAt.ToString("HH:mm:ss"), "kn-list__sub"));
+            row.Add(texts);
+            row.Add(Ui.Button(L10n.Tr("history.restoreHere"), () => RestoreFromHistory(snapshot), "kn-button--small"));
+            return row;
+        }
+
+        private void CloseHistory()
+        {
+            if (_historyOverlay == null) return;
+            _historyOverlay.RemoveFromHierarchy();
+            _historyOverlay = null;
+        }
+
+        private string OperationTitle(BackupSnapshot snapshot)
+        {
+            if (!string.IsNullOrEmpty(snapshot.operationKey)) return L10n.Tr(snapshot.operationKey);
+            // 古いバックアップや MA などの英語名は、初心者にも読める機能名に置き換える。
+            var name = snapshot.operationName;
+            if (!string.IsNullOrEmpty(name) && name.Any(c => c >= '\u3040' && c <= '\u9fff')) return name;
+            return L10n.Tr("history.operation", FeatureTitle(snapshot.featureId));
         }
 
         private void RestoreFromHistory(BackupSnapshot snapshot)
         {
+            if (_avatar == null || snapshot == null || snapshot.hiddenFromHistory) return;
             if (!EditorUtility.DisplayDialog(
                     L10n.Tr("restore.title"),
-                    L10n.Tr("restore.historyMessage", snapshot.CreatedAt.ToString("M/d HH:mm:ss"), FeatureTitle(snapshot.featureId)),
-                    L10n.Tr("restore.ok"),
-                    L10n.Tr("dialog.cancel")))
-            {
-                return;
-            }
-
+                    L10n.Tr("history.confirm", snapshot.CreatedAt.ToString("M/d HH:mm:ss"), OperationTitle(snapshot)),
+                    L10n.Tr("history.restoreHere"), L10n.Tr("dialog.cancel"))) return;
+            CloseHistory();
             if (_selected != null) _selected.OnClosed();
             _backup.Restore(_avatar, snapshot);
-            BuildNavigation();
-            BuildPanel();
-            RefreshFooter();
+            _savedGroup = -1;
+            _seenAt = EditorApplication.timeSinceStartup;
+            RefreshAfterUndo();
         }
 
         private string FeatureTitle(string id)
         {
             var feature = _features.FirstOrDefault(f => f.Id == id);
-            return feature == null ? id : feature.Title;
+            return feature == null ? L10n.Tr("history.unknownFeature") : feature.NavTitle;
+        }
+
+        /// <summary>グループ番号の変化だけでは新しい編集と判断しない（Undo 自体でも番号が進む）。</summary>
+        private UndoPropertyModification[] OnRecordedModifications(UndoPropertyModification[] changes)
+        {
+            if (_avatar != null && changes.Any(change => change.currentValue != null &&
+                    IsAvatarModification(change.currentValue.target)))
+            {
+                _afterUndoRedo = false;
+                _saveEditGroup = Undo.GetCurrentGroup();
+                _saveEditName = Undo.GetCurrentGroupName();
+            }
+            else if (changes.Length > 0)
+            {
+                // 別の対象への編集まで、前のアバター操作に巻き込まない。
+                _saveEditGroup = -1;
+            }
+            return changes;
+        }
+
+        private bool IsAvatarModification(Object target)
+        {
+            var component = target as Component;
+            var go = component != null ? component.gameObject : target as GameObject;
+            if (go != null) return !EditorUtility.IsPersistent(go) && go.transform.IsChildOf(_avatar.transform);
+            return target is Material && WorkFolders.IsOwnedBy(target, _avatar.gameObject);
         }
 
         private void OnUndoRedo()
         {
+            _undoPerformed = true;
+            _backup.OnUndoRedo();
+            // Undo 後はグループ番号が同じでも、戻した状態を次の自動保存に含める。
+            _savedGroup = -1;
+            _seenAt = EditorApplication.timeSinceStartup;
+            CloseHistory();
+            RefreshAfterUndo();
+        }
+
+        private void RefreshAfterUndo()
+        {
             if (_panelArea == null) return;
             UndoHelper.Separate();
-            BuildNavigation();
-            BuildPanel();
+            // Undo/Redo の直後に再適用すると、新しい保存の履歴が Redo を消してしまう。
+            // 保存済みの編集は Prefab 側も同じ Undo で戻る。次の編集か明示的な保存まで待つ。
+            _afterUndoRedo = true;
+            _saveEditGroup = -1;
+            TransformFeature.CancelAdjustment();
+            _seenGroup = _savedGroup = Undo.GetCurrentGroup();
+            _backup.EndSession();
+            RefreshNavigationStatus();
+            if (_selected == null || !_selected.RefreshValues()) BuildPanel(false);
+            RefreshUploadCheck();
             UpdateSaveLabel();
             RefreshFooter();
         }

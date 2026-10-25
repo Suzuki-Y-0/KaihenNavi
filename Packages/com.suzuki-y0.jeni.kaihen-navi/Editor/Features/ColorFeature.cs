@@ -31,6 +31,12 @@ namespace Jeni.KaihenNavi
         private static readonly HashSet<Material> Excluded = new HashSet<Material>();
 
         private readonly Dictionary<Material, Color> _baselines = new Dictionary<Material, Color>();
+        private readonly Dictionary<string, Color> _layerBaselines = new Dictionary<string, Color>();
+        private readonly HashSet<Material> _bakeQueue = new HashSet<Material>();
+        private readonly HashSet<Material> _colorizeQueue = new HashSet<Material>();
+        // 場所（髪・服…）ごとに「色をのせる」を覚える
+        private static readonly HashSet<BodyPart> Colorize = new HashSet<BodyPart>();
+        private double _bakeAt;
         private BodyPart _part = BodyPart.Hair;
         private List<Entry> _entries = new List<Entry>();
         private Slider _hue;
@@ -85,6 +91,23 @@ namespace Jeni.KaihenNavi
             root.Add(_saturation);
             root.Add(_brightness);
 
+            // 白・黒・灰色は色味をずらしても色が出ないので、色をのせるやり方も選べるようにする
+            var colorize = new Toggle(L10n.Tr("color.colorize")) { value = Colorize.Contains(_part) };
+            colorize.AddToClassList("kn-field");
+            colorize.RegisterValueChangedCallback(e =>
+            {
+                if (e.newValue) Colorize.Add(_part);
+                else
+                {
+                    Colorize.Remove(_part);
+                    var undoName = L10n.Tr("undo.color");
+                    foreach (var entry in Selected().ToList()) ColorLayers.ResetMain(entry.Material, undoName);
+                }
+                Apply(ctx);
+            });
+            root.Add(colorize);
+            root.Add(Ui.Text(L10n.Tr("color.colorizeHint"), "kn-hint"));
+
             var buttons = Ui.Box("kn-row");
             buttons.Add(Ui.Button(L10n.Tr("color.reset"), () => ResetColors(ctx)));
             root.Add(buttons);
@@ -99,6 +122,13 @@ namespace Jeni.KaihenNavi
 
         public override void OnClosed()
         {
+            if (_bakeAt > 0)
+            {
+                _bakeAt = 1; // 閉じる前に、待っていた作り直しをすぐ行う
+                BakeWhenIdle();
+            }
+
+            _bakeAt = 0;
             _baselines.Clear();
         }
 
@@ -199,7 +229,7 @@ namespace Jeni.KaihenNavi
             var brightness = _brightness.value;
             var undoName = L10n.Tr("undo.color");
 
-            ctx.BeginEdit();
+            ctx.BeginEdit("color:" + _part);
             UndoHelper.Begin("color:" + _part, undoName);
 
             foreach (var entry in Selected().ToList())
@@ -211,7 +241,20 @@ namespace Jeni.KaihenNavi
                 if (IsLilToon(material))
                 {
                     var v = material.GetVector(HsvgProperty);
-                    material.SetVector(HsvgProperty, new Vector4(hue / 360f, saturation / 100f, brightness / 100f, v.w));
+                    if (Colorize.Contains(_part))
+                    {
+                        // 色をのせるときは、色調補正は使わず画像の複製で色をつける（両方使うと二重にずれる）
+                        material.SetVector(HsvgProperty, new Vector4(0f, 1f, 1f, v.w));
+                        _colorizeQueue.Add(material);
+                        QueueBake(material);
+                    }
+                    else
+                    {
+                        material.SetVector(HsvgProperty, new Vector4(hue / 360f, saturation / 100f, brightness / 100f, v.w));
+                        // 2nd / 3rd の層に色が乗っている服（ドレスの外側など）は、層の色も変える
+                        ColorLayers.ApplyTint(material, hue, saturation, brightness, _layerBaselines);
+                        if (ColorLayers.HasLayers(material)) QueueBake(material);
+                    }
                 }
                 else
                 {
@@ -231,6 +274,35 @@ namespace Jeni.KaihenNavi
             UndoHelper.End();
         }
 
+        /// <summary>層のテクスチャの作り直しは重いので、スライダーが止まってから 1 回だけ行う。</summary>
+        private void QueueBake(Material material)
+        {
+            _bakeQueue.Add(material);
+            if (_bakeAt <= 0) EditorApplication.update += BakeWhenIdle;
+            _bakeAt = EditorApplication.timeSinceStartup + 0.4;
+        }
+
+        private void BakeWhenIdle()
+        {
+            if (EditorApplication.timeSinceStartup < _bakeAt) return;
+            EditorApplication.update -= BakeWhenIdle;
+            _bakeAt = 0;
+            if (_hue == null) return;
+            var undoName = L10n.Tr("undo.color");
+            var hue = _hue.value;
+            var saturation = _saturation.value;
+            var brightness = _brightness.value;
+            foreach (var material in _bakeQueue)
+            {
+                if (material == null) continue;
+                if (_colorizeQueue.Contains(material)) ColorLayers.BakeColorize(material, hue, saturation, brightness, undoName);
+                else if (ColorLayers.HasLayers(material)) ColorLayers.BakeTextures(material, hue, saturation, brightness, undoName);
+            }
+
+            _bakeQueue.Clear();
+            _colorizeQueue.Clear();
+        }
+
         private void ResetColors(FeatureContext ctx)
         {
             var undoName = L10n.Tr("undo.colorReset");
@@ -244,11 +316,16 @@ namespace Jeni.KaihenNavi
                 if (IsLilToon(material))
                 {
                     var v = material.GetVector(HsvgProperty);
-                    if (Mathf.Approximately(v.x, 0f) && Mathf.Approximately(v.y, 1f) && Mathf.Approximately(v.z, 1f)) continue;
-                    material = Own(ctx, entry, undoName);
-                    Undo.RecordObject(material, undoName);
-                    material.SetVector(HsvgProperty, new Vector4(0f, 1f, 1f, v.w));
-                    EditorUtility.SetDirty(material);
+                    if (!(Mathf.Approximately(v.x, 0f) && Mathf.Approximately(v.y, 1f) && Mathf.Approximately(v.z, 1f)))
+                    {
+                        material = Own(ctx, entry, undoName);
+                        Undo.RecordObject(material, undoName);
+                        material.SetVector(HsvgProperty, new Vector4(0f, 1f, 1f, v.w));
+                        EditorUtility.SetDirty(material);
+                    }
+
+                    if (ColorLayers.HasLayers(material)) ColorLayers.Reset(material, _layerBaselines, undoName);
+                    ColorLayers.ResetMain(material, undoName);
                 }
                 else
                 {

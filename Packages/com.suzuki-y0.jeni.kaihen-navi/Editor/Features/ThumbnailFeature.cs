@@ -24,7 +24,8 @@ namespace Jeni.KaihenNavi
 
         private static readonly string[] FramingKeys = { "thumb.face", "thumb.upper", "thumb.full" };
         private static readonly float[] Angles = { 0f, -25f, 25f };
-        private static readonly string[] AngleKeys = { "thumb.front", "thumb.left", "thumb.right" };
+        // -25° では写真の中で体が右を向く（実際に撮って確かめた）
+        private static readonly string[] AngleKeys = { "thumb.front", "thumb.right", "thumb.left" };
 
         // 背景（最初はシーンのまま）
         private static readonly Color?[] Backgrounds =
@@ -33,10 +34,21 @@ namespace Jeni.KaihenNavi
             new Color(1f, 1f, 1f),
             new Color(1f, 0.89f, 0.93f),
             new Color(0.86f, 0.93f, 1f),
+            new Color(0.91f, 0.88f, 1f),
+            new Color(0.86f, 0.97f, 0.91f),
+            new Color(1f, 0.96f, 0.85f),
             new Color(0.16f, 0.16f, 0.19f),
+            new Color(0.02f, 0.02f, 0.03f),
+            null, // 好きな色（_custom を使う）
         };
 
-        private static readonly string[] BackgroundKeys = { "thumb.bgScene", "thumb.bgWhite", "thumb.bgPink", "thumb.bgBlue", "thumb.bgDark" };
+        private static readonly string[] BackgroundKeys =
+        {
+            "thumb.bgScene", "thumb.bgWhite", "thumb.bgPink", "thumb.bgBlue", "thumb.bgLavender", "thumb.bgMint",
+            "thumb.bgCream", "thumb.bgDark", "thumb.bgBlack", "thumb.bgCustom",
+        };
+
+        private static Color _custom = new Color(0.98f, 0.8f, 0.6f);
 
         private static int _framing;
         private static int _angle;
@@ -69,6 +81,7 @@ namespace Jeni.KaihenNavi
             }));
 
             root.Add(Ui.Heading(L10n.Tr("thumb.angle")));
+            root.Add(Ui.Text(L10n.Tr("thumb.angleHint"), "kn-hint"));
             root.Add(Ui.Chips(Labels(AngleKeys), _angle, i =>
             {
                 _angle = i;
@@ -83,6 +96,17 @@ namespace Jeni.KaihenNavi
                 RefreshPreview(avatar, preview);
                 ctx.Rebuild();
             }));
+            if (_background == BackgroundKeys.Length - 1)
+            {
+                var picker = new UnityEditor.UIElements.ColorField(L10n.Tr("thumb.bgCustom")) { value = _custom, showAlpha = false };
+                picker.AddToClassList("kn-field");
+                picker.RegisterValueChangedCallback(e =>
+                {
+                    _custom = e.newValue;
+                    RefreshPreview(avatar, preview);
+                });
+                root.Add(picker);
+            }
 
             root.Add(Ui.Slider(L10n.Tr("thumb.zoom"), 70f, 140f, _zoom * 100f, v =>
             {
@@ -167,7 +191,7 @@ namespace Jeni.KaihenNavi
                 camera.aspect = aspect;
                 camera.nearClipPlane = 0.01f;
                 camera.farClipPlane = distance + span * 4f + 10f;
-                var background = Backgrounds[_background];
+                var background = _background == BackgroundKeys.Length - 1 ? (Color?)_custom : Backgrounds[_background];
                 camera.clearFlags = background.HasValue ? CameraClearFlags.SolidColor : CameraClearFlags.Skybox;
                 if (background.HasValue) camera.backgroundColor = background.Value;
                 camera.transform.position = center - toTarget * distance;

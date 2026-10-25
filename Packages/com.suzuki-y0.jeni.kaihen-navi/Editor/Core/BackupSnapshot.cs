@@ -57,6 +57,15 @@ namespace Jeni.KaihenNavi
         public long createdTicks;
         /// <summary>どの「やりたいこと」の前に取ったか（FeatureBase.Id）。</summary>
         public string featureId;
+        /// <summary>同じ機能を続けて操作したまとまりの識別子。旧バックアップでは createdTicks を使う。</summary>
+        public long sessionTicks;
+        /// <summary>Undo グループ名と翻訳キー。未知の名前は画面で機能名に置き換える。</summary>
+        public string operationName;
+        public string operationKey;
+        /// <summary>Undo・Redo と同じグループで更新する履歴の表示状態。復元後もファイルは消さない。</summary>
+        public bool hiddenFromHistory;
+
+        public long SessionTicks { get { return sessionTicks == 0 ? createdTicks : sessionTicks; } }
 
         public Vector3 viewPosition;
         public List<TransformState> transforms = new List<TransformState>();

@@ -39,13 +39,28 @@ namespace Jeni.KaihenNavi
             public Dictionary<string, float> Values;
         }
 
+        // どのおすすめも 5 項目すべてを決める（一部だけ変えると、前に押したおすすめと混ざって違いが分からなくなるため）。
+        // 順番：いちばん暗いとき、いちばん明るいとき、まわりの明るさを無視、影の濃さ、影のぼかし
         private static readonly Preset[] Presets =
         {
-            new Preset { Key = "visible", Values = new Dictionary<string, float> { { "_LightMinLimit", 0.25f } } },
-            new Preset { Key = "soft", Values = new Dictionary<string, float> { { "_ShadowStrength", 0.5f }, { "_ShadowBlur", 0.3f } } },
-            new Preset { Key = "noGlare", Values = new Dictionary<string, float> { { "_LightMaxLimit", 1f }, { "_AsUnlit", 0f } } },
-            new Preset { Key = "standard", Values = Settings.ToDictionary(s => s.Property, s => s.Default) },
+            Make("visible", 0.35f, 1f, 0.15f, 0.6f, 0.2f),
+            Make("soft", 0.1f, 1f, 0f, 0.4f, 0.45f),
+            Make("noGlare", 0.05f, 0.75f, 0f, 1f, 0.1f),
+            Make("standard", 0.05f, 1f, 0f, 1f, 0.1f),
         };
+
+        private static Preset Make(string key, float min, float max, float unlit, float shadow, float blur)
+        {
+            return new Preset
+            {
+                Key = key,
+                Values = new Dictionary<string, float>
+                {
+                    { "_LightMinLimit", min }, { "_LightMaxLimit", max }, { "_AsUnlit", unlit },
+                    { "_ShadowStrength", shadow }, { "_ShadowBlur", blur },
+                },
+            };
+        }
 
         private const string LilToonMarker = "_lilToonVersion";
         private const string UseShadowProperty = "_UseShadow";
@@ -111,10 +126,13 @@ namespace Jeni.KaihenNavi
             foreach (var preset in Presets)
             {
                 var p = preset;
-                presets.Add(Ui.Button(L10n.Tr("light.preset." + p.Key), () => ApplyPreset(ctx, p), "kn-button--ghost"));
+                var button = Ui.Button(L10n.Tr("light.preset." + p.Key), () => ApplyPreset(ctx, p), "kn-button--ghost");
+                button.tooltip = L10n.Tr("light.preset." + p.Key + "Hint");
+                presets.Add(button);
             }
 
             root.Add(presets);
+            root.Add(Ui.Text(L10n.Tr("light.presetsHint"), "kn-hint"));
 
             // 細かく調整する
             root.Add(Ui.Heading(L10n.Tr("light.adjust")));
@@ -219,7 +237,7 @@ namespace Jeni.KaihenNavi
         private void Apply(FeatureContext ctx, Setting setting, float value)
         {
             var undoName = L10n.Tr("undo.light");
-            ctx.BeginEdit();
+            ctx.BeginEdit("light:" + setting.Property);
             UndoHelper.Begin("light:" + setting.Property, undoName);
             Set(ctx, setting.Property, value, undoName);
             UndoHelper.End();

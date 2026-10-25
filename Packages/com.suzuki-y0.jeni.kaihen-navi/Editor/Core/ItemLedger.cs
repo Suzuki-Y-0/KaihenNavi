@@ -42,9 +42,12 @@ namespace Jeni.KaihenNavi
         private const string LedgerPath = WorkFolders.Root + "/Ledger/items.json";
         private static List<LedgerPackage> _cachedPackages;
         private static Dictionary<string, LedgerPackage> _recordsByPath;
+        private static List<LedgerPackage> _projectItems;
 
         public static event Action Changed;
         private static readonly Dictionary<string, KonoAssetLedgerLinkUndo> LinkUndo = new Dictionary<string, KonoAssetLedgerLinkUndo>();
+
+        internal const string LedgerFile = LedgerPath;
 
         private const string PendingKey = "KaihenNavi.ItemLedger.Pending";
 
@@ -64,6 +67,7 @@ namespace Jeni.KaihenNavi
         static ItemLedger()
         {
             Undo.undoRedoPerformed += RestoreLinks;
+            KonoAssetLink.Changed += () => _projectItems = null;
             AssetDatabase.importPackageStarted += Started;
             AssetDatabase.importPackageCompleted += Completed;
             AssetDatabase.importPackageCancelled += Cancelled;
@@ -206,6 +210,29 @@ namespace Jeni.KaihenNavi
             catch (Exception e) { Warn(e); }
         }
 
+        /// <summary>選んだ商品の取り込み元を、同名パッケージがある場合も確実に記録する。</summary>
+        public static void ImportProduct(KonoAssetItem product, string path)
+        {
+            if (product == null || !KonoAssetLink.Packages(product).Contains(path)) return;
+            if (!PackageImportUndo.Begin(path)) return;
+            SessionState.SetString("KaihenNavi.ItemLedger.ImportProduct", product.id);
+            try { AssetDatabase.ImportPackage(path, true); }
+            catch
+            {
+                SessionState.EraseString("KaihenNavi.ItemLedger.ImportProduct");
+                PackageImportUndo.Cancel();
+                throw;
+            }
+        }
+
+        internal static void Invalidate()
+        {
+            _cachedPackages = null;
+            _recordsByPath = null;
+            _projectItems = null;
+            if (Changed != null) Changed();
+        }
+
         private static void Started(string packageName)
         {
             try
@@ -260,10 +287,12 @@ namespace Jeni.KaihenNavi
                 package.scanned = false;
                 if (!package.konoAssetManual)
                 {
-                    var linked = KonoAssetLink.FindByPackageName(packageName);
+                    var selectedId = SessionState.GetString("KaihenNavi.ItemLedger.ImportProduct", "");
+                    var linked = KonoAssetLink.Find(selectedId) ?? KonoAssetLink.FindByPackageName(packageName);
                     if (linked != null) package.konoAssetId = linked.id;
                 }
                 Save(packages);
+                SessionState.EraseString("KaihenNavi.ItemLedger.ImportProduct");
             }
             catch (Exception e) { Warn(e); }
         }
@@ -278,65 +307,48 @@ namespace Jeni.KaihenNavi
                 File.WriteAllText(LedgerPath, JsonUtility.ToJson(new LedgerData { packages = packages }, true), new UTF8Encoding(false));
                 AssetDatabase.ImportAsset(LedgerPath);
             }
-            finally { _cachedPackages = null; _recordsByPath = null; }
+            finally { _cachedPackages = null; _recordsByPath = null; _projectItems = null; }
             if (Changed != null) Changed();
         }
 
-        /// <summary>購入したファイルを変更せず、今ある Prefab を台帳に登録する。</summary>
-        public static void ScanExisting()
+        /// <summary>プロジェクト内の服を読み取りだけで発見する。検索入力のたびには走査しない。</summary>
+        public static List<LedgerPackage> ProjectItems(bool reload = false)
         {
-            try
+            if (!reload && _projectItems != null) return _projectItems;
+            var packages = All().Where(p => p != null && (!p.scanned || p.konoAssetManual)).ToList();
+            var imported = new HashSet<string>(packages.SelectMany(p =>
+                (p.assetPaths ?? new List<string>()).Concat(
+                    (p.prefabs ?? new List<LedgerPrefab>()).Where(f => f != null).Select(f => f.path))), StringComparer.Ordinal);
+            var paths = AssetDatabase.FindAssets("t:Prefab", new[] { "Assets" })
+                .Select(AssetDatabase.GUIDToAssetPath).Where(IsScanPath)
+                .Distinct().OrderBy(p => p, StringComparer.Ordinal).ToList();
+            var folders = new Dictionary<string, string>(StringComparer.Ordinal);
+            foreach (var group in paths.GroupBy(p => p.Split('/').Length > 2 ? p.Split('/')[1] : ""))
             {
-                EditorUtility.DisplayProgressBar(L10n.Tr("pick.owned"), L10n.Tr("pick.scanning"), 0f);
-                // 壊れた台帳は上書きしない。取り込みと手動の対応（解除も含む）は残す。
-                var packages = ReadPackages().Where(p => p != null && (!p.scanned || p.konoAssetManual)).ToList();
-                var imported = new HashSet<string>(packages.SelectMany(p =>
-                    (p.assetPaths ?? new List<string>()).Concat(
-                        (p.prefabs ?? new List<LedgerPrefab>()).Where(f => f != null).Select(f => f.path))), StringComparer.Ordinal);
-                var paths = AssetDatabase.FindAssets("t:Prefab", new[] { "Assets" })
-                    .Select(AssetDatabase.GUIDToAssetPath).Where(IsScanPath)
-                    .Distinct().OrderBy(p => p, StringComparer.Ordinal).ToList();
-                var folders = new Dictionary<string, string>(StringComparer.Ordinal);
-                foreach (var group in paths.GroupBy(p => p.Split('/').Length > 2 ? p.Split('/')[1] : ""))
+                var root = group.Key.Length == 0 ? "Assets" : "Assets/" + group.Key;
+                GroupFolders(root, group.ToList(), 0, folders);
+            }
+            var scanned = new Dictionary<string, LedgerPackage>(StringComparer.Ordinal);
+            for (var i = 0; i < paths.Count; i++)
+            {
+                var path = paths[i];
+                if (imported.Contains(path)) continue;
+                // KonoAsset に同じ名前の商品があれば、そのフォルダを商品のまとまりにする（置き場や分類のフォルダより確か）
+                KonoAssetItem konoItem;
+                var folder = KonoFolderOf(path, out konoItem) ?? folders[path];
+                LedgerPackage package;
+                if (!scanned.TryGetValue(folder, out package))
                 {
-                    var root = group.Key.Length == 0 ? "Assets" : "Assets/" + group.Key;
-                    GroupFolders(root, group.ToList(), 0, folders);
+                    package = new LedgerPackage { packageName = Path.GetFileName(folder), commonFolder = folder, scanned = true };
+                    var linked = konoItem ?? KonoAssetLink.FindByFolderName(package.packageName);
+                    if (linked != null) package.konoAssetId = linked.id;
+                    scanned.Add(folder, package);
                 }
-                var scanned = new Dictionary<string, LedgerPackage>(StringComparer.Ordinal);
-                for (var i = 0; i < paths.Count; i++)
-                {
-                    var path = paths[i];
-                    EditorUtility.DisplayProgressBar(L10n.Tr("pick.owned"),
-                        L10n.Tr("pick.scanning") + " (" + (i + 1) + "/" + paths.Count + ")", (float)i / paths.Count);
-                    if (imported.Contains(path)) continue;
-                    // KonoAsset に同じ名前の商品があれば、そのフォルダを商品のまとまりにする（置き場や分類のフォルダより確か）
-                    KonoAssetItem konoItem;
-                    var folder = KonoFolderOf(path, out konoItem) ?? folders[path];
-                    LedgerPackage package;
-                    if (!scanned.TryGetValue(folder, out package))
-                    {
-                        package = new LedgerPackage { packageName = Path.GetFileName(folder), commonFolder = folder, scanned = true };
-                        var linked = konoItem ?? KonoAssetLink.FindByFolderName(package.packageName);
-                        if (linked != null) package.konoAssetId = linked.id;
-                        scanned.Add(folder, package);
-                    }
-                    package.assetPaths.Add(path);
-                    package.prefabs.Add(new LedgerPrefab { path = path, kind = Classify(path) });
-                }
-                packages.AddRange(scanned.Values);
-                Save(packages);
+                package.assetPaths.Add(path);
+                package.prefabs.Add(new LedgerPrefab { path = path, kind = Classify(path) });
             }
-            catch (Exception e)
-            {
-                Warn(e);
-                EditorUtility.DisplayDialog(L10n.Tr("app.name"), L10n.Tr("pick.scanFailed"), L10n.Tr("dialog.ok"));
-            }
-            finally
-            {
-                _cachedPackages = null;
-                _recordsByPath = null;
-                EditorUtility.ClearProgressBar();
-            }
+            packages.AddRange(scanned.Values);
+            return _projectItems = packages;
         }
 
         // 置き場や分類によく使われる名前。KonoAsset の商品名と偶然一致しやすいので照合しない
@@ -431,7 +443,7 @@ namespace Jeni.KaihenNavi
 
         private static void Cancelled(string packageName)
         {
-            try { SessionState.EraseString(PendingKey); }
+            try { SessionState.EraseString(PendingKey); SessionState.EraseString("KaihenNavi.ItemLedger.ImportProduct"); }
             catch (Exception e) { Warn(e); }
         }
 

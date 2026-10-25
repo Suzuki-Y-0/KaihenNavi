@@ -33,23 +33,22 @@ namespace Jeni.KaihenNavi
 
         public override bool RefreshOnHierarchyChange { get { return true; } }
 
+        /// <summary>既存の候補一覧と同じ方法で、装着済みの数を表示する。</summary>
+        public override string NavBadge(VRCAvatarDescriptor avatar)
+        {
+#if KAIHENNAVI_MA
+            var count = avatar == null ? 0 : Worn(avatar).Count;
+            return count == 0 ? null : count.ToString();
+#else
+            return null;
+#endif
+        }
+
         public override VisualElement Build(FeatureContext ctx)
         {
             var root = new VisualElement();
 #if KAIHENNAVI_MA
             root.Add(Ui.Notice(L10n.Tr("outfit.intro"), "info"));
-
-            root.Add(Ui.Heading(L10n.Tr("outfit.pick")));
-            root.Add(ItemPicker.DropZone(L10n.Tr("outfit.drop"), ItemKind.Outfit, prefab => Wear(ctx, prefab)));
-
-            var suggestions = ItemPicker.Suggestions(ctx.Avatar, ItemKind.Outfit);
-            if (suggestions.Count > 0)
-            {
-                root.Add(Ui.Text(L10n.Tr("outfit.suggest"), "kn-hint"));
-                root.Add(ItemPicker.SuggestionList(suggestions, prefab => Wear(ctx, prefab)));
-            }
-
-            root.Add(ItemPicker.OwnedItems(ItemKind.Outfit, prefab => Wear(ctx, prefab)));
 
             // 着ている服（このツールや Setup Outfit で着せたもの）
             var worn = Worn(ctx.Avatar);
@@ -59,6 +58,22 @@ namespace Jeni.KaihenNavi
                 var list = Ui.Box("kn-list");
                 foreach (var outfit in worn) list.Add(WornRow(ctx, outfit));
                 root.Add(list);
+            }
+
+            root.Add(Ui.Heading(L10n.Tr("outfit.pick")));
+            root.Add(ItemPicker.DropZone(L10n.Tr("outfit.drop"), ItemKind.Outfit, prefab => Wear(ctx, prefab)));
+
+            var suggestions = ItemPicker.Suggestions(ctx.Avatar, ItemKind.Outfit);
+            if (suggestions.Count > 0)
+            {
+                root.Add(Ui.Heading(L10n.Tr("outfit.suggest")));
+                root.Add(ItemPicker.SuggestionList(suggestions, prefab => Wear(ctx, prefab)));
+            }
+
+            root.Add(ItemPicker.OwnedItems(ItemKind.Outfit, prefab => Wear(ctx, prefab)));
+
+            if (worn.Count > 0)
+            {
                 root.Add(Ui.Notice(L10n.Tr("outfit.afterTips"), "ok"));
                 root.Add(Ui.Button(L10n.Tr("outfit.toToggle"), () =>
                 {

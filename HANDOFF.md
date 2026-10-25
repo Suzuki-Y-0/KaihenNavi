@@ -296,6 +296,16 @@ Assets/KaihenNavi/
 - **体験版／製品版**: スクリプト定義シンボル `KAIHENNAVI_FULL` があると鍵が外れる（`Edition.IsTrial`）。`Edition.BoothUrl` は仮の `https://booth.pm/`
 - **言語**: `Editor/Localization/{ja,en,zh-Hans,ko}.json`（キーと文言だけの平らな JSON）。文言を足したら 4 ファイルともキーをそろえる（`tools/check.sh` が検査）
 
+### UI の方針（2026-10-25）
+
+- **VCC / ALCOM 風、差し色は Unity の青**。Unity のダーク／ライトスキンに合わせたグレーの面、薄い枠線、角丸 4px（カード 6px）を使う。番号の丸・色付き漢字アイコン・ピンクの装飾は使わない。アバターの色見本や撮影背景の色選択は機能の内容として残す。
+- `kn-current` / `kn-status-chip`: 上部のアバター帯と小さな状態表示。`kn-upload-check` は直下の1行警告（詳細はホバー、修正前の確認ダイアログは維持）。
+- `kn-workspace` / `kn-navigation` / `kn-nav-item`: 左ナビ＋右ページ。`FeatureBase.Group` と `nav.group.*` で4グループに分け、線画アイコンを添える。`Icon` / `Accent` は画面で参照しない。体験版の製品版項目にはグレーの「製品版」を表示。
+- `kn-page-header` / `kn-panel`: タイトル・説明・更新と、既存の `Feature.Build`。ナビと本文は別々にスクロール。幅 560px 未満は `GeometryChangedEvent` で `kn-compact-window` に切り替え、ナビの代わりに `PopupField` を表示する。
+- `kn-chooser` / `kn-choice`: アバター未選択時の中央の二択。`kn-footer`: 自動バックアップ件数・履歴・控えめな元に戻すボタン。
+- `kn-step-header` は番号なし見出し、`kn-notice` は標準アイコン＋薄い枠、`kn-chip` はセグメント、`kn-list__row` は行形式。各機能の編集処理は維持し、体型図の選択点と視点マーカーも青にそろえた。
+- Unity 実機では両スキン・4言語・幅 360 / 559 / 560 / 800px で、折り返し・スクロール・ナビ／ドロップダウンの選択同期・保存／履歴／警告を確認する。
+
 ## 6. ファイル構成
 
 ```
@@ -306,7 +316,7 @@ Packages/com.suzuki-y0.jeni.kaihen-navi/
     Core/  KaihenNaviWindow（画面）, BackupService / BackupSnapshot（バックアップ）,
            MaterialCopier, PartGuesser（髪・服・目・肌の判定）, AvatarFinder, HierarchyPath,
            WorkFolders, UndoHelper, L10n, Ui, PackagePaths, Edition
-    Features/  FeatureBase, FeatureCatalog（カードの並び）, ColorFeature, ToggleFeature, TransformFeature
+    Features/  FeatureBase, FeatureCatalog（ナビの並び）, ColorFeature, ToggleFeature, TransformFeature
     UI/KaihenNavi.uss
     Localization/*.json
 tools/

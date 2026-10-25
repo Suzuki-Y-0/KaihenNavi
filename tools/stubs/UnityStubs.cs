@@ -230,6 +230,7 @@ namespace UnityEngine
     }
 
     public class TextAsset : Object { public string text; }
+    public class Font : Object { }
 
     public class Animator : Behaviour
     {
@@ -372,6 +373,7 @@ namespace UnityEngine
     public class GUIContent
     {
         public GUIContent(string text) { }
+        public Texture image;
     }
 
     [AttributeUsage(AttributeTargets.Field)] public class SerializeField : Attribute { }
@@ -462,13 +464,19 @@ namespace UnityEngine.UIElements
     public class PointerMoveEvent : PointerEventBase { }
     public class PointerUpEvent : PointerEventBase { }
 
+    public enum LineCap { Butt, Round, Square }
+    public enum LineJoin { Miter, Round, Bevel }
+
     public class Painter2D
     {
         public float lineWidth;
+        public LineCap lineCap;
+        public LineJoin lineJoin;
         public UnityEngine.Color strokeColor, fillColor;
         public void BeginPath() { }
         public void MoveTo(UnityEngine.Vector2 p) { }
         public void LineTo(UnityEngine.Vector2 p) { }
+        public void BezierCurveTo(UnityEngine.Vector2 c1, UnityEngine.Vector2 c2, UnityEngine.Vector2 end) { }
         public void ClosePath() { }
         public void Stroke() { }
         public void Fill() { }
@@ -497,6 +505,7 @@ namespace UnityEngine.UIElements
     public interface IResolvedStyle
     {
         UnityEngine.FontStyle unityFontStyleAndWeight { get; }
+        UnityEngine.Color color { get; }
     }
 
     public struct UQueryBuilder<T> where T : VisualElement
@@ -509,10 +518,13 @@ namespace UnityEngine.UIElements
         public static UQueryBuilder<T> Query<T>(this VisualElement e) where T : VisualElement { return default(UQueryBuilder<T>); }
     }
 
+    public interface IPanel { }
+
     public class VisualElement
     {
         public UnityEngine.Rect layout;
         public IStyle style;
+        public IPanel panel;
         public IResolvedStyle resolvedStyle;
         public IVisualElementScheduler schedule;
         public bool ClassListContains(string c) { return false; }
@@ -530,6 +542,7 @@ namespace UnityEngine.UIElements
         public void EnableInClassList(string c, bool enable) { }
         public void SetEnabled(bool value) { }
         public void RegisterCallback<T>(EventCallback<T> callback) where T : EventBase { }
+        public void UnregisterCallback<T>(EventCallback<T> callback) where T : EventBase { }
     }
 
     public class ChangeEvent<T> : EventBase
@@ -551,7 +564,7 @@ namespace UnityEngine.UIElements
 
     public class TextElement : VisualElement { public string text; }
     public class Label : TextElement { public Label() { } public Label(string text) { } }
-    public class Button : TextElement { public Button() { } public Button(Action clickEvent) { } }
+    public class Button : TextElement { public Action clicked; public Button() { } public Button(Action clickEvent) { } }
     public class Foldout : BaseField<bool> { public string text; }
     public class Toggle : BaseField<bool> { public Toggle() { } public Toggle(string label) { } }
     public class TextField : BaseField<string> { public string label; }
@@ -570,7 +583,7 @@ namespace UnityEngine.UIElements
 
     public enum ScrollViewMode { Vertical, Horizontal }
     public class ScrollView : VisualElement { public ScrollView(ScrollViewMode mode) { } public VisualElement contentViewport; }
-    public class GeometryChangedEvent : EventBase { }
+    public class GeometryChangedEvent : EventBase { public UnityEngine.Rect newRect; }
 }
 
 namespace UnityEditor.UIElements
@@ -601,7 +614,7 @@ namespace UnityEditor
     public class EditorWindow : ScriptableObject
     {
         public GUIContent titleContent;
-        public Vector2 minSize;
+        public Vector2 minSize, maxSize;
         public UnityEngine.UIElements.VisualElement rootVisualElement;
         public static T GetWindow<T>() where T : EditorWindow { return null; }
         public void Show() { }
@@ -794,6 +807,7 @@ namespace UnityEditor
         public static void DisplayProgressBar(string title, string info, float progress) { if (ProgressForTests != null) ProgressForTests(progress); }
         public static void ClearProgressBar() { if (ClearProgressForTests != null) ClearProgressForTests(); }
         public static void SetDirty(Object o) { }
+        public static bool IsDirty(Object target) { return false; }
         public static Action<Object, Object> CopyForTests;
         public static void CopySerialized(Object src, Object dst) { if (CopyForTests != null) CopyForTests(src, dst); }
         public static bool DisplayDialog(string t, string m, string ok) { return true; }
@@ -803,6 +817,7 @@ namespace UnityEditor
     public static class EditorGUIUtility
     {
         public static bool isProSkin;
+        public static GUIContent IconContent(string name) { return new GUIContent(name); }
         public static void PingObject(Object o) { }
     }
 
@@ -859,6 +874,7 @@ namespace UnityEditor
         public delegate void MenuFunction();
         public void AddItem(GUIContent c, bool on, MenuFunction f) { }
         public void AddDisabledItem(GUIContent c) { }
+        public void AddSeparator(string path) { }
         public void ShowAsContext() { }
     }
 
@@ -900,6 +916,7 @@ namespace UnityEngine.TextCore.Text
         public FontWeightPair[] fontWeightTable { get { return null; } }
         public System.Collections.Generic.List<FontAsset> fallbackFontAssetTable { get; set; }
         public static FontAsset CreateFontAsset(string familyName, string styleName, int pointSize) { return null; }
+        public static FontAsset CreateFontAsset(UnityEngine.Font font) { return null; }
     }
 }
 

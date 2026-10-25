@@ -21,6 +21,7 @@ namespace Jeni.KaihenNavi
         private static Dictionary<string, string> _table;
         private static Dictionary<string, string> _fallback;
         private static string _loadedCode;
+        private static Dictionary<string, string> _undoKeys;
 
         /// <summary>言語が切り替わったときに呼ばれる。</summary>
         public static event Action Changed;
@@ -69,9 +70,25 @@ namespace Jeni.KaihenNavi
             }
         }
 
+        /// <summary>既存の Undo 名を 4 言語から照合し、履歴に保存する翻訳キーを返す。</summary>
+        public static string UndoKey(string name)
+        {
+            if (string.IsNullOrEmpty(name)) return null;
+            if (_undoKeys == null)
+            {
+                _undoKeys = new Dictionary<string, string>();
+                foreach (var code in Codes)
+                    foreach (var pair in Load(code))
+                        if (pair.Key.StartsWith("undo.", StringComparison.Ordinal)) _undoKeys[pair.Value] = pair.Key;
+            }
+            string key;
+            return _undoKeys.TryGetValue(name, out key) ? key : null;
+        }
+
         /// <summary>言語ファイルを読み直す（翻訳の編集中に使う）。</summary>
         public static void Reload()
         {
+            _undoKeys = null;
             _table = null;
             _fallback = null;
             if (Changed != null) Changed();

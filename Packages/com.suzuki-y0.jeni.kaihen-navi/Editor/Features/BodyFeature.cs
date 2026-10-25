@@ -60,7 +60,12 @@ namespace Jeni.KaihenNavi
         private Slider _length;
         private Slider _width;
         private Label _heightLabel;
+        private Label _partLabel;
+        private Label _dragHint;
+        private VisualElement _widthRow;
+        private readonly List<Button> _partButtons = new List<Button>();
         private bool _dragging;
+        private bool _updatingControls;
         private Vector2 _dragStart;
         private float _dragLength;
         private float _dragWidth;
@@ -76,6 +81,8 @@ namespace Jeni.KaihenNavi
         {
             var root = new VisualElement();
 #if KAIHENNAVI_MA
+            // 手動更新でページを作り直す場合も、前の撮影予約と画像を解放する。
+            OnClosed();
             _avatar = ctx.Avatar;
             if (AvatarMeasure.HumanAnimator(_avatar) == null)
             {
@@ -107,9 +114,23 @@ namespace Jeni.KaihenNavi
             return root;
         }
 
+        public override bool RefreshValues()
+        {
+#if KAIHENNAVI_MA
+            if (_avatar == null || _canvas == null || _partLabel == null) return false;
+            UpdateControls();
+            Refresh();
+            return true;
+#else
+            return false;
+#endif
+        }
+
         public override void OnClosed()
         {
 #if KAIHENNAVI_MA
+            if (_refresh != null) _refresh.Pause();
+            _dragging = false;
             if (_silhouette != null) Object.DestroyImmediate(_silhouette);
             _silhouette = null;
             _canvas = null;
@@ -122,17 +143,17 @@ namespace Jeni.KaihenNavi
         private VisualElement BuildPartList(FeatureContext ctx)
         {
             var list = Ui.Box("kn-figure__parts");
+            _partButtons.Clear();
             for (var i = 0; i < Groups.Length; i++)
             {
                 var index = i;
                 var button = Ui.Button(L10n.Tr(Groups[i].Key), () =>
                 {
-                    _selected = index;
-                    UndoHelper.Separate();
-                    ctx.Rebuild();
+                    SelectPart(index);
                 }, "kn-button--small", "kn-figure__part");
                 if (i == _selected) button.AddToClassList("kn-figure__part--selected");
                 list.Add(button);
+                _partButtons.Add(button);
             }
 
             return list;
@@ -141,48 +162,75 @@ namespace Jeni.KaihenNavi
         private VisualElement BuildControls(FeatureContext ctx)
         {
             var box = Ui.Box("kn-figure__controls");
-            var group = Groups[_selected];
-            box.Add(Ui.Heading(L10n.Tr(group.Key)));
+            _partLabel = Ui.Heading("");
+            box.Add(_partLabel);
+            _heightLabel = Ui.Text("", "kn-readout");
+            box.Add(_heightLabel);
+            // 選択のたびに要素を作り直さず、ラベル・範囲・値だけを切り替える。
+            _length = Ui.Slider("", 50f, 150f, 100f, v =>
+            {
+                if (_updatingControls) return;
+                var group = Groups[_selected];
+                if (group.Whole) SetHeight(ctx, v);
+                else SetPart(ctx, group, v, group.Uniform ? v : _width.value);
+            });
+            box.Add(_length);
+            _width = Ui.Slider(L10n.Tr("body.width"), 50f, 150f, 100f,
+                v => { if (!_updatingControls) SetPart(ctx, Groups[_selected], _length.value, v); });
+            _widthRow = _width;
+            box.Add(_width);
+            var buttons = Ui.Box("kn-row");
+            buttons.Add(Ui.Button(L10n.Tr("body.resetPart"), () => ResetGroup(ctx, Groups[_selected]), "kn-button--small"));
+            buttons.Add(Ui.Button(L10n.Tr("body.resetAll"), () => ResetAll(ctx), "kn-button--small", "kn-button--ghost"));
+            box.Add(buttons);
+            _dragHint = Ui.Text("", "kn-hint");
+            box.Add(_dragHint);
+            UpdateControls();
+            return box;
+        }
 
-            if (group.Whole)
+        /// <summary>点と部位ボタンは同じ部分更新を使う。選択だけではアバターを変更しない。</summary>
+        private void SelectPart(int index)
+        {
+            if (_selected == index) return;
+            _selected = index;
+            UndoHelper.Separate();
+            UpdateControls();
+            _canvas.MarkDirtyRepaint();
+        }
+
+        /// <summary>入力通知を出さずに、選択中の部位の値を表示する。</summary>
+        private void UpdateControls()
+        {
+            _updatingControls = true;
+            try
             {
-                var armature = Armature(_avatar);
-                var percent = armature == null ? 100f : armature.localScale.y / BaseArmatureScale(armature) * 100f;
-                _heightLabel = Ui.Text("", "kn-readout");
-                box.Add(_heightLabel);
-                _length = Ui.Slider(L10n.Tr("body.height"), 80f, 120f, percent, v => SetHeight(ctx, v));
-                box.Add(_length);
-                _width = null;
-                UpdateHeightLabel();
-            }
-            else
-            {
-                Vector3 current;
-                int axis;
-                Read(group, out current, out axis);
-                if (group.Uniform)
+                var group = Groups[_selected];
+                for (var i = 0; i < _partButtons.Count; i++)
+                    _partButtons[i].EnableInClassList("kn-figure__part--selected", i == _selected);
+                _partLabel.text = L10n.Tr(group.Key);
+                _heightLabel.style.display = group.Whole ? DisplayStyle.Flex : DisplayStyle.None;
+                _widthRow.style.display = !group.Whole && !group.Uniform ? DisplayStyle.Flex : DisplayStyle.None;
+                _length.label = L10n.Tr(group.Whole ? "body.height" : group.Uniform ? "body.size" : "body.length");
+                _length.lowValue = group.Whole ? 80f : 50f;
+                _length.highValue = group.Whole ? 120f : 150f;
+                if (group.Whole)
                 {
-                    _length = Ui.Slider(L10n.Tr("body.size"), 50f, 150f, current.x * 100f, v => SetPart(ctx, group, v, v));
-                    _width = null;
+                    var armature = Armature(_avatar);
+                    _length.SetValueWithoutNotify(armature == null ? 100f : armature.localScale.y / BaseArmatureScale(armature) * 100f);
+                    UpdateHeightLabel();
                 }
                 else
                 {
-                    var thick = axis == 0 ? current.y : current.x;
-                    _length = Ui.Slider(L10n.Tr("body.length"), 50f, 150f, current[axis] * 100f, v => SetPart(ctx, group, v, _width != null ? _width.value : 100f));
-                    _width = Ui.Slider(L10n.Tr("body.width"), 50f, 150f, thick * 100f, v => SetPart(ctx, group, _length.value, v));
-                    box.Add(_length);
-                    box.Add(_width);
+                    Vector3 current;
+                    int axis;
+                    Read(group, out current, out axis);
+                    _length.SetValueWithoutNotify((group.Uniform ? current.x : current[axis]) * 100f);
+                    _width.SetValueWithoutNotify((axis == 0 ? current.y : current.x) * 100f);
                 }
-
-                if (group.Uniform) box.Add(_length);
+                _dragHint.text = L10n.Tr(group.Whole ? "body.dragHintWhole" : "body.dragHint");
             }
-
-            var buttons = Ui.Box("kn-row");
-            buttons.Add(Ui.Button(L10n.Tr("body.resetPart"), () => ResetGroup(ctx, group), "kn-button--small"));
-            buttons.Add(Ui.Button(L10n.Tr("body.resetAll"), () => ResetAll(ctx), "kn-button--small", "kn-button--ghost"));
-            box.Add(buttons);
-            box.Add(Ui.Text(L10n.Tr(group.Whole ? "body.dragHintWhole" : "body.dragHint"), "kn-hint"));
-            return box;
+            finally { _updatingControls = false; }
         }
 
         // ---------------------------------------------------------------- シルエットとボーン図
@@ -379,16 +427,14 @@ namespace Jeni.KaihenNavi
             if (hit < 0) return;
             if (hit != _selected)
             {
-                _selected = hit;
-                UndoHelper.Separate();
-                ctx.Rebuild();
+                SelectPart(hit);
                 return;
             }
 
             _dragging = true;
             _dragStart = new Vector2(e.localPosition.x, e.localPosition.y);
             _dragLength = _length != null ? _length.value : 100f;
-            _dragWidth = _width != null ? _width.value : 100f;
+            _dragWidth = _width.value;
             _canvas.CapturePointer(e.pointerId);
         }
 
@@ -398,7 +444,7 @@ namespace Jeni.KaihenNavi
             var delta = new Vector2(e.localPosition.x, e.localPosition.y) - _dragStart;
             // 上へ動かすと長く（大きく）、右へ動かすと太く
             if (_length != null) _length.value = Mathf.Clamp(_dragLength - delta.y * DragPercentPerPixel, _length.lowValue, _length.highValue);
-            if (_width != null) _width.value = Mathf.Clamp(_dragWidth + delta.x * DragPercentPerPixel, _width.lowValue, _width.highValue);
+            if (!Groups[_selected].Whole && !Groups[_selected].Uniform) _width.value = Mathf.Clamp(_dragWidth + delta.x * DragPercentPerPixel, _width.lowValue, _width.highValue);
         }
 
         private void OnPointerUp(PointerUpEvent e)
@@ -433,7 +479,7 @@ namespace Jeni.KaihenNavi
         {
             var undoName = L10n.Tr("undo.body");
             var animator = AvatarMeasure.HumanAnimator(_avatar);
-            ctx.BeginEdit();
+            ctx.BeginEdit("body:" + group.Key);
             UndoHelper.Begin("body:" + group.Key, undoName);
             var viewBefore = AvatarMeasure.EyeCenter(_avatar);
             var feetBefore = BoneFollow.FeetHeight(animator);
@@ -479,16 +525,19 @@ namespace Jeni.KaihenNavi
             {
                 ctx.BeginEdit();
                 UndoHelper.Separate();
+                UndoHelper.Begin("body-reset", L10n.Tr("undo.body"));
                 var viewBefore = AvatarMeasure.EyeCenter(_avatar);
                 var animator = AvatarMeasure.HumanAnimator(_avatar);
                 var feetBefore = BoneFollow.FeetHeight(animator);
                 foreach (var b in group.Bones) RemoveAdjuster(_avatar, AvatarMeasure.Bone(_avatar, b));
                 BoneFollow.KeepFeetOnFloor(animator, feetBefore, L10n.Tr("undo.body"));
                 FollowView(viewBefore, L10n.Tr("undo.body"));
+                UndoHelper.End();
             }
 
             UndoHelper.Separate();
-            ctx.Rebuild();
+            UpdateControls();
+            Refresh();
         }
 
         private void ResetAll(FeatureContext ctx)
@@ -496,6 +545,10 @@ namespace Jeni.KaihenNavi
             if (!EditorUtility.DisplayDialog(L10n.Tr("app.name"), L10n.Tr("body.resetAllConfirm"), L10n.Tr("body.resetAll"), L10n.Tr("dialog.cancel"))) return;
             ctx.BeginEdit();
             UndoHelper.Separate();
+            Undo.IncrementCurrentGroup();
+            var undoGroup = Undo.GetCurrentGroup();
+            Undo.SetCurrentGroupName(L10n.Tr("undo.body"));
+            var eyesBefore = AvatarMeasure.EyeCenter(_avatar);
             var allAnimator = AvatarMeasure.HumanAnimator(_avatar);
             var allFeet = BoneFollow.FeetHeight(allAnimator);
             foreach (var g in Groups)
@@ -506,9 +559,15 @@ namespace Jeni.KaihenNavi
 
             BoneFollow.KeepFeetOnFloor(allAnimator, allFeet, L10n.Tr("undo.body"));
 
+            FollowView(eyesBefore, L10n.Tr("undo.body"));
             SetHeight(ctx, 100f);
+            Undo.SetCurrentGroupName(L10n.Tr("undo.body"));
+            Undo.CollapseUndoOperations(undoGroup);
+            // 身長の内側で増えたグループに、履歴だけが残らないようまとめ先を渡す。
+            ctx.Backup.CompletePending(undoGroup);
             UndoHelper.Separate();
-            ctx.Rebuild();
+            UpdateControls();
+            Refresh();
         }
 
         private static void RemoveAdjuster(VRCAvatarDescriptor avatar, Transform bone)
@@ -586,7 +645,7 @@ namespace Jeni.KaihenNavi
             }
 
             var undoName = L10n.Tr("undo.height");
-            ctx.BeginEdit();
+            ctx.BeginEdit("body:height");
             UndoHelper.Begin("body:height", undoName);
             var baseScale = BaseArmatureScaleVector(armature);
             var eyesBefore = AvatarMeasure.EyeCenter(_avatar);

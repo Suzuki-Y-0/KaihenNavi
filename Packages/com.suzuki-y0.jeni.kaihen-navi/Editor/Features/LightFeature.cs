@@ -219,7 +219,7 @@ namespace Jeni.KaihenNavi
         private void Apply(FeatureContext ctx, Setting setting, float value)
         {
             var undoName = L10n.Tr("undo.light");
-            ctx.BeginEdit();
+            ctx.BeginEdit("light:" + setting.Property);
             UndoHelper.Begin("light:" + setting.Property, undoName);
             Set(ctx, setting.Property, value, undoName);
             UndoHelper.End();

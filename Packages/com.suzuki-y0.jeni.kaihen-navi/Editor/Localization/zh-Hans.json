@@ -520,5 +520,13 @@
   "feature.walk.nav": "更换动作",
   "feature.menu.nav": "整理菜单",
   "feature.thumbnail.nav": "拍摄缩略图",
-  "nav.sceneAdvice": "修改仅保存在场景中。请从“更多”创建改装模型以启用自动保存。"
+  "nav.sceneAdvice": "修改仅保存在场景中。请从“更多”创建改装模型以启用自动保存。",
+  "history.close": "关闭",
+  "history.hint": "展开工作名称可查看详细步骤。“恢复到这里”会恢复到执行该步骤之前。",
+  "history.session": "{0} · {1} 步 ▾",
+  "history.restoreHere": "恢复到这里",
+  "history.operation": "{0}的修改",
+  "history.confirm": "恢复到 {0} 执行“{1}”之前的状态吗？\n之后的修改也会撤销。按 Ctrl+Z 可撤销本次恢复。",
+  "history.unknownFeature": "虚拟形象的修改",
+  "history.record": "记录操作历史"
 }

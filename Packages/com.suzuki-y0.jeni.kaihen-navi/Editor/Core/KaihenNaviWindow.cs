@@ -53,6 +53,8 @@ namespace Jeni.KaihenNavi
         private bool _compact;
         private VisualElement _panelArea;
         private Label _backupLabel;
+        private Label _toast;
+        private IVisualElementScheduledItem _toastClear;
         private Button _restoreButton;
         private Button _historyButton;
         private VisualElement _historyOverlay;
@@ -250,6 +252,9 @@ namespace Jeni.KaihenNavi
             _backupLabel = Ui.Text("", "kn-footer__label");
             info.Add(_backupLabel);
             footer.Add(info);
+            _toast = Ui.Text("", "kn-footer__toast");
+            _toast.style.display = DisplayStyle.None;
+            footer.Add(_toast);
 
             return footer;
         }
@@ -788,6 +793,7 @@ namespace Jeni.KaihenNavi
                     // 一覧に新しいアバターを加え、選んだ状態で作り直す
                     BuildAvatarArea();
                 },
+                Notify = ShowToast,
                 OpenFeature = id =>
                 {
                     var feature = _features.FirstOrDefault(f => f.Id == id);
@@ -804,6 +810,16 @@ namespace Jeni.KaihenNavi
                 Debug.LogException(e);
                 _panelArea.Add(Ui.Notice(L10n.Tr("panel.error", e.Message), "warn"));
             }
+        }
+
+        /// <summary>下のステータスに、終わったことを数秒だけ出す。</summary>
+        private void ShowToast(string message)
+        {
+            if (_toast == null) return;
+            _toast.text = "✓ " + message;
+            _toast.style.display = DisplayStyle.Flex;
+            if (_toastClear != null) _toastClear.Pause();
+            _toastClear = _toast.schedule.Execute(() => _toast.style.display = DisplayStyle.None).StartingIn(6000);
         }
 
         private void RefreshFooter()

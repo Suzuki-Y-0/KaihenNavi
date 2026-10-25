@@ -282,10 +282,9 @@ namespace Jeni.KaihenNavi
 
             Bounds bounds;
             var hasBounds = TryBounds(instance, out bounds);
-            // 元の位置を保つのは、このアバター用に作られた物か、元の位置が骨のすぐ近く（身長の 5% 以内）のときだけ。
-            // 20% まで許すと、別のアバター用の耳が頭の中に入るなど、見えない所に付いてしまった。
-            var keepPosition = MatchesAvatar(avatar, prefab) ||
-                (hasBounds && Vector3.Distance(bounds.center, bone.position) <= height * 0.05f);
+            // 元の位置を保つのは、このアバター用に作られた物（名前・置き場所にアバター名がある）ときだけ。
+            // 距離で判断すると、別のアバター用の耳が頭の中に入るなど、見えない所に付いてしまった（実際に付けて確かめた）。
+            var keepPosition = MatchesAvatar(avatar, prefab);
             Undo.SetTransformParent(target, bone, undoName);
             Undo.RecordObject(target, undoName);
             if (!keepPosition)

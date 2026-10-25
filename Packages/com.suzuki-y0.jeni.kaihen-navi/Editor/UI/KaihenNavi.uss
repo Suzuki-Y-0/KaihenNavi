@@ -115,9 +115,10 @@
 .kn-page-title { font-size: 17px; -unity-font-style: bold; white-space: normal; margin: 0 0 6px 0; }
 .kn-page-description { font-size: 11.5px; color: var(--kn-text-sub); white-space: normal; margin: 0; }
 .kn-page-scroll { flex-grow: 1; min-height: 0; }
-.kn-page-scroll .unity-scroll-view__content-container { flex-grow: 1; }
+/* 中身の高さをスクロール枠に合わせない（合わせると長いページで行が縮んで重なる） */
+.kn-panel > *, .kn-panel > * > *, .kn-list > * { flex-shrink: 0; }
 .kn-panel { flex-grow: 1; padding: 0 24px 16px 24px; }
-.kn-panel--empty { align-items: center; justify-content: center; }
+.kn-panel--empty { align-items: center; justify-content: center; min-height: 320px; }
 .kn-empty { color: var(--kn-text-sub); white-space: normal; -unity-text-align: middle-center; margin: 24px; }
 .kn-compact { flex-shrink: 0; padding: 8px 16px; border-bottom-width: 1px; border-bottom-color: var(--kn-border); }
 .kn-feature-popup { margin: 0; min-width: 0; }

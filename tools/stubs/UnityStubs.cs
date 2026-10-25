@@ -39,7 +39,7 @@ namespace UnityEngine
     {
         public GameObject gameObject;
         public Transform transform;
-        public T GetComponent<T>() { return default(T); }
+        public T GetComponent<T>() { var all = GetComponents<T>(); return all.Length > 0 ? all[0] : default(T); }
         public T[] GetComponents<T>() { return gameObject == null ? new T[0] : gameObject.GetComponents<T>(); }
         public T[] GetComponentsInChildren<T>(bool includeInactive) { return gameObject == null ? new T[0] : gameObject.GetComponentsInChildren<T>(includeInactive); }
         public T GetComponentInChildren<T>(bool includeInactive) { return default(T); }
@@ -50,21 +50,49 @@ namespace UnityEngine
 
     public class GameObject : Object
     {
-        public GameObject() { }
-        public GameObject(string name) { }
+        public GameObject() : this("") { }
+        public GameObject(string name)
+        {
+            this.name = name;
+            transform = new Transform { name = name, gameObject = this };
+            transform.transform = transform;
+        }
+        private readonly List<Component> _components = new List<Component>();
         public Transform transform;
         public UnityEngine.SceneManagement.Scene scene;
-        public bool activeSelf;
+        public bool activeSelf = true;
         public bool activeInHierarchy;
         public string tag;
         public int layer;
-        public void SetActive(bool value) { }
-        public T AddComponent<T>() where T : Component { return null; }
-        public T GetComponent<T>() { return default(T); }
+        public void SetActive(bool value) { activeSelf = value; }
+        public T AddComponent<T>() where T : Component { return (T)AddComponent(typeof(T)); }
+        public Component AddComponent(Type type)
+        {
+            var component = (Component)Activator.CreateInstance(type);
+            component.gameObject = this;
+            component.transform = transform;
+            component.name = name;
+            _components.Add(component);
+            return component;
+        }
+        public T GetComponent<T>() { var all = GetComponents<T>(); return all.Length > 0 ? all[0] : default(T); }
         public Func<Type, object[]> ComponentsForTests;
         public T[] GetComponents<T>()
-        { return ComponentsForTests == null ? new T[0] : Array.ConvertAll(ComponentsForTests(typeof(T)), o => (T)o); }
-        public T[] GetComponentsInChildren<T>(bool includeInactive) { return GetComponents<T>(); }
+        {
+            if (ComponentsForTests != null) return Array.ConvertAll(ComponentsForTests(typeof(T)), o => (T)o);
+            var result = new List<T>();
+            if (transform is T) result.Add((T)(object)transform);
+            foreach (var component in _components) if (component is T) result.Add((T)(object)component);
+            return result.ToArray();
+        }
+        public T[] GetComponentsInChildren<T>(bool includeInactive)
+        {
+            var result = new List<T>();
+            if (includeInactive || activeSelf) result.AddRange(GetComponents<T>());
+            foreach (Transform child in transform)
+                if (includeInactive || child.gameObject.activeSelf) result.AddRange(child.gameObject.GetComponentsInChildren<T>(includeInactive));
+            return result.ToArray();
+        }
         public T GetComponentInChildren<T>(bool includeInactive) { return default(T); }
     }
 
@@ -74,13 +102,20 @@ namespace UnityEngine
         public Transform parent;
         public Transform root;
         public Vector3 lossyScale;
+        public Vector3 localEulerAngles;
         public int childCount;
         public Vector3 position, localPosition, localScale, up, right, forward;
         public Quaternion rotation, localRotation;
-        public Transform GetChild(int index) { return null; }
-        public Transform Find(string n) { return null; }
-        public bool IsChildOf(Transform p) { return false; }
-        public void SetParent(Transform p, bool worldPositionStays) { }
+        private readonly List<Transform> _children = new List<Transform>();
+        public Transform GetChild(int index) { return _children[index]; }
+        public Transform Find(string n) { return _children.Find(t => t.name == n); }
+        public bool IsChildOf(Transform p) { for (var t = this; t != null; t = t.parent) if (t == p) return true; return false; }
+        public void SetParent(Transform p, bool worldPositionStays)
+        {
+            if (parent != null) { parent._children.Remove(this); parent.childCount = parent._children.Count; }
+            parent = p;
+            if (p != null) { p._children.Add(this); p.childCount = p._children.Count; }
+        }
         public int GetSiblingIndex() { return 0; }
         public void SetSiblingIndex(int i) { }
         public void SetAsLastSibling() { }
@@ -88,7 +123,7 @@ namespace UnityEngine
         public Vector3 TransformPoint(Vector3 v) { return v; }
         public Vector3 InverseTransformPoint(Vector3 v) { return v; }
         public Vector3 InverseTransformVector(Vector3 v) { return v; }
-        public System.Collections.IEnumerator GetEnumerator() { yield break; }
+        public System.Collections.IEnumerator GetEnumerator() { return _children.GetEnumerator(); }
     }
 
     public class Renderer : Component { public Material[] sharedMaterials; public Bounds bounds; }
@@ -248,6 +283,7 @@ namespace UnityEngine
 
     public struct Bounds
     {
+        public Bounds(Vector3 center, Vector3 size) { this.center = center; max = center + size * 0.5f; }
         public Vector3 center, max;
         public void Encapsulate(Bounds b) { }
     }
@@ -336,6 +372,7 @@ namespace UnityEngine
 
     public static class Mathf
     {
+        public static float DeltaAngle(float current, float target) { return target - current; }
         public const float PI = 3.14159265f;
         public const float Deg2Rad = PI / 180f;
         public static float Max(float a, float b) { return a; }
@@ -454,6 +491,7 @@ namespace UnityEngine.UIElements
     public abstract class EventBase { public object target; }
     public class MouseDownEvent : EventBase { public int clickCount; }
     public class FocusOutEvent : EventBase { }
+    public class PointerCaptureOutEvent : EventBase { }
     public class DragUpdatedEvent : EventBase { }
     public abstract class PointerEventBase : EventBase
     {
@@ -554,12 +592,20 @@ namespace UnityEngine.UIElements
     public abstract class BaseField<T> : VisualElement
     {
         public T value;
-        public void SetValueWithoutNotify(T v) { }
+        public EventCallback<ChangeEvent<T>> ChangedForTests;
+        public void SetValueWithoutNotify(T v) { value = v; }
+        public void SendValueForTests(T next)
+        {
+            var old = value;
+            value = next;
+            if (ChangedForTests != null) ChangedForTests(new ChangeEvent<T> { previousValue = old, newValue = next });
+        }
     }
 
     public static class INotifyValueChangedExtensions
     {
-        public static bool RegisterValueChangedCallback<T>(this BaseField<T> control, EventCallback<ChangeEvent<T>> callback) { return true; }
+        public static bool RegisterValueChangedCallback<T>(this BaseField<T> control, EventCallback<ChangeEvent<T>> callback)
+        { control.ChangedForTests += callback; return true; }
     }
 
     public class TextElement : VisualElement { public string text; }
@@ -741,13 +787,17 @@ namespace UnityEditor
     public static class PrefabUtility
     {
         public static void RecordPrefabInstancePropertyModifications(Object o) { }
-        public static bool IsPartOfPrefabInstance(Object o) { return false; }
+        public static GameObject RootForTests;
+        public static string PathForTests;
+        public static bool OverridesForTests;
+        public static Action<GameObject, InteractionMode> ApplyForTests;
+        public static bool IsPartOfPrefabInstance(Object o) { return RootForTests != null; }
         public static bool IsOutermostPrefabInstanceRoot(GameObject g) { return false; }
-        public static GameObject GetOutermostPrefabInstanceRoot(Object o) { return null; }
-        public static string GetPrefabAssetPathOfNearestInstanceRoot(Object o) { return null; }
+        public static GameObject GetOutermostPrefabInstanceRoot(Object o) { return RootForTests; }
+        public static string GetPrefabAssetPathOfNearestInstanceRoot(Object o) { return PathForTests; }
         public static GameObject SaveAsPrefabAssetAndConnect(GameObject g, string path, InteractionMode m, out bool ok) { ok = true; return g; }
-        public static bool HasPrefabInstanceAnyOverrides(GameObject g, bool includeDefault) { return false; }
-        public static void ApplyPrefabInstance(GameObject g, InteractionMode m) { }
+        public static bool HasPrefabInstanceAnyOverrides(GameObject g, bool includeDefault) { return OverridesForTests; }
+        public static void ApplyPrefabInstance(GameObject g, InteractionMode m) { if (ApplyForTests != null) ApplyForTests(g, m); }
         public static T GetCorrespondingObjectFromSource<T>(T o) where T : Object { return null; }
         public static Object InstantiatePrefab(Object o) { return null; }
         public static Object InstantiatePrefab(Object o, Transform parent) { return null; }
@@ -778,23 +828,39 @@ namespace UnityEditor
 
     public enum PlayModeStateChange { EnteredEditMode, ExitingEditMode, EnteredPlayMode, ExitingPlayMode }
 
+    public class PropertyModification { public Object target; }
+    public struct UndoPropertyModification { public PropertyModification currentValue; }
+
     public static class Undo
     {
         public static void RevertAllDownToGroup(int group) { }
-        public static void SetTransformParent(Transform t, Transform parent, string name) { }
+        public static void SetTransformParent(Transform t, Transform parent, string name) { t.SetParent(parent, true); }
         public static event Action undoRedoPerformed;
+        public delegate UndoPropertyModification[] PostprocessModifications(UndoPropertyModification[] modifications);
+        public static event PostprocessModifications postprocessModifications;
         public static Action<Object> RecordForTests;
         public static void RecordObject(Object o, string name) { if (RecordForTests != null) RecordForTests(o); }
         public static void ReplayForTests() { if (undoRedoPerformed != null) undoRedoPerformed(); }
         public static void RegisterFullObjectHierarchyUndo(Object o, string name) { }
-        public static void IncrementCurrentGroup() { }
-        public static int GetCurrentGroup() { return 0; }
-        public static void SetCurrentGroupName(string n) { }
-        public static void CollapseUndoOperations(int g) { }
-        public static void DestroyObjectImmediate(Object o) { }
+        public static void FlushUndoRecordObjects() { }
+        private static int _group;
+        private static string _name;
+        public static Action<int> CollapseForTests;
+        public static Action<Object> DestroyForTests;
+        public static void IncrementCurrentGroup() { _group++; }
+        public static int GetCurrentGroup() { return _group; }
+        public static void SetCurrentGroupName(string n) { _name = n; }
+        public static string GetCurrentGroupName() { return _name; }
+        public static void CollapseUndoOperations(int g) { if (CollapseForTests != null) CollapseForTests(g); }
+        public static void DestroyObjectImmediate(Object o)
+        {
+            if (DestroyForTests != null) DestroyForTests(o);
+            var go = o as GameObject;
+            if (go != null) go.transform.SetParent(null, true);
+        }
         public static void RegisterCreatedObjectUndo(Object o, string n) { }
-        public static T AddComponent<T>(GameObject go) where T : Component { return null; }
-        public static Component AddComponent(GameObject go, Type type) { return null; }
+        public static T AddComponent<T>(GameObject go) where T : Component { return go.AddComponent<T>(); }
+        public static Component AddComponent(GameObject go, Type type) { return go.AddComponent(type); }
     }
 
     public static class EditorUtility
@@ -843,12 +909,16 @@ namespace UnityEditor
         public static Transform activeTransform;
     }
 
+    public enum Tool { Move }
+    public static class Tools { public static Tool current; }
+
     public class SceneView : EditorWindow
     {
         public static SceneView lastActiveSceneView;
         public static Action<SceneView> duringSceneGui;
         public static void RepaintAll() { }
         public bool FrameSelected() { return true; }
+        public void Frame(Bounds bounds, bool instant = true) { }
         public void LookAt(Vector3 point, Quaternion direction, float size) { }
     }
 

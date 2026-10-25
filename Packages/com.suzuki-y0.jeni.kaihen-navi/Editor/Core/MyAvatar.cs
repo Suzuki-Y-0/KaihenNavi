@@ -417,7 +417,7 @@ namespace Jeni.KaihenNavi
         /// シーン上の改変を自分用アバターに書き込む。書き込み先が自分用アバターでなければ何もしない
         /// （買ったときの Prefab を書き換えないための確認）。
         /// </summary>
-        public static bool Save(VRCAvatarDescriptor avatar)
+        public static bool Save(VRCAvatarDescriptor avatar, bool recordUndo = true)
         {
             if (EditorApplication.isPlayingOrWillChangePlaymode) return false;
             var root = InstanceRoot(avatar);
@@ -427,7 +427,17 @@ namespace Jeni.KaihenNavi
             if (!IsMinePath(path)) return false;
             if (!PrefabUtility.HasPrefabInstanceAnyOverrides(root, false)) return false;
 
-            PrefabUtility.ApplyPrefabInstance(root, InteractionMode.AutomatedAction);
+            // AutomatedAction はシーンの追加物を Undo 対象外の Prefab 部品にしてしまう。
+            // 保存も編集と同じグループへ入れ、Ctrl+Z でアセットとシーンを一緒に戻す。
+            // Undo コールバックからの復元だけは新しい履歴を作らない。
+            var group = Undo.GetCurrentGroup();
+            var undoName = Undo.GetCurrentGroupName();
+            PrefabUtility.ApplyPrefabInstance(root, recordUndo ? InteractionMode.UserAction : InteractionMode.AutomatedAction);
+            if (recordUndo)
+            {
+                Undo.SetCurrentGroupName(undoName);
+                Undo.CollapseUndoOperations(group);
+            }
             return true;
         }
 

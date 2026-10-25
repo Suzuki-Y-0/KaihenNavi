@@ -44,5 +44,6 @@ sys.exit(0 if ok else 1)
 EOF
 
 python3 "$here/test_konoasset.py"
+python3 "$here/test_feature_edits.py"
 
 echo "All checks passed."

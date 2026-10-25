@@ -580,5 +580,10 @@
   "history.confirm": "Return to just before “{1}” at {0}?\nLater changes will also be reverted. Press Ctrl+Z to undo this restoration.",
   "history.unknownFeature": "Avatar changes",
   "history.record": "Record edit history",
-  "library.tryEnglish": "If nothing is found with kana, try the English name too (e.g. \"sweet\")."
+  "library.tryEnglish": "If nothing is found with kana, try the English name too (e.g. \"sweet\").",
+  "outfit.remove": "Remove",
+  "undo.outfitRemove": "Remove outfit",
+  "outfit.removed": "Removed the outfit. Press Ctrl+Z to undo.",
+  "color.colorize": "Add color to white, black and gray parts",
+  "color.colorizeHint": "Black or white clothes don't change when you move the hue, because there is no color to shift. Turn this on to apply the hue slider's color while keeping the shading. Dark clothes become a dark color."
 }

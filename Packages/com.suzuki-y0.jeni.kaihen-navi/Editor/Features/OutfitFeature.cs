@@ -173,7 +173,7 @@ namespace Jeni.KaihenNavi
             texts.Add(Ui.Text(outfit.activeSelf ? L10n.Tr("toggle.stateVisible") : L10n.Tr("toggle.stateHidden"), "kn-list__sub"));
             row.Add(texts);
 
-            // 消すと「元に戻す」で戻せないので、脱がす＝隠すにする（アップロードにも含まれなくなる）
+            // 脱がす＝隠す（アップロードにも含まれなくなる）。完全に取り除くときは「取り除く」。
             var visible = outfit.activeSelf;
             row.Add(Ui.Button(visible ? L10n.Tr("outfit.takeOff") : L10n.Tr("outfit.putOn"), () =>
             {
@@ -196,6 +196,20 @@ namespace Jeni.KaihenNavi
             {
                 EditorGUIUtility.PingObject(outfit);
                 Selection.activeGameObject = outfit;
+            }, "kn-button--small", "kn-button--ghost"));
+            // 着せた服をアバターから取り除く。Ctrl+Z で戻せる（自分用アバターの保存も同じ 1 手にまとめる）。
+            row.Add(Ui.Button(L10n.Tr("outfit.remove"), () =>
+            {
+                var undoName = L10n.Tr("undo.outfitRemove");
+                ctx.BeginEdit();
+                UndoHelper.Separate();
+                Undo.IncrementCurrentGroup();
+                var group = Undo.GetCurrentGroup();
+                Undo.SetCurrentGroupName(undoName);
+                Undo.DestroyObjectImmediate(outfit);
+                ctx.CompleteEdit(group);
+                ctx.Tell(L10n.Tr("outfit.removed"));
+                ctx.Rebuild();
             }, "kn-button--small", "kn-button--ghost"));
             return row;
         }

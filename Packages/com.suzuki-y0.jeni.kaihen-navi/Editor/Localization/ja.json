@@ -580,5 +580,10 @@
   "history.confirm": "{0} の「{1}」を行う直前に戻します。\nそれより後の変更も戻ります。Ctrl+Z で、戻す前の状態に戻せます。",
   "history.unknownFeature": "アバターの変更",
   "history.record": "操作履歴を記録する",
-  "library.tryEnglish": "かなで見つからないときは、英語の名前でも探してみてください（例：「スイート」→「sweet」）。"
+  "library.tryEnglish": "かなで見つからないときは、英語の名前でも探してみてください（例：「スイート」→「sweet」）。",
+  "outfit.remove": "取り除く",
+  "undo.outfitRemove": "服を取り除く",
+  "outfit.removed": "服を取り除きました。Ctrl+Z で戻せます。",
+  "color.colorize": "白・黒・灰色の服にも色をのせる",
+  "color.colorizeHint": "黒や白の服は、色味を動かしても色が変わりません（色の無い所はずらしても色が出ないため）。オンにすると、明るさの濃淡は残したまま、色味のスライダーの色をのせます。暗い服は暗い色になります。"
 }

@@ -74,6 +74,64 @@ namespace Jeni.KaihenNavi
             }
         }
 
+        /// <summary>
+        /// 白・黒・灰色の服にも色をのせる（明るさの濃淡は残して、色味とあざやかさを指定の値にする）。
+        /// 色調補正（色味をずらす）では、色の無い所はずらしても色が出ないため。メインの画像の複製を作って差し替える。
+        /// </summary>
+        public static void BakeColorize(Material material, float hueDegrees, float saturation, float brightness, string undoName)
+        {
+            const string property = "_MainTex";
+            if (!material.HasProperty(property)) return;
+            var current = material.GetTexture(property) as Texture2D;
+            if (current == null) return;
+            var source = SourceOf(current) ?? current;
+            var path = BakedPath(material, "main");
+            if (path == null) return;
+            var hue = Mathf.Repeat(hueDegrees / 360f, 1f);
+            var sat = Mathf.Clamp01(saturation / 100f * 0.6f);
+            WriteConverted(source, path, c =>
+            {
+                var l = Mathf.Clamp01((0.299f * c.r + 0.587f * c.g + 0.114f * c.b) * brightness / 100f);
+                var result = Hsl(hue, sat, l);
+                result.a = c.a;
+                return result;
+            });
+            var baked = AssetDatabase.LoadAssetAtPath<Texture2D>(path);
+            if (baked == null || baked == current) return;
+            Undo.RecordObject(material, undoName);
+            material.SetTexture(property, baked);
+            EditorUtility.SetDirty(material);
+        }
+
+        /// <summary>色をのせるのをやめて、元のメインの画像に戻す。</summary>
+        public static void ResetMain(Material material, string undoName)
+        {
+            const string property = "_MainTex";
+            if (!material.HasProperty(property)) return;
+            var current = material.GetTexture(property) as Texture2D;
+            var source = current == null ? null : SourceOf(current);
+            if (source == null) return;
+            Undo.RecordObject(material, undoName);
+            material.SetTexture(property, source);
+            EditorUtility.SetDirty(material);
+        }
+
+        private static Color Hsl(float h, float s, float l)
+        {
+            var q = l < 0.5f ? l * (1 + s) : l + s - l * s;
+            var p = 2 * l - q;
+            return new Color(HueToRgb(p, q, h + 1f / 3f), HueToRgb(p, q, h), HueToRgb(p, q, h - 1f / 3f));
+        }
+
+        private static float HueToRgb(float p, float q, float t)
+        {
+            t = Mathf.Repeat(t, 1f);
+            if (t < 1f / 6f) return p + (q - p) * 6f * t;
+            if (t < 0.5f) return q;
+            if (t < 2f / 3f) return p + (q - p) * (2f / 3f - t) * 6f;
+            return p;
+        }
+
         /// <summary>層の色とテクスチャを元に戻す。</summary>
         public static void Reset(Material material, Dictionary<string, Color> baselines, string undoName)
         {
@@ -135,6 +193,11 @@ namespace Jeni.KaihenNavi
 
         private static void WriteShifted(Texture2D source, string path, float hue, float saturation, float brightness)
         {
+            WriteConverted(source, path, c => Shift(c, hue, saturation, brightness));
+        }
+
+        private static void WriteConverted(Texture2D source, string path, System.Func<Color, Color> convert)
+        {
             var sourcePath = AssetDatabase.GetAssetPath(source);
             var sourceImporter = AssetImporter.GetAtPath(sourcePath) as TextureImporter;
             var linear = sourceImporter != null && !sourceImporter.sRGBTexture;
@@ -151,7 +214,7 @@ namespace Jeni.KaihenNavi
             RenderTexture.ReleaseTemporary(rt);
 
             var pixels = copy.GetPixels();
-            for (var i = 0; i < pixels.Length; i++) pixels[i] = Shift(pixels[i], hue, saturation, brightness);
+            for (var i = 0; i < pixels.Length; i++) pixels[i] = convert(pixels[i]);
             copy.SetPixels(pixels);
             copy.Apply();
             File.WriteAllBytes(path, copy.EncodeToPNG());

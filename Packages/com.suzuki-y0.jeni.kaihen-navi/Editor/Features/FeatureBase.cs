@@ -49,6 +49,23 @@ namespace Jeni.KaihenNavi
         public string Title { get { return L10n.Tr("feature." + Id + ".title"); } }
         public string Description { get { return L10n.Tr("feature." + Id + ".desc"); } }
 
+        /// <summary>ナビでは短い名前を使い、未定義ならページの見出しを使う。</summary>
+        public string NavTitle
+        {
+            get
+            {
+                var key = "feature." + Id + ".nav";
+                var title = L10n.Tr(key);
+                return title == key ? Title : title;
+            }
+        }
+
+        /// <summary>ナビの右端に表示する件数。ナビ再構築時にだけ呼ばれる。</summary>
+        public virtual string NavBadge(VRCAvatarDescriptor avatar) => null;
+
+        /// <summary>完了済みならナビの右端に緑のチェックを出す。</summary>
+        public virtual bool IsDone(VRCAvatarDescriptor avatar) => false;
+
         /// <summary>体験版のため鍵がかかっているか。</summary>
         public bool Locked { get { return Edition.IsTrial && !InTrial; } }
 

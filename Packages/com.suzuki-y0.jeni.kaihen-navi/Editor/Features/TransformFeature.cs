@@ -53,6 +53,13 @@ namespace Jeni.KaihenNavi
 
         public override bool RefreshOnHierarchyChange { get { return true; } }
 
+        /// <summary>既存の候補一覧と同じ方法で、装着済みの数を表示する。</summary>
+        public override string NavBadge(VRCAvatarDescriptor avatar)
+        {
+            var count = avatar == null ? 0 : FindTargets(avatar).Count;
+            return count == 0 ? null : count.ToString();
+        }
+
         public override VisualElement Build(FeatureContext ctx)
         {
             var root = new VisualElement();

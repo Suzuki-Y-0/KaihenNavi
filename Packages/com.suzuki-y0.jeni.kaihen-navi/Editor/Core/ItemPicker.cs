@@ -49,7 +49,14 @@ namespace Jeni.KaihenNavi
         public static VisualElement DropZone(string hint, ItemKind kind, Action<GameObject> onPicked)
         {
             var zone = Ui.Box("kn-drop");
-            zone.Add(Ui.Text(hint, "kn-drop__text"));
+            Ui.DashedBorder(zone);
+            var icon = Ui.NavigationIcon("uploadCheck");
+            icon.AddToClassList("kn-drop__icon");
+            zone.Add(icon);
+            var texts = Ui.Box("kn-drop__texts");
+            texts.Add(Ui.Text(hint, "kn-drop__text"));
+            texts.Add(Ui.Text(L10n.Tr("pick.dropHint"), "kn-drop__hint"));
+            zone.Add(texts);
 
             zone.RegisterCallback<DragUpdatedEvent>(e =>
             {
@@ -66,14 +73,48 @@ namespace Jeni.KaihenNavi
                 Use(prefab, kind, onPicked);
             });
 
-            // ドラッグが難しいとき用：一覧から選ぶ（Unity 標準の選択画面が開く）
-            zone.Add(PickRow(typeof(GameObject), o =>
+            // 選択だけでは装着しない。既存の確定ボタンを補助画面でも使う。
+            var choose = Ui.Button(L10n.Tr("pick.file"), null, "kn-button--small", "kn-button--ghost");
+            choose.clicked += () => PrefabPickerWindow.Open(prefab =>
             {
-                var prefab = o as GameObject;
-                if (prefab != null) Use(prefab, kind, onPicked);
-            }));
+                // 選択中にページやアバターを切り替えていたら、古い対象には装着しない。
+                if (zone.panel != null) Use(prefab, kind, onPicked);
+            });
+            zone.Add(choose);
 
             return zone;
+        }
+
+        /// <summary>Project の Prefab を選び、確定してから呼び出し元に渡す小さな画面。</summary>
+        private sealed class PrefabPickerWindow : EditorWindow
+        {
+            public static void Open(Action<GameObject> onPicked)
+            {
+                var window = CreateInstance<PrefabPickerWindow>();
+                window.titleContent = new GUIContent(L10n.Tr("pick.file"));
+                window.minSize = new Vector2(420, 90);
+                window.maxSize = window.minSize;
+                var root = window.rootVisualElement;
+                root.AddToClassList("kn-root");
+                root.AddToClassList(EditorGUIUtility.isProSkin ? "kn-dark" : "kn-light");
+                var sheet = AssetDatabase.LoadAssetAtPath<StyleSheet>(PackagePaths.StyleSheet);
+                if (sheet != null) root.styleSheets.Add(sheet);
+                FontLoader.Apply(root, L10n.Current);
+                root.Add(PickRow(typeof(GameObject), value =>
+                {
+                    var prefab = value as GameObject;
+                    if (prefab == null) return;
+                    window.Close();
+                    onPicked(prefab);
+                }));
+                // オブジェクト選択画面にフォーカスが移っても閉じない補助ウィンドウを使う。
+                window.ShowUtility();
+            }
+
+            private void OnDisable()
+            {
+                FontLoader.Release(rootVisualElement);
+            }
         }
 
         /// <summary>

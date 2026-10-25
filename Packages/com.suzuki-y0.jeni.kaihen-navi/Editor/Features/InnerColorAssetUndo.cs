@@ -29,12 +29,18 @@ namespace Jeni.KaihenNavi
                     meta = File.Exists(path + ".meta") ? File.ReadAllBytes(path + ".meta") : null,
                 };
             }
+            /// <summary>
+            /// ファイルがあったか。Unity の保存（Undo の記録など）を通ると null の配列は空の配列になるので、空も「無い」とみなす。
+            /// 空のまま書くと、GUID の無い .meta ができて Unity がエラーを出していた（実際に操作して確かめた）。
+            /// </summary>
+            internal bool Exists { get { return content != null && content.Length > 0; } }
+
             internal void Write()
             {
-                if (content == null || !WorkFolders.IsToolPath(path)) return;
+                if (!Exists || !WorkFolders.IsToolPath(path)) return;
                 WorkFolders.Ensure(Path.GetDirectoryName(path).Replace('\\', '/'));
                 File.WriteAllBytes(path, content);
-                if (meta != null) File.WriteAllBytes(path + ".meta", meta);
+                if (meta != null && meta.Length > 0) File.WriteAllBytes(path + ".meta", meta);
             }
         }
         [Serializable]
@@ -170,11 +176,11 @@ namespace Jeni.KaihenNavi
             if (avatar == null) return;
             // .meta を先に戻し、依存先を全て置いてからインポートする。
             foreach (var file in files) file.Write();
-            foreach (var file in files.Where(f => f.content != null)) AssetDatabase.ImportAsset(file.path);
+            foreach (var file in files.Where(f => f.Exists)) AssetDatabase.ImportAsset(file.path);
             snapshot.Apply(avatar);
             AssetDatabase.SaveAssets();
             MyAvatar.Save(avatar, false);
-            var absent = new HashSet<string>(files.Where(f => f.content == null).Select(f => f.path));
+            var absent = new HashSet<string>(files.Where(f => !f.Exists).Select(f => f.path));
             var referenced = InnerColorAssets.Referenced(absent);
             foreach (var path in absent)
                 if (WorkFolders.IsToolPath(path) && !referenced.Contains(path)) AssetDatabase.DeleteAsset(path);

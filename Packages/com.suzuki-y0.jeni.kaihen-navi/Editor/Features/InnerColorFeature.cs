@@ -245,8 +245,9 @@ namespace Jeni.KaihenNavi
                 var materials = OriginalMaterials(avatar, state, r);
                 var slots = HairSlots(avatar, r, materials);
                 var slot = _slots.ContainsKey(r) && slots.Contains(_slots[r]) ? _slots[r] : slots[0];
-                // マテリアルとサブメッシュが 1 対 1 でない髪では、枠を足すと既存の描画も変わってしまう。
-                if (materials.Length != original.subMeshCount)
+                // マテリアルがサブメッシュより多い髪（最後の面を影用などで重ねて描く）にも対応する（ApplySurface で最後の面を複製して残す）。
+                // マテリアルが足りない髪は、描かれていない面があるので扱わない。
+                if (materials.Length < original.subMeshCount)
                     throw new InvalidOperationException(L10n.Tr("innerColor.slotMismatch", r.name));
                 var baked = new Mesh();
                 try
@@ -254,7 +255,7 @@ namespace Jeni.KaihenNavi
                     r.BakeMesh(baked, true);
                     var vertices = baked.vertices.Select(v => r.transform.position + r.transform.rotation * v).ToArray();
                     var triangles = Enumerable.Range(0, original.subMeshCount).Select(original.GetTriangles).ToArray();
-                    var selected = Enumerable.Range(0, original.subMeshCount).Select(i => materials[i] == materials[slot]).ToArray();
+                    var selected = Enumerable.Range(0, original.subMeshCount).Select(i => i < materials.Length && materials[i] == materials[slot]).ToArray();
                     surfaces.Add(new Surface { renderer = r, original = original, materials = materials, slot = slot,
                         split = InnerColorTriangles.Classify(vertices, triangles, selected, center, up,
                             InnerColorTriangles.Threshold(_range), _height) });
@@ -324,9 +325,14 @@ namespace Jeni.KaihenNavi
             {
                 // baseVertex 付きの大きなメッシュも、絶対頂点番号で安全に保存する。
                 if (mesh.vertexCount > ushort.MaxValue) mesh.indexFormat = UnityEngine.Rendering.IndexFormat.UInt32;
-                mesh.subMeshCount = surface.original.subMeshCount + 1;
+                var count = surface.original.subMeshCount;
+                // マテリアルがサブメッシュより多いとき、余ったマテリアルは「最後のサブメッシュ」を重ねて描いている（影用など）。
+                // 内側の枠を足すと最後が変わってしまうので、元の最後のサブメッシュを丸ごと複製して、いちばん後ろに残す。
+                var extras = surface.materials.Length - count;
+                mesh.subMeshCount = count + 1 + (extras > 0 ? 1 : 0);
                 for (var i = 0; i < surface.split.outer.Length; i++) mesh.SetTriangles(surface.split.outer[i], i);
-                mesh.SetTriangles(surface.split.inner, surface.original.subMeshCount);
+                mesh.SetTriangles(surface.split.inner, count);
+                if (extras > 0) mesh.SetTriangles(surface.original.GetTriangles(count - 1), count + 1);
                 AssetDatabase.CreateAsset(mesh, meshPath);
             }
             catch { if (!EditorUtility.IsPersistent(mesh)) Object.DestroyImmediate(mesh); throw; }
@@ -350,7 +356,9 @@ namespace Jeni.KaihenNavi
                 originalMaterials = surface.materials.Select(InnerColorState.AssetRef.Of).ToArray(), sourceSlot = surface.slot });
             Undo.RecordObject(r, undoName);
             r.sharedMesh = mesh;
-            r.sharedMaterials = surface.materials.Concat(new[] { material }).ToArray();
+            var main = surface.materials.Take(surface.original.subMeshCount);
+            var overlays = surface.materials.Skip(surface.original.subMeshCount);
+            r.sharedMaterials = main.Concat(new[] { material }).Concat(overlays).ToArray();
             PrefabUtility.RecordPrefabInstancePropertyModifications(r);
             EditorUtility.SetDirty(r);
         }

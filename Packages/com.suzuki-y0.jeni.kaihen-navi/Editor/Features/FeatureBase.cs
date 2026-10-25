@@ -100,6 +100,18 @@ namespace Jeni.KaihenNavi
         /// <summary>別の「やりたいこと」に切り替える（id を指定）。</summary>
         public Action<string> OpenFeature;
 
+        /// <summary>
+        /// 終わったことを、作業を止めずに知らせる（下のステータスに数秒出す）。
+        /// 成功のたびに閉じるまで操作できない窓を出すと、続けて作業しにくいため。
+        /// </summary>
+        public Action<string> Notify;
+
+        /// <summary>Notify が無いとき（テストなど）は何もしない。</summary>
+        public void Tell(string message)
+        {
+            if (Notify != null) Notify(message);
+        }
+
         /// <summary>何かを変える直前に呼ぶ。連続入力では UndoHelper.Begin と同じキーを渡すと、1 手にまとめて保存する。</summary>
         public void BeginEdit(string mergeKey = null)
         {

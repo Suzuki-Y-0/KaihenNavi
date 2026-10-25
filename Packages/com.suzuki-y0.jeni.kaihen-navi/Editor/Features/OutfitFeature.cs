@@ -122,8 +122,8 @@ namespace Jeni.KaihenNavi
                 Undo.CollapseUndoOperations(group);
                 UndoHelper.Separate();
             }
-            EditorUtility.DisplayDialog(L10n.Tr("app.name"),
-                setup ? L10n.Tr("outfit.done", prefab.name) : L10n.Tr("outfit.setupFailed"), L10n.Tr("dialog.ok"));
+            if (setup) ctx.Tell(L10n.Tr("outfit.done", prefab.name));
+            else EditorUtility.DisplayDialog(L10n.Tr("app.name"), L10n.Tr("outfit.setupFailed"), L10n.Tr("dialog.ok"));
             ctx.Rebuild();
         }
 

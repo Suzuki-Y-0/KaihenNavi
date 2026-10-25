@@ -325,3 +325,6 @@
 /* 持っている服・アクセの検索欄 */
 .kn-search { margin: 2px 0 8px 0; }
 .kn-search > .unity-text-field__input { min-height: 26px; padding: 0 8px; border-radius: 4px; }
+
+/* 終わったことを知らせる短い表示 */
+.kn-footer__toast { color: var(--kn-ok); -unity-font-style: bold; font-size: 11px; margin: 0 0 0 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex-shrink: 1; }

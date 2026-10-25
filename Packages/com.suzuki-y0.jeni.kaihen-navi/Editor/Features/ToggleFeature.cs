@@ -340,7 +340,7 @@ namespace Jeni.KaihenNavi
                     }
 
                     CreateMenu(ctx, targets);
-                    EditorUtility.DisplayDialog(L10n.Tr("app.name"), L10n.Tr("toggle.done", targets.Count), L10n.Tr("dialog.ok"));
+                    ctx.Tell(L10n.Tr("toggle.done", targets.Count));
                     ctx.Rebuild();
                 },
                 "kn-button--primary"));

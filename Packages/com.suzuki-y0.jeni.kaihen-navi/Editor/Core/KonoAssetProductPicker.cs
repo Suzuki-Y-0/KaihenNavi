@@ -35,8 +35,7 @@ namespace Jeni.KaihenNavi
                 list.Clear();
                 var query = (field.value ?? "").Trim();
                 var matches = KonoAssetLink.All.Where(i => query.Length == 0 ||
-                    ((i.description.name ?? "") + " " + (i.description.creator ?? ""))
-                        .IndexOf(query, StringComparison.OrdinalIgnoreCase) >= 0)
+                    KonoAssetLink.Matches(i, query))
                     .OrderBy(i => i.description.name, StringComparer.Ordinal).ToList();
                 if (matches.Count == 0) list.Add(Ui.Text(L10n.Tr("kono.noProducts"), "kn-hint"));
                 // 全商品の一覧を検索可能にする。候補を勝手に省略しない。

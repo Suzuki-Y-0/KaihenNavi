@@ -29,9 +29,10 @@ namespace Jeni.KaihenNavi
         public string[] supportedAvatars = null;
         // 外部データには書かない。索引用のファイル名だけを Library に保存する。
         public string[] packageNames = null;
+        public string sourceFile = null;
     }
 
-    /// <summary>外部フォルダでは列挙と読み取りだけを行う。商品の実ファイルは開かない。</summary>
+    /// <summary>外部フォルダでは列挙と読み取りだけを行う。一覧の作成ではパッケージの本文を開かない。</summary>
     [InitializeOnLoad]
     internal static class KonoAssetLink
     {
@@ -170,7 +171,7 @@ namespace Jeni.KaihenNavi
                     try
                     {
                         var cached = JsonUtility.FromJson<Index>(File.ReadAllText(CachePath, Encoding.UTF8));
-                        if (cached != null && cached.version == 1 && cached.root == root && cached.stamps != null &&
+                        if (cached != null && cached.version == 2 && cached.root == root && cached.stamps != null &&
                             cached.stamps.SequenceEqual(stamps) && cached.items != null) index = cached;
                     }
                     catch { /* 壊れたキャッシュは元のメタデータから再作成する。 */ }
@@ -244,6 +245,7 @@ namespace Jeni.KaihenNavi
                     {
                         Guid id;
                         if (item == null || !Guid.TryParse(item.id, out id) || item.description == null) continue;
+                        item.sourceFile = filename;
                         var names = new List<string>();
                         // ファイル本文には触れず、ディレクトリとファイル名だけを列挙する。
                         try { ListPackages(Path.Combine(root, "data", item.id), names); }
@@ -254,7 +256,7 @@ namespace Jeni.KaihenNavi
                 }
                 catch { complete = false; }
             }
-            return new Index { version = 1, root = root, stamps = stamps, items = items.ToArray() };
+            return new Index { version = 2, root = root, stamps = stamps, items = items.ToArray() };
         }
 
         private static void ListPackages(string directory, List<string> names)
@@ -265,6 +267,42 @@ namespace Jeni.KaihenNavi
             foreach (var file in Directory.EnumerateFiles(directory, "*.unitypackage"))
                 names.Add(Path.GetFileNameWithoutExtension(file));
             foreach (var child in Directory.EnumerateDirectories(directory)) ListPackages(child, names);
+        }
+
+        /// <summary>選んだ商品の unitypackage だけを、外部データを変更せずに列挙する。</summary>
+        public static List<string> Packages(KonoAssetItem item)
+        {
+            EnsureLoaded();
+            Guid id;
+            var files = new List<string>();
+            if (_root == null || item == null || !Guid.TryParse(item.id, out id)) return files;
+            try { ListPackageFiles(Path.Combine(_root, "data", item.id), files); }
+            catch { /* 読めない場所は取り込み候補にしない。 */ }
+            return files.OrderBy(p => p, StringComparer.Ordinal).ToList();
+        }
+
+        private static void ListPackageFiles(string directory, List<string> files)
+        {
+            if (!Directory.Exists(directory) || (File.GetAttributes(directory) & FileAttributes.ReparsePoint) != 0) return;
+            files.AddRange(Directory.EnumerateFiles(directory).Where(p =>
+                p.EndsWith(".unitypackage", StringComparison.OrdinalIgnoreCase) &&
+                (File.GetAttributes(p) & FileAttributes.ReparsePoint) == 0));
+            foreach (var child in Directory.EnumerateDirectories(directory)) ListPackageFiles(child, files);
+        }
+
+        /// <summary>商品名・ショップ名・保存ファイル名を同じ表記ルールで部分一致検索する。</summary>
+        public static bool Matches(KonoAssetItem item, string query)
+        {
+            if (item == null) return false;
+            return Contains(item.description == null ? null : item.description.name, query) ||
+                Contains(item.description == null ? null : item.description.creator, query) ||
+                (item.packageNames ?? new string[0]).Any(n => Contains(n, query));
+        }
+
+        public static bool Contains(string value, string query)
+        {
+            var key = Normalize(query);
+            return key.Length == 0 || Normalize(value).Contains(key);
         }
 
         private static void SaveIndex(Index index)
@@ -288,7 +326,9 @@ namespace Jeni.KaihenNavi
         public static string Normalize(string name)
         {
             if (string.IsNullOrEmpty(name)) return "";
-            return new string(name.Normalize(NormalizationForm.FormKC).ToLowerInvariant().Where(char.IsLetterOrDigit).ToArray());
+            // カタカナをひらがなにそろえ、全角英数・半角カナと大小文字の違いも吸収する。
+            return new string(name.Normalize(NormalizationForm.FormKC).ToLowerInvariant()
+                .Select(c => c >= 'ァ' && c <= 'ヶ' ? (char)(c - 0x60) : c).Where(char.IsLetterOrDigit).ToArray());
         }
 
         public static KonoAssetItem Find(string id)
@@ -326,8 +366,8 @@ namespace Jeni.KaihenNavi
         public static bool SupportsAvatar(KonoAssetItem item, IEnumerable<string> keywords)
         {
             if (item == null || item.supportedAvatars == null || keywords == null) return false;
-            var keys = keywords.Select(Normalize).Where(k => k.Length >= 3).ToArray();
-            return item.supportedAvatars.Select(Normalize).Any(a => a.Length >= 3 &&
+            var keys = keywords.Select(Normalize).Where(k => k.Length >= 2).ToArray();
+            return item.supportedAvatars.Select(Normalize).Any(a => a.Length >= 2 &&
                 keys.Any(k => a == k || a.StartsWith(k, StringComparison.Ordinal) || k.StartsWith(a, StringComparison.Ordinal)));
         }
 

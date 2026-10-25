@@ -231,28 +231,18 @@ namespace Jeni.KaihenNavi
 
             if (_pending == null)
             {
-                box.Add(ItemPicker.DropZone(L10n.Tr("attach.drop"), ItemKind.Accessory, prefab =>
+                box.Add(ItemLibrary.Build(ctx.Avatar, ItemKind.Accessory, prefab =>
                 {
                     _pending = prefab;
                     ctx.Rebuild();
                 }));
-
-                var suggestions = ItemPicker.Suggestions(ctx.Avatar, ItemKind.Accessory);
-                if (suggestions.Count > 0)
-                {
-                    box.Add(Ui.Text(L10n.Tr("attach.suggest"), "kn-hint"));
-                    box.Add(ItemPicker.SuggestionList(suggestions, prefab =>
-                    {
-                        _pending = prefab;
-                        ctx.Rebuild();
-                    }));
-                }
-
-                box.Add(ItemPicker.OwnedItems(ItemKind.Accessory, prefab =>
+                var drop = ItemPicker.DropZone(L10n.Tr("attach.drop"), ItemKind.Accessory, prefab =>
                 {
                     _pending = prefab;
                     ctx.Rebuild();
-                }));
+                });
+                drop.AddToClassList("kn-drop--compact");
+                box.Add(drop);
                 return box;
             }
 

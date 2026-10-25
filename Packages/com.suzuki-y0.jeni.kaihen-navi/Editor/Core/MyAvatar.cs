@@ -427,7 +427,14 @@ namespace Jeni.KaihenNavi
             if (!IsMinePath(path)) return false;
             if (!PrefabUtility.HasPrefabInstanceAnyOverrides(root, false)) return false;
 
-            PrefabUtility.ApplyPrefabInstance(root, InteractionMode.AutomatedAction);
+            // 自動保存でも Apply の取り消しを記録する。服の装着時は呼び出し元で編集とまとめる。
+            // AutomatedAction は Undo を作らず、追加した服が Prefab の一部になって履歴と食い違う。
+            var group = Undo.GetCurrentGroup();
+            var undoName = Undo.GetCurrentGroupName();
+            Undo.FlushUndoRecordObjects();
+            PrefabUtility.ApplyPrefabInstance(root, InteractionMode.UserAction);
+            Undo.CollapseUndoOperations(group);
+            Undo.SetCurrentGroupName(undoName);
             return true;
         }
 

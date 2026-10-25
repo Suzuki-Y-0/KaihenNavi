@@ -6,6 +6,8 @@ from pathlib import Path
 import hashlib
 import subprocess
 import tempfile
+import io
+import tarfile
 
 repo = Path(__file__).resolve().parent.parent
 source = r'''
@@ -77,6 +79,36 @@ internal static class KonoAssetChecks
         Use(monolith, hair);
         Check(KonoAssetLink.FindByPackageName("MONOLITH_Shinano") == monolith, "aliases in one product are unambiguous");
 
+        // 未取り込みの商品も全件を検索する。候補数や台帳の有無で検索対象を制限しない。
+        var wicca = Item("wicca", "ＷＩＣＣＡ", new[] { "WICCA_Celestia" });
+        wicca.description.creator = "ＭｙＳｈｏｐ";
+        var sweet = Item("sweet", "スイートデビル", new[] { "Sweet_Devil" });
+        sweet.description.creator = "小さなお店";
+        Use(monolith, hair, wicca, sweet);
+        var library = ItemLibrary.Collect(KonoAssetLink.All, new LedgerPackage[0], ItemKind.Outfit);
+        Check(library.Single(i => i.Matches("wicca")).Product == wicca, "unimported WICCA found without ledger");
+        Check(library.Single(i => i.Matches("すいーと")).Product == sweet, "hiragana product substring");
+        Check(library.Single(i => i.Matches("ｽｲｰﾄ")).Product == sweet, "halfwidth katakana product substring");
+        Check(library.Single(i => i.Matches("myshop")).Product == wicca, "normalized shop substring");
+        Check(library.Single(i => i.Matches("devil")).Product == sweet, "package filename substring");
+        var owned = new LedgerPackage { konoAssetId = "wicca", packageName = "購入した服", commonFolder = "Assets/Wardrobe", prefabs = new List<LedgerPrefab> {
+            new LedgerPrefab { path = "Assets/Wardrobe/VersionA.prefab", kind = LedgerItemKind.Outfit },
+            new LedgerPrefab { path = "Assets/Wardrobe/VersionB.prefab", kind = LedgerItemKind.Outfit },
+            new LedgerPrefab { path = "Assets/Wardrobe/Earring.prefab", kind = LedgerItemKind.Accessory } } };
+        library = ItemLibrary.Collect(KonoAssetLink.All, new[] { owned, owned }, ItemKind.Outfit);
+        var combined = library.Single(i => i.Product == wicca);
+        Check(combined.Paths.Count == 2, "one product merges prefabs, removes duplicates and filters kind");
+        Check(combined.Matches("VERSIONb") && combined.Matches("wardrobe") && combined.Matches("購入した"), "prefab, folder and ledger names searched");
+        Check(combined.ForAvatar(new[] { "セレスティア", "Celestia" }), "avatar metadata filter");
+        Check(!combined.ForAvatar(new[] { "Manuka" }), "unrelated avatar filtered");
+        var local = new LedgerPackage { packageName = "Local", commonFolder = "Assets/Local", prefabs = new List<LedgerPrefab> {
+            new LedgerPrefab { path = "Assets/Local/ｾﾚｽﾃｨｱ/Hat.prefab", kind = LedgerItemKind.Accessory } } };
+        var localItem = ItemLibrary.Collect(new KonoAssetItem[0], new[] { local }, ItemKind.Accessory).Single();
+        Check(localItem.Matches("hat") && localItem.ForAvatar(new[] { "せれすてぃあ" }), "project-only item and normalized avatar path");
+        var many = Enumerable.Range(0, 361).Select(i => Item("id" + i, "Product" + i, new string[0])).ToArray();
+        Check(ItemLibrary.Collect(many, new LedgerPackage[0], ItemKind.Outfit).Count == 361, "all 361 products retained before pagination");
+        Use(monolith, hair);
+
         var legacy = new LedgerPackage { packageName = "MONOLITH_Shinano" };
         Check(ItemLedger.KonoItem(legacy) == monolith && legacy.konoAssetId == null, "legacy record resolves without saving");
         var scanned = new LedgerPackage { scanned = true, commonFolder = "Assets/MONOLITH" };
@@ -116,6 +148,56 @@ internal static class KonoAssetChecks
         indexType.GetField("root").SetValue(index, Directory.GetCurrentDirectory());
         Call("SaveIndex", index);
         Check(!File.Exists("Library/KaihenNavi/konoasset-index.json"), "cache is not written inside external root");
+        // unitypackage の実体を読み取りだけで検査し、既存アセットとの衝突を見逃さない。
+        var importType = typeof(PackageImportUndo);
+        var archive = (IList)importType.GetMethod("ReadArchive", PrivateStatic).Invoke(null, new object[] { args[3] });
+        Check(archive.Count == 2, "unitypackage tar manifest read");
+        var archiveEntry = archive[0];
+        var archiveType = archiveEntry.GetType();
+        Check((string)archiveType.GetField("path").GetValue(archiveEntry) == "Assets/服/Item.prefab", "Japanese pathname read");
+        Check((string)archiveType.GetField("guid").GetValue(archiveEntry) == "0123456789abcdef0123456789abcdef", "asset GUID read for relocation conflict check");
+        var existing = Path.Combine(args[0], "same.txt");
+        File.WriteAllText(existing, "asset contents", new System.Text.UTF8Encoding(false));
+        var checkExisting = importType.GetMethod("CheckExisting", PrivateStatic);
+        checkExisting.Invoke(null, new[] { (object)existing, archiveType.GetField("assetHash").GetValue(archiveEntry) });
+        count++;
+        var refused = false;
+        try { checkExisting.Invoke(null, new object[] { existing, "different" }); }
+        catch (TargetInvocationException e) { refused = e.InnerException is IOException; }
+        Check(refused && File.ReadAllText(existing) == "asset contents", "original asset overwrite refused");
+        foreach (var invalid in new[] { "../outside", "Assets/../outside", "Packages/x", "Assets//x", "Assets/./x", "Assets/x\\y" })
+        {
+            refused = false;
+            try { PackageImportUndo.ValidatePath(invalid); } catch (InvalidDataException) { refused = true; }
+            Check(refused, "unsafe path refused: " + invalid);
+        }
+        Directory.CreateDirectory("Assets/Added");
+        Directory.CreateDirectory("Assets/KaihenNavi/Ledger");
+        var store = Path.Combine(args[0], "undo");
+        Directory.CreateDirectory(store);
+        File.WriteAllText("Assets/Added/Item.prefab", "new prefab");
+        File.WriteAllText("Assets/Added/Item.prefab.meta", "new GUID");
+        File.WriteAllText("Assets/Original.prefab", "unchanged original");
+        File.WriteAllText(ItemLedger.LedgerFile, "new ledger");
+        File.WriteAllText(Path.Combine(store, "0.after"), "new prefab");
+        File.WriteAllText(Path.Combine(store, "1.after"), "new GUID");
+        File.WriteAllText(Path.Combine(store, "3.before"), "old ledger");
+        File.WriteAllText(Path.Combine(store, "3.after"), "new ledger");
+        var snapshot = new PackageImportUndo.Snapshot {
+            directories = new List<string> { "Assets/Added" },
+            files = new List<PackageImportUndo.FileState> {
+                new PackageImportUndo.FileState { path = "Assets/Added/Item.prefab", after = true },
+                new PackageImportUndo.FileState { path = "Assets/Added/Item.prefab.meta", after = true },
+                new PackageImportUndo.FileState { path = "Assets/Original.prefab", before = true, after = true },
+                new PackageImportUndo.FileState { path = ItemLedger.LedgerFile, before = true, after = true } } };
+        PackageImportUndo.Apply(snapshot, store, false);
+        Check(!Directory.Exists("Assets/Added") && File.ReadAllText(ItemLedger.LedgerFile) == "old ledger", "Undo removes imported files and restores ledger");
+        Check(File.ReadAllText("Assets/Original.prefab") == "unchanged original", "Undo never rewrites original assets");
+        PackageImportUndo.Apply(snapshot, store, true);
+        Check(File.ReadAllText("Assets/Added/Item.prefab") == "new prefab" && File.ReadAllText("Assets/Added/Item.prefab.meta") == "new GUID", "Redo restores prefab and exact meta GUID");
+        Check(File.ReadAllText(ItemLedger.LedgerFile) == "new ledger", "Redo restores ledger together");
+        File.Delete(existing);
+        Directory.Delete(store, true);
         Directory.SetCurrentDirectory(args[2]);
         indexType.GetField("root").SetValue(index, args[1]);
         Call("SaveIndex", index);
@@ -137,6 +219,15 @@ with tempfile.TemporaryDirectory(prefix="kaihennavi-kono-") as temporary:
     metadata.mkdir()
     (metadata / "avatars.json").write_text('{"version":3,"data":[]}', encoding="utf-8")
 
+    package = temp / "test.unitypackage"
+    with tarfile.open(package, "w:gz", format=tarfile.USTAR_FORMAT) as archive:
+        for guid, pathname in [("first", "Assets/服/Item.prefab"), ("second", "Assets/Empty")]:
+            for suffix, payload in [("pathname", pathname.encode()), ("asset", b"asset contents"),
+                                    ("asset.meta", b"fileFormatVersion: 2\nguid: 0123456789abcdef0123456789abcdef\n")]:
+                info = tarfile.TarInfo(guid + "/" + suffix)
+                info.size = len(payload)
+                archive.addfile(info, io.BytesIO(payload))
+
     def snapshot():
         return {str(p.relative_to(temp)): (p.stat().st_mtime_ns, hashlib.sha256(p.read_bytes()).hexdigest())
                 for p in temp.glob("external/**/*") if p.is_file()}
@@ -153,6 +244,6 @@ with tempfile.TemporaryDirectory(prefix="kaihennavi-kono-") as temporary:
     subprocess.run(["mcs", "-nologo", "-langversion:7", "-r:System.Core.dll", "-out:" + str(executable),
                     str(repo / "tools/stubs/UnityStubs.cs"), str(repo / "tools/stubs/VrcAndMaStubs.cs"),
                     *map(str, sources), str(harness)], check=True)
-    subprocess.run(["mono", str(executable), str(data), str(temp / "external"), str(symlink_workspace)], cwd=temp, check=True)
+    subprocess.run(["mono", str(executable), str(data), str(temp / "external"), str(symlink_workspace), str(package)], cwd=temp, check=True)
     assert before == snapshot(), "external files were modified"
     print("External source files unchanged.")

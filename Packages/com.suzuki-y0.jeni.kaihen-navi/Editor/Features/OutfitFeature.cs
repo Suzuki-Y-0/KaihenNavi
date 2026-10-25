@@ -48,8 +48,6 @@ namespace Jeni.KaihenNavi
         {
             var root = new VisualElement();
 #if KAIHENNAVI_MA
-            root.Add(Ui.Notice(L10n.Tr("outfit.intro"), "info"));
-
             // 着ている服（このツールや Setup Outfit で着せたもの）
             var worn = Worn(ctx.Avatar);
             if (worn.Count > 0)
@@ -60,22 +58,15 @@ namespace Jeni.KaihenNavi
                 root.Add(list);
             }
 
-            root.Add(Ui.Heading(L10n.Tr("outfit.pick")));
-            root.Add(ItemPicker.DropZone(L10n.Tr("outfit.drop"), ItemKind.Outfit, prefab => Wear(ctx, prefab)));
-
-            var suggestions = ItemPicker.Suggestions(ctx.Avatar, ItemKind.Outfit);
-            if (suggestions.Count > 0)
-            {
-                root.Add(Ui.Heading(L10n.Tr("outfit.suggest")));
-                root.Add(ItemPicker.SuggestionList(suggestions, prefab => Wear(ctx, prefab)));
-            }
-
-            root.Add(ItemPicker.OwnedItems(ItemKind.Outfit, prefab => Wear(ctx, prefab)));
+            root.Add(ItemLibrary.Build(ctx.Avatar, ItemKind.Outfit, prefab => Wear(ctx, prefab)));
+            var drop = ItemPicker.DropZone(L10n.Tr("outfit.drop"), ItemKind.Outfit, prefab => Wear(ctx, prefab));
+            drop.AddToClassList("kn-drop--compact");
+            root.Add(drop);
 
             if (worn.Count > 0)
             {
-                root.Add(Ui.Notice(L10n.Tr("outfit.afterTips"), "ok"));
-                root.Add(Ui.Button(L10n.Tr("outfit.toToggle"), () =>
+                root.Add(Ui.Notice(L10n.Tr("outfit.afterTips", L10n.Tr("feature.toggle.nav"), L10n.Tr("feature.skin.nav")), "ok"));
+                root.Add(Ui.Button(L10n.Tr("library.goTo", L10n.Tr("feature.toggle.nav")), () =>
                 {
                     if (ctx.OpenFeature != null) ctx.OpenFeature("toggle");
                 }, "kn-button--ghost"));
@@ -95,27 +86,44 @@ namespace Jeni.KaihenNavi
             if (avatar == null || prefab == null) return;
 
             var undoName = L10n.Tr("undo.outfit");
+            // バックアップの作成は操作グループの外、シーンの変更は MA の内部操作も含めて1手にする。
             ctx.BeginEdit();
             UndoHelper.Separate();
-
-            var instance = PrefabUtility.InstantiatePrefab(prefab) as GameObject;
-            if (instance == null) return;
-            Undo.RegisterCreatedObjectUndo(instance, undoName);
-            Undo.SetTransformParent(instance.transform, avatar.transform, undoName);
-            instance.transform.localPosition = Vector3.zero;
-            instance.transform.localRotation = Quaternion.identity;
-            ctx.NoteCreated(instance);
-
-            if (!SetupOutfit(instance))
+            Undo.IncrementCurrentGroup();
+            var group = Undo.GetCurrentGroup();
+            Undo.SetCurrentGroupName(undoName);
+            var setup = false;
+            try
             {
-                EditorUtility.DisplayDialog(L10n.Tr("app.name"), L10n.Tr("outfit.setupFailed"), L10n.Tr("dialog.ok"));
+                var instance = PrefabUtility.InstantiatePrefab(prefab) as GameObject;
+                if (instance == null) return;
+                Undo.RegisterCreatedObjectUndo(instance, undoName);
+                Undo.SetTransformParent(instance.transform, avatar.transform, undoName);
+                Undo.RecordObject(instance.transform, undoName);
+                instance.transform.localPosition = Vector3.zero;
+                instance.transform.localRotation = Quaternion.identity;
+                // MA が付け足す部品・骨の設定も、複製したインスタンスにだけ反映する。
+                Undo.RegisterFullObjectHierarchyUndo(instance, undoName);
+                setup = SetupOutfit(instance);
+                ctx.NoteCreated(instance);
+                // 後の自動保存で「追加した服」が Prefab に移っても、Undo が分かれないようここで一緒に保存する。
+                MyAvatar.Save(avatar);
+                Selection.activeGameObject = instance;
             }
-            else
+            catch (System.Exception e)
             {
-                EditorUtility.DisplayDialog(L10n.Tr("app.name"), L10n.Tr("outfit.done", prefab.name), L10n.Tr("dialog.ok"));
+                Undo.RevertAllDownToGroup(group);
+                Debug.LogException(e);
+                EditorUtility.DisplayDialog(L10n.Tr("app.name"), L10n.Tr("outfit.failed"), L10n.Tr("dialog.ok"));
+                return;
             }
-
-            Selection.activeGameObject = instance;
+            finally
+            {
+                Undo.CollapseUndoOperations(group);
+                UndoHelper.Separate();
+            }
+            EditorUtility.DisplayDialog(L10n.Tr("app.name"),
+                setup ? L10n.Tr("outfit.done", prefab.name) : L10n.Tr("outfit.setupFailed"), L10n.Tr("dialog.ok"));
             ctx.Rebuild();
         }
 
@@ -171,8 +179,17 @@ namespace Jeni.KaihenNavi
             {
                 ctx.BeginEdit();
                 UndoHelper.Separate();
-                Undo.RecordObject(outfit, L10n.Tr("undo.outfit"));
-                outfit.SetActive(!visible);
+                Undo.IncrementCurrentGroup();
+                var group = Undo.GetCurrentGroup();
+                Undo.SetCurrentGroupName(L10n.Tr("undo.outfit"));
+                try
+                {
+                    Undo.RecordObject(outfit, L10n.Tr("undo.outfit"));
+                    outfit.SetActive(!visible);
+                    PrefabUtility.RecordPrefabInstancePropertyModifications(outfit);
+                    MyAvatar.Save(ctx.Avatar);
+                }
+                finally { Undo.CollapseUndoOperations(group); }
                 ctx.Rebuild();
             }, "kn-button--small"));
             row.Add(Ui.Button(L10n.Tr("common.where"), () =>

@@ -284,6 +284,19 @@ Assets/KaihenNavi/
 - 調査メモ Docs/research-asset-managers.md（KonoAsset・BLM）。BLM は今回は使わない
 - 注意: computer use で open_application("Unity") を使うと Unity Hub が前に出てユーザーの邪魔になる。Unity のウィンドウを直接クリックする
 
+## 4.13 服のライブラリ（2026-10-25・Unity 実機は未確認）
+
+- 検索不具合の原因: 旧 `ItemPicker.OwnedItems` は Ledger に登録された Prefab だけを検索しており、`KonoAssetLink.All` の全商品索引を使っていなかった。未取り込みの商品は必ず対象外になり、大小文字以外の表記揺れも吸収していなかった。
+- `Core/ItemLibrary.cs` に服・アクセ共通の「商品一覧 → 行内の詳細 → 確定」を実装。商品名・ショップ名・フォルダ名・Prefab 名・unitypackage 名で部分一致。NFKC、大小文字、ひらがな／カタカナを正規化する。検索対象は全件、表示だけ24件ずつに分ける。「このアバター用」が初期値、対応情報と Prefab パスで絞り込む。
+- KonoAsset と Ledger、および既存 Prefab の読み取り専用の探索結果を商品単位で結合。一覧更新・装着では台帳に書き込まない。外部データも変更しない。商品索引は出所の JSON 名を追加してキャッシュ形式を2にした。
+- 詳細に画像、商品・ショップ、Prefab の選択、Project の「場所」、確定ボタン。アクセは確定後に従来の付け場所選択へ進む。`TransformFeature` は共通一覧の呼び出しだけ変更し、付ける処理・位置調整部分は変更していない。
+- 「ファイルから選ぶ…」は「Project から選ぶ…」として補助欄に残した。OS のファイル選択との混同を避け、ドラッグが難しい人も使えるようにするため。「読み込み直す」は1つ、KonoAsset のデータ場所は「設定」にまとめた。他機能へのボタンと説明は左ナビの翻訳を参照する。
+- 未取り込みの商品は `.unitypackage` を選択して `ImportPackage(..., true)`。選択した商品IDと検索・絞り込みを SessionState に保持し、取り込み後も詳細を復元する。
+- 取り込みのファイル Undo は `PackageImportUndo` / `PackageImportState`。gzip/tar の pathname・内容ハッシュ・GUID で既存ファイルへの上書きや別の場所にある同一 GUID を事前に拒否。追加ファイルと .meta、および台帳・ツールの README の前後を `Library/KaihenNavi/Imports/` に保存し、Undo / Redo で復元する。既存の配布ファイルは書き戻さない。版の違う既存ファイルを含むパッケージは、安全のため取り込み全体を停止する。
+- 装着はインスタンス生成・MA の処理・バックアップへの追加パスの記録・自分用 Prefab への保存まで同じ Undo グループにまとめる。`MyAvatar.Save` の Apply を UserAction に変更し、保存の取り消しも記録する。服の操作内で保存することで、後の自動保存が装着の Undo を分けないようにした。
+- `bash tools/check.sh`: NoMA / WithMA / Full のコンパイル、4言語543キー、KonoAsset の60検証が成功。検索・結合、アーカイブ読取、衝突拒否、追加ファイルと GUID・台帳の Undo/Redo 用ファイル復元を検証。Unity の JsonUtility・実 Undo・MA 実行はスタブでは確認できない。
+- **Unity で確認すること**: 行の選択だけでは服が増えないこと／検索と「すべて」の切り替え／画像と狭い幅・両スキン・4言語／装着後に1.5秒待つ・ページ切り替え・保存・ウィンドウ再起動を挟んだ Ctrl+Z と Redo（MA の部品も戻ること）／取り込みの完了・キャンセル・失敗・スクリプトによるドメインリロード後の詳細復元／取り込み Undo で新規ファイル・.meta・台帳が一緒に戻り、Redo で GUID が保たれること／元アセットのハッシュが不変なこと。
+
 ## 5. 設計の要点
 
 - **元アセットは絶対に書き換えない**: マテリアルは初回変更時に `Assets/KaihenNavi/<アバター名>/Materials/` へ複製し、アバター内の参照をすべて差し替える（`MaterialCopier`）

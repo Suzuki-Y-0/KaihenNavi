@@ -611,6 +611,7 @@ namespace UnityEditor.UIElements
 
     public class PopupField<T> : UnityEngine.UIElements.BaseField<T>
     {
+        public string label;
         public PopupField(List<T> choices, int defaultIndex) { }
     }
 }
@@ -691,6 +692,8 @@ namespace UnityEditor
 
     public static class AssetDatabase
     {
+        public static void ImportPackage(string path, bool interactive) { }
+        public static void Refresh() { }
         public static Func<Object, string> PathForTests;
         public static Func<string, Object> LoadForTests;
         public static Func<string, Object[]> LoadAllForTests;
@@ -798,9 +801,11 @@ namespace UnityEditor
         public static void RecordObject(Object o, string name) { if (RecordForTests != null) RecordForTests(o); }
         public static void ReplayForTests() { if (undoRedoPerformed != null) undoRedoPerformed(); }
         public static void RegisterFullObjectHierarchyUndo(Object o, string name) { }
+        public static void FlushUndoRecordObjects() { }
         public static void IncrementCurrentGroup() { }
         public static int GetCurrentGroup() { return 0; }
         public static void SetCurrentGroupName(string n) { }
+        public static string GetCurrentGroupName() { return "Undo"; }
         public static void CollapseUndoOperations(int g) { }
         public static void DestroyObjectImmediate(Object o) { }
         public static void RegisterCreatedObjectUndo(Object o, string n) { }
@@ -852,6 +857,7 @@ namespace UnityEditor
 
     public static class Selection
     {
+        public static Object activeObject;
         public static GameObject activeGameObject;
         public static Transform activeTransform;
     }

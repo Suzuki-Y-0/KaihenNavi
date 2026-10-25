@@ -565,7 +565,7 @@
   "attach.adjusting": "「{0}」を調整",
   "attach.finish": "完了",
   "undo.detach": "アクセを外す",
-  "transform.localHint": "位置と向きは、つけた骨を基準にしています。数値は直接入力もできます。Ctrl+Z でひとつ前に戻せます。",
+  "transform.localHint": "0 が、つけたときに推定した位置と向きです。数値は直接入力もできます。Ctrl+Z でひとつ前に戻せます。",
   "transform.localY": "上下（Y・cm）",
   "transform.localZ": "前後（Z・cm）",
   "transform.localX": "左右（X・cm）",

@@ -145,14 +145,14 @@ namespace Jeni.KaihenNavi
             root.Add(Ui.Text(L10n.Tr("transform.localHint"), "kn-hint"));
             var height = AvatarMeasure.Height(avatar);
             root.Add(Ui.Heading(L10n.Tr("transform.position")));
-            AddPositionSlider(root, ctx, target, "transform.localY", 1, height);
-            AddPositionSlider(root, ctx, target, "transform.localZ", 2, height);
-            AddPositionSlider(root, ctx, target, "transform.localX", 0, height);
+            AddPositionSlider(root, ctx, target, "transform.localY", 1, height, baseline);
+            AddPositionSlider(root, ctx, target, "transform.localZ", 2, height, baseline);
+            AddPositionSlider(root, ctx, target, "transform.localX", 0, height, baseline);
 
             root.Add(Ui.Heading(L10n.Tr("transform.rotation")));
-            AddRotationSlider(root, ctx, target, "transform.rotationX", 0);
-            AddRotationSlider(root, ctx, target, "transform.rotationY", 1);
-            AddRotationSlider(root, ctx, target, "transform.rotationZ", 2);
+            AddRotationSlider(root, ctx, target, "transform.rotationX", 0, baseline);
+            AddRotationSlider(root, ctx, target, "transform.rotationY", 1, baseline);
+            AddRotationSlider(root, ctx, target, "transform.rotationZ", 2, baseline);
 
             root.Add(Ui.Heading(L10n.Tr("transform.size")));
             root.Add(EditSlider(ctx, target, L10n.Tr("transform.sizeLabel"), 10f, 300f,
@@ -282,14 +282,16 @@ namespace Jeni.KaihenNavi
 
             Bounds bounds;
             var hasBounds = TryBounds(instance, out bounds);
+            // 元の位置を保つのは、このアバター用に作られた物か、元の位置が骨のすぐ近く（身長の 5% 以内）のときだけ。
+            // 20% まで許すと、別のアバター用の耳が頭の中に入るなど、見えない所に付いてしまった。
             var keepPosition = MatchesAvatar(avatar, prefab) ||
-                (hasBounds && Vector3.Distance(bounds.center, bone.position) <= height * 0.2f);
+                (hasBounds && Vector3.Distance(bounds.center, bone.position) <= height * 0.05f);
             Undo.SetTransformParent(target, bone, undoName);
             Undo.RecordObject(target, undoName);
             if (!keepPosition)
             {
                 // 頭は骨より上、首は少し前。ほかは骨の中心を出発点にする。
-                var offset = place == HumanBodyBones.Head ? avatar.transform.up * (height * 0.06f) :
+                var offset = place == HumanBodyBones.Head ? avatar.transform.up * (height * 0.08f) :
                     place == HumanBodyBones.Neck ? avatar.transform.forward * (height * 0.02f) : Vector3.zero;
                 target.position += bone.position + offset - (hasBounds ? bounds.center : target.position);
             }
@@ -450,25 +452,30 @@ namespace Jeni.KaihenNavi
         }
 
         private static void AddPositionSlider(VisualElement root, FeatureContext ctx, Transform target,
-            string key, int axis, float height)
+            string key, int axis, float height, Baseline baseline)
         {
-            // 骨のスケールを含めて cm に換算する。表示値の原点は骨の位置。
+            // 骨のスケールを含めて cm に換算する。表示値の原点は「推定した位置」（0 = つけたときの位置）。
+            // 骨からの値そのものを出すと、足元が原点のアクセでは -106cm のような分かりにくい数字になるため。
             var scale = target.parent == null ? 1f : Mathf.Abs(Axis(target.parent.lossyScale, axis));
             scale = Mathf.Max(0.0001f, scale);
-            var cm = Axis(target.localPosition, axis) * scale * 100f;
+            var origin = Axis(baseline.LocalPosition, axis);
+            var cm = (Axis(target.localPosition, axis) - origin) * scale * 100f;
             var range = Mathf.Max(height * 25f, Mathf.Abs(cm) + height * 5f);
             root.Add(EditSlider(ctx, target, L10n.Tr(key), -range, range, cm,
                 L10n.Tr("undo.transformMove"), value =>
-                    target.localPosition = WithAxis(target.localPosition, axis, value / (scale * 100f))));
+                    target.localPosition = WithAxis(target.localPosition, axis, origin + value / (scale * 100f))));
         }
 
         private static void AddRotationSlider(VisualElement root, FeatureContext ctx, Transform target,
-            string key, int axis)
+            string key, int axis, Baseline baseline)
         {
-            var degrees = Mathf.DeltaAngle(0f, Axis(target.localEulerAngles, axis));
+            // 推定した向きからの差（°）で表す
+            var originEuler = baseline.LocalRotation.eulerAngles;
+            var origin = Axis(originEuler, axis);
+            var degrees = Mathf.DeltaAngle(origin, Axis(target.localEulerAngles, axis));
             root.Add(EditSlider(ctx, target, L10n.Tr(key), -180f, 180f, degrees,
                 L10n.Tr("undo.transformRotate"), value =>
-                    target.localEulerAngles = WithAxis(target.localEulerAngles, axis, value)));
+                    target.localEulerAngles = WithAxis(target.localEulerAngles, axis, origin + value)));
         }
 
         /// <summary>ドラッグは離すまで、数値入力は欄を離れるまでを 1 操作にし、最後に保存する。</summary>

@@ -360,6 +360,7 @@ namespace UnityEngine
     public struct Quaternion
     {
         public float x, y, z, w;
+        public Vector3 eulerAngles { get { return new Vector3(); } }
         public static Quaternion identity;
         public static Quaternion Inverse(Quaternion q) { return q; }
         public static Quaternion AngleAxis(float a, Vector3 axis) { return default(Quaternion); }

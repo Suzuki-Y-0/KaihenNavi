@@ -565,7 +565,7 @@
   "attach.adjusting": "调整“{0}”",
   "attach.finish": "完成",
   "undo.detach": "取下配饰",
-  "transform.localHint": "位置和旋转以所佩戴的骨骼为基准。也可直接输入数值。按 Ctrl+Z 可撤销。",
+  "transform.localHint": "0 表示佩戴时推测的位置和朝向。也可以直接输入数值。按 Ctrl+Z 可以撤销一步。",
   "transform.localY": "上下（Y，cm）",
   "transform.localZ": "前后（Z，cm）",
   "transform.localX": "左右（X，cm）",

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using UnityEditor;
 using UnityEngine;
 using VRC.SDK3.Avatars.Components;
@@ -8,7 +9,7 @@ using Object = UnityEngine.Object;
 
 namespace Jeni.KaihenNavi
 {
-    /// <summary>焼いた髪の位置 → 頂点の内側度 → UV マスク。元の Mesh/Texture は変更しない。</summary>
+    /// <summary>UV マスクの範囲・継ぎ目を整える。頂点による塗り分けはレイ方式の予備として残す。</summary>
     internal static class InnerColorMask
     {
         private static double Radius(Vector3 p) { return Math.Sqrt(p.x * p.x + p.y * p.y + p.z * p.z); }
@@ -16,11 +17,46 @@ namespace Jeni.KaihenNavi
         private static float Smooth(float value) { var t = Clamp01(value); return t * t * (3 - 2 * t); }
 
         // UI の 1〜40 を、開け具合のしきい値 0.08〜0.40 に対応させる。
-        // 大きくするほど外から見えやすい場所まで含む。64 本のレイでも境目が段にならないようにする。
+        // 大きくするほど外から見えやすい場所まで含む。票の境目をなだらかにする。
         internal static float FromOpenness(float openness, float range)
         {
             var threshold = 0.08f + Clamp01((range - 0.01f) / 0.39f) * 0.32f;
             return Smooth((threshold - Clamp01(openness)) / 0.06f + 0.5f);
+        }
+
+        /// <summary>頭より下を 0〜1 にした高さから、毛先の範囲を決める。</summary>
+        internal static float LowerWeight(float normalizedDepth, float height)
+        {
+            return Smooth((normalizedDepth - 1 + Clamp01(height)) / 0.05f);
+        }
+
+        /// <summary>塗った島の外だけを広げる。隣の島の外側の面には、色を広げない。</summary>
+        internal static float[] PadIslands(float[] source, bool[] coverage, int size, int radius)
+        {
+            var values = (float[])source.Clone();
+            var known = (bool[])coverage.Clone();
+            for (var step = 0; step < radius; step++)
+            {
+                var next = (float[])values.Clone(); var filled = (bool[])known.Clone();
+                for (var y = 0; y < size; y++)
+                    for (var x = 0; x < size; x++)
+                    {
+                        var index = y * size + x;
+                        if (known[index]) continue;
+                        var sum = 0f; var count = 0;
+                        for (var dy = -1; dy <= 1; dy++)
+                            for (var dx = -1; dx <= 1; dx++)
+                            {
+                                var neighbor = ((y + dy + size) % size) * size + (x + dx + size) % size;
+                                if (!known[neighbor]) continue;
+                                sum += values[neighbor]; count++;
+                            }
+                        if (count == 0) continue;
+                        next[index] = sum / count; filled[index] = true;
+                    }
+                values = next; known = filled;
+            }
+            return values;
         }
 
         /// <param name="used">色を変える枠で使う頂点。他の枠には色をつけない。</param>
@@ -147,7 +183,21 @@ namespace Jeni.KaihenNavi
             {
                 texture.SetPixels32(colors);
                 texture.Apply();
-                File.WriteAllBytes(path, texture.EncodeToPNG());
+                var png = texture.EncodeToPNG();
+                File.WriteAllBytes(path, png);
+                // 開発時だけ EditorPrefs で有効にする。Assets にデバッグ画像を残さない。
+                if (EditorPrefs.GetBool("KaihenNavi.InnerColor.SaveDebugMasks", false))
+                {
+                    try
+                    {
+                        var folder = "Library/KaihenNavi/InnerColor";
+                        Directory.CreateDirectory(folder);
+                        var name = new string(key.Select(c => char.IsLetterOrDigit(c) ? c : '_').ToArray());
+                        File.WriteAllBytes(Path.Combine(folder, name + ".png"), png);
+                    }
+                    catch (IOException e) { Debug.LogWarning("かいへんナビ: 確認用マスクを保存できませんでした。" + e.Message); }
+                    catch (UnauthorizedAccessException e) { Debug.LogWarning("かいへんナビ: 確認用マスクを保存できませんでした。" + e.Message); }
+                }
             }
             finally { Object.DestroyImmediate(texture); }
             AssetDatabase.ImportAsset(path);

@@ -192,7 +192,7 @@ namespace Jeni.KaihenNavi
             var components = new Component[] { root, avatar, hair, other };
             go.ComponentsForTests = type => components.Where(type.IsInstanceOfType).Cast<object>().ToArray();
             renderers.Add(hair); renderers.Add(other);
-            var source = new Material(null) { name = "Hair" };
+            var source = new Material((Shader)null) { name = "Hair" };
             foreach (var name in InnerColorFeature.Floats) source.SetFloat(name, 0.25f);
             foreach (var name in InnerColorFeature.Vectors) source.SetVector(name, new Vector4(1, 2, 3, 4));
             source.SetColor("_Color2nd", new Color(0.1f, 0.2f, 0.3f));
@@ -238,7 +238,7 @@ namespace Jeni.KaihenNavi
             Check(File.ReadAllBytes(entry.maskPath).SequenceEqual(new byte[] { 1, 2, 3 }), "Undo overwrite must restore previous PNG content");
             Replay(secondJournal, true);
             Check(File.ReadAllBytes(entry.maskPath).SequenceEqual(new byte[] { 4, 5, 6 }), "Redo overwrite must restore replacement PNG content");
-            var collision = new Material(null) { name = "Hair" }; Add(collision, "Assets/Other/Hair.mat");
+            var collision = new Material((Shader)null) { name = "Hair" }; Add(collision, "Assets/Other/Hair.mat");
             var stable = InnerColorAssets.StablePath(folder + "/Materials", "Hair", "_InnerColor.mat", "other-key");
             Check(stable != entry.materialPath && stable == InnerColorAssets.StablePath(folder + "/Materials", "Hair", "_InnerColor.mat", "other-key"), "Same-name sources must get deterministic collision paths");
             var subsetJournal = InnerColorAssetUndo.Begin(avatar);

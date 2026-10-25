@@ -18,6 +18,7 @@ COMMON_TAIL = "  userData: \n  assetBundleName: \n  assetBundleVariant: \n"
 
 TEMPLATES = {
     "folder": "folderAsset: yes\nDefaultImporter:\n  externalObjects: {}\n" + COMMON_TAIL,
+    ".shader": "ShaderImporter:\n  externalObjects: {}\n  defaultTextures: []\n  nonModifiableTextures: []\n" + COMMON_TAIL,
     ".cs": (
         "MonoImporter:\n  externalObjects: {}\n  serializedVersion: 2\n  defaultReferences: []\n"
         "  executionOrder: 0\n  icon: {instanceID: 0}\n" + COMMON_TAIL

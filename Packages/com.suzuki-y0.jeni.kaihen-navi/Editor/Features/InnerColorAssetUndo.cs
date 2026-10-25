@@ -162,7 +162,7 @@ namespace Jeni.KaihenNavi
             foreach (var file in files.Where(f => f.content != null)) AssetDatabase.ImportAsset(file.path);
             snapshot.Apply(avatar);
             AssetDatabase.SaveAssets();
-            MyAvatar.Save(avatar);
+            MyAvatar.Save(avatar, false);
             var absent = new HashSet<string>(files.Where(f => f.content == null).Select(f => f.path));
             var referenced = InnerColorAssets.Referenced(absent);
             foreach (var path in absent)

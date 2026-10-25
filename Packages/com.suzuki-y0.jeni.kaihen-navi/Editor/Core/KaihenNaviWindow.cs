@@ -65,6 +65,9 @@ namespace Jeni.KaihenNavi
         private int _seenGroup = -1;
         private double _seenAt;
         private int _savedGroup = -1;
+        private bool _afterUndoRedo;
+        private int _saveEditGroup = -1;
+        private string _saveEditName;
         private System.DateTime _lastSavedAt;
         private const double AutoSaveDelay = 1.5;
 
@@ -90,6 +93,7 @@ namespace Jeni.KaihenNavi
             KonoAssetLink.Changed += QueueKonoRefresh;
             ItemLedger.Changed += QueueKonoRefresh;
             Undo.undoRedoPerformed += OnUndoRedo;
+            Undo.postprocessModifications += OnRecordedModifications;
             EditorApplication.hierarchyChanged += QueueScan;
             EditorApplication.playModeStateChanged += OnPlayModeChanged;
             EditorSceneManager.sceneClosing += OnSceneClosing;
@@ -103,6 +107,7 @@ namespace Jeni.KaihenNavi
             ItemLedger.Changed -= QueueKonoRefresh;
             EditorApplication.delayCall -= RefreshKono;
             Undo.undoRedoPerformed -= OnUndoRedo;
+            Undo.postprocessModifications -= OnRecordedModifications;
             EditorApplication.hierarchyChanged -= QueueScan;
             EditorApplication.delayCall -= RunQueuedScan;
             _scanQueued = false;
@@ -555,6 +560,7 @@ namespace Jeni.KaihenNavi
         {
             if (_avatar == null || EditorApplication.isPlayingOrWillChangePlaymode) return;
             UpdateSaveLabel();
+            if (TransformFeature.IsAdjusting || _afterUndoRedo) return;
             var group = Undo.GetCurrentGroup();
             var now = EditorApplication.timeSinceStartup;
             if (group != _seenGroup)
@@ -572,10 +578,20 @@ namespace Jeni.KaihenNavi
         /// <param name="manual">「保存」ボタンから呼んだとき true（変更がなくても保存時刻を更新する）。</param>
         private void SaveNow(bool manual = false)
         {
-            if (_avatar == null) return;
+            if (_avatar == null || (_afterUndoRedo && !manual)) return;
+            var editGroup = _saveEditGroup;
+            var editName = _saveEditName;
+            TransformFeature.FinishAdjustment();
             var materialsChanged = HasUnsavedMaterials();
             MyAvatar.SaveMaterials(_avatar);
             var saved = MyAvatar.Save(_avatar);
+            // Scene の移動ツールからの編集も、記録されたグループに保存をまとめる。
+            if (saved && editGroup >= 0)
+            {
+                Undo.SetCurrentGroupName(editName);
+                Undo.CollapseUndoOperations(editGroup);
+            }
+            _saveEditGroup = -1;
             _savedGroup = Undo.GetCurrentGroup();
             if (saved || materialsChanged || manual) _lastSavedAt = System.DateTime.Now;
             UpdateSaveLabel();
@@ -713,6 +729,7 @@ namespace Jeni.KaihenNavi
                 Avatar = _avatar,
                 Backup = _backup,
                 FeatureId = _selected.Id,
+                Editing = () => _afterUndoRedo = false,
                 Rebuild = () =>
                 {
                     BuildNavigation();
@@ -763,6 +780,8 @@ namespace Jeni.KaihenNavi
             _backup.EndSession();
             UndoHelper.Separate();
             _avatar = avatar;
+            _saveEditGroup = -1;
+            _afterUndoRedo = false;
             _avatarId = avatar == null ? null : BackupService.AvatarId(avatar);
             _lastSavedAt = default(System.DateTime);
             _seenGroup = Undo.GetCurrentGroup();
@@ -943,10 +962,43 @@ namespace Jeni.KaihenNavi
             return feature == null ? id : feature.Title;
         }
 
+        /// <summary>グループ番号の変化だけでは新しい編集と判断しない（Undo 自体でも番号が進む）。</summary>
+        private UndoPropertyModification[] OnRecordedModifications(UndoPropertyModification[] changes)
+        {
+            if (_avatar != null && changes.Any(change => change.currentValue != null &&
+                    IsAvatarModification(change.currentValue.target)))
+            {
+                _afterUndoRedo = false;
+                _saveEditGroup = Undo.GetCurrentGroup();
+                _saveEditName = Undo.GetCurrentGroupName();
+            }
+            else if (changes.Length > 0)
+            {
+                // 別の対象への編集まで、前のアバター操作に巻き込まない。
+                _saveEditGroup = -1;
+            }
+            return changes;
+        }
+
+        private bool IsAvatarModification(Object target)
+        {
+            var component = target as Component;
+            var go = component != null ? component.gameObject : target as GameObject;
+            if (go != null) return !EditorUtility.IsPersistent(go) && go.transform.IsChildOf(_avatar.transform);
+            return target is Material && WorkFolders.IsOwnedBy(target, _avatar.gameObject);
+        }
+
         private void OnUndoRedo()
         {
             if (_panelArea == null) return;
             UndoHelper.Separate();
+            // Undo/Redo の直後に再適用すると、新しい保存の履歴が Redo を消してしまう。
+            // 保存済みの編集は Prefab 側も同じ Undo で戻る。次の編集か明示的な保存まで待つ。
+            _afterUndoRedo = true;
+            _saveEditGroup = -1;
+            TransformFeature.CancelAdjustment();
+            _seenGroup = _savedGroup = Undo.GetCurrentGroup();
+            _backup.EndSession();
             BuildNavigation();
             BuildPanel();
             UpdateSaveLabel();

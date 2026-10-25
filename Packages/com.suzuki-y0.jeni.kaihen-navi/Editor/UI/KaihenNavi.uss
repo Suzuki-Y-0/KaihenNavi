@@ -287,3 +287,9 @@
 .kn-issue { margin: 8px 0; padding: 8px; border-radius: 6px; border-width: 1px; border-color: var(--kn-border); background-color: var(--kn-surface); }
 .kn-menu__row--hidden { opacity: 0.55; }
 .kn-menu__icon { width: 28px; height: 28px; margin-right: 8px; flex-shrink: 0; border-radius: 4px; -unity-background-scale-mode: scale-to-fit; }
+
+/* 商品の詳細と、一覧にないアイテムを入れる補助欄。 */
+.kn-library__detail { padding: 12px; margin: 0 4px 8px 4px; background-color: var(--kn-surface); border-radius: 4px; border-width: 1px; border-color: var(--kn-border); }
+.kn-library__image { width: 128px; height: 128px; min-width: 128px; margin-bottom: 8px; }
+.kn-drop--compact { min-height: 40px; padding: 6px 8px; }
+.kn-drop--compact .kn-drop__icon, .kn-drop--compact .kn-drop__hint { display: none; }

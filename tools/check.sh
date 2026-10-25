@@ -45,5 +45,6 @@ EOF
 
 python3 "$here/test_konoasset.py"
 python3 "$here/test_feature_edits.py"
+bash "$here/test_history.sh"
 
 echo "All checks passed."

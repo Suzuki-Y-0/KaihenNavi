@@ -27,6 +27,14 @@ build NoMA
 build WithMA -define:KAIHENNAVI_MA
 build Full -define:KAIHENNAVI_MA -define:KAIHENNAVI_FULL
 
+# インナーカラーの分類・UV の継ぎ目・複製ファイルの Undo を数値と一時フォルダで確認する。
+echo "== InnerColor"
+mcs -nologo -langversion:7 -warnaserror+ -nowarn:0618 -define:INNER_COLOR_ASSET_TESTS \
+    -r:System.Core.dll -out:"$out/InnerColorTests.exe" \
+    "$here/stubs/UnityStubs.cs" "$here/stubs/VrcAndMaStubs.cs" "${files[@]}" \
+    "$here/tests/InnerColorMaskTests.cs" "$here/tests/InnerColorAssetTests.cs"
+mono "$out/InnerColorTests.exe"
+
 # 言語ファイルのキーがそろっているか
 python3 - "$src/Localization" <<'EOF'
 import json, sys, os

@@ -127,7 +127,7 @@ namespace UnityEngine
         public System.Collections.IEnumerator GetEnumerator() { return _children.GetEnumerator(); }
     }
 
-    public class Renderer : Component { public Material[] sharedMaterials; public Bounds bounds; }
+    public class Renderer : Component { public Material[] sharedMaterials; public Bounds bounds; public bool enabled, forceRenderingOff; }
     public class MeshRenderer : Renderer { }
     public class MeshFilter : Component { public Mesh sharedMesh; }
     public class ParticleSystemRenderer : Renderer { public int meshCount; public int GetMeshes(Mesh[] meshes) { return 0; } }
@@ -141,7 +141,7 @@ namespace UnityEngine
         public void BakeMesh(Mesh m, bool useScale) { }
     }
 
-    public class Mesh : Object { public Vector2[] uv; public int subMeshCount; public int[] GetTriangles(int submesh) { return new int[0]; } public bool isReadable; public int blendShapeCount; public Vector3[] vertices; public Vector3[] normals; public int[] triangles; public int vertexCount { get { return vertices == null ? 0 : vertices.Length; } } public UnityEngine.Rendering.IndexFormat indexFormat; public void RecalculateNormals() { } public void RecalculateBounds() { } public string GetBlendShapeName(int i) { return ""; } public int GetBlendShapeIndex(string name) { return -1; } }
+    public class Mesh : Object { public Vector2[] uv, uv2; public int subMeshCount; public int[] GetTriangles(int submesh) { return new int[0]; } public bool isReadable; public int blendShapeCount; public Vector3[] vertices; public Vector3[] normals; public int[] triangles; public int vertexCount { get { return vertices == null ? 0 : vertices.Length; } } public UnityEngine.Rendering.IndexFormat indexFormat; public void SetTriangles(int[] triangles, int submesh) { } public void RecalculateNormals() { } public void RecalculateBounds() { } public string GetBlendShapeName(int i) { return ""; } public int GetBlendShapeIndex(string name) { return -1; } }
     public class Collider : Component { }
     public class MeshCollider : Collider { public Mesh sharedMesh; }
     public struct RaycastHit { public Collider collider; }
@@ -156,16 +156,23 @@ namespace UnityEngine
     }
     public struct Matrix4x4
     {
+        public static Matrix4x4 identity;
+        public static Matrix4x4 TRS(Vector3 p, Quaternion q, Vector3 s) { return default(Matrix4x4); }
+        public static Matrix4x4 Scale(Vector3 s) { return default(Matrix4x4); }
+        public static Matrix4x4 Ortho(float l, float r, float b, float t, float n, float f) { return default(Matrix4x4); }
+        public static Matrix4x4 operator *(Matrix4x4 a, Matrix4x4 b) { return a; }
         public Matrix4x4 inverse { get { return this; } }
         public Matrix4x4 transpose { get { return this; } }
         public Vector3 MultiplyVector(Vector3 v) { return v; }
     }
     public enum FilterMode { Point, Bilinear, Trilinear }
-    public class Texture : Object { public TextureWrapMode wrapMode; public int width; public int height; public FilterMode filterMode; }
-    public enum TextureFormat { RGBA32, RGB24 }
+    public struct Hash128 { }
+    public class Texture : Object { public TextureWrapMode wrapMode; public int width; public int height; public FilterMode filterMode; public Hash128 imageContentsHash; }
+    public enum TextureFormat { RGBA32, RGB24, RGBAFloat }
     public enum TextureWrapMode { Repeat, Clamp }
     public class Texture2D : Texture
     {
+        public static Texture2D whiteTexture;
         public Texture2D(int w, int h, TextureFormat f, bool mip) { }
         public Texture2D(int w, int h, TextureFormat f, bool mip, bool linear) { }
         public Color[] GetPixels() { return new Color[0]; }
@@ -174,6 +181,7 @@ namespace UnityEngine
         public Color32[] GetPixels32() { return new Color32[0]; }
         public void SetPixels32(Color32[] p) { }
         public void ReadPixels(Rect r, int x, int y) { }
+        public void ReadPixels(Rect r, int x, int y, bool recalculateMipMaps) { }
         public byte[] EncodeToPNG() { return new byte[0]; }
         public void Apply() { }
     }
@@ -185,10 +193,11 @@ namespace UnityEngine
 
     public enum RenderTextureFormat { ARGB32, RGFloat, ARGBFloat, Depth }
     public enum RenderTextureReadWrite { Default, Linear, sRGB }
-    public static class Graphics { public static void Blit(Texture source, RenderTexture dest) { } }
     public class RenderTexture : Texture
     {
         public RenderTexture(int w, int h, int depth, RenderTextureFormat f) { }
+        public RenderTexture(int w, int h, int depth, RenderTextureFormat f, RenderTextureReadWrite rw) { }
+        public bool Create() { return true; }
         public int antiAliasing;
         public static RenderTexture active;
         public void Release() { }
@@ -208,12 +217,25 @@ namespace UnityEngine
         public Vector3 WorldToViewportPoint(Vector3 p) { return p; }
     }
 
-    public class Shader : Object { public bool isSupported; }
+    public class Shader : Object { public bool isSupported; public static Shader Find(string name) { return null; } }
+    public static class GL { public static Matrix4x4 GetGPUProjectionMatrix(Matrix4x4 p, bool texture) { return p; } }
+    public static class Graphics { public static void ExecuteCommandBuffer(UnityEngine.Rendering.CommandBuffer buffer) { } public static void Blit(Texture source, RenderTexture dest) { } }
+    public static class SystemInfo
+    {
+        public static UnityEngine.Rendering.GraphicsDeviceType graphicsDeviceType;
+        public static int maxTextureSize;
+        public static bool SupportsRenderTextureFormat(RenderTextureFormat f) { return false; }
+        public static bool SupportsBlendingOnRenderTextureFormat(RenderTextureFormat f) { return false; }
+        public static bool SupportsTextureFormat(TextureFormat f) { return false; }
+    }
     public class RuntimeAnimatorController : Object { }
 
     public class Material : Object
     {
         public Texture mainTexture;
+        public int renderQueue;
+        public Material(Shader s) { shader = s; }
+        public void SetMatrix(string name, Matrix4x4 value) { }
         public Color color;
         public Shader shader;
 #if INNER_COLOR_ASSET_TESTS
@@ -337,6 +359,7 @@ namespace UnityEngine
 
     public struct Quaternion
     {
+        public float x, y, z, w;
         public static Quaternion identity;
         public static Quaternion Inverse(Quaternion q) { return q; }
         public static Quaternion AngleAxis(float a, Vector3 axis) { return default(Quaternion); }
@@ -355,7 +378,7 @@ namespace UnityEngine
         public float r, g, b, a;
         public Color(float r, float g, float b) { this.r = r; this.g = g; this.b = b; a = 1f; }
         public Color(float r, float g, float b, float a) { this.r = r; this.g = g; this.b = b; this.a = a; }
-        public static Color gray, white;
+        public static Color gray, white, clear;
         public static void RGBToHSV(Color c, out float h, out float s, out float v) { h = s = v = 0; }
         public static Color HSVToRGB(float h, float s, float v) { return default(Color); }
         public static Color HSVToRGB(float h, float s, float v, bool hdr) { return default(Color); }
@@ -743,6 +766,7 @@ namespace UnityEditor
 
     public static class EditorPrefs
     {
+        public static bool GetBool(string key, bool fallback) { return fallback; }
         public static string GetString(string k, string d) { return d; }
         public static void SetString(string k, string v) { }
     }
@@ -1037,4 +1061,19 @@ namespace UnityEngine.TextCore.Text
     }
 }
 
-namespace UnityEngine.Rendering { public enum IndexFormat { UInt16, UInt32 } public enum CompareFunction { Disabled, Never, Less, Equal, LessEqual, Greater, NotEqual, GreaterEqual, Always } }
+namespace UnityEngine.Rendering
+{
+    public enum IndexFormat { UInt16, UInt32 }
+    public enum CompareFunction { Disabled, Never, Less, Equal, LessEqual, Greater, NotEqual, GreaterEqual, Always }
+    public enum GraphicsDeviceType { Null, Direct3D11, OpenGLCore, Metal, Vulkan }
+    public class CommandBuffer
+    {
+        public string name;
+        public void SetRenderTarget(UnityEngine.RenderTexture target) { }
+        public void ClearRenderTarget(bool depth, bool color, UnityEngine.Color value) { }
+        public void DrawMesh(UnityEngine.Mesh mesh, UnityEngine.Matrix4x4 matrix, UnityEngine.Material material, int submesh, int pass) { }
+        public void Blit(UnityEngine.Texture source, UnityEngine.RenderTexture dest, UnityEngine.Material material, int pass) { }
+        public void Clear() { }
+        public void Release() { }
+    }
+}

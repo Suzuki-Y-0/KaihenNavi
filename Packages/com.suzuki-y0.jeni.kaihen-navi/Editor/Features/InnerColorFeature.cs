@@ -50,6 +50,7 @@ namespace Jeni.KaihenNavi
         private readonly HashSet<SkinnedMeshRenderer> _excluded = new HashSet<SkinnedMeshRenderer>();
         private readonly HashSet<SkinnedMeshRenderer> _selectionInitialized = new HashSet<SkinnedMeshRenderer>();
         private readonly InnerColorOpenness.Cache _openness = new InnerColorOpenness.Cache();
+        private readonly InnerColorVisibility _visibility = new InnerColorVisibility();
         private Color _color = Colors[0];
         private int _mode;
         private int _size = 512;
@@ -75,6 +76,7 @@ namespace Jeni.KaihenNavi
                 _excluded.Clear();
                 _selectionInitialized.Clear();
                 _openness.Clear();
+                _visibility.Clear();
             }
             var state = InnerColorState.Load(ctx.Avatar);
             _preview = state != null && state.data.entries.Count > 0;
@@ -123,6 +125,7 @@ namespace Jeni.KaihenNavi
             else
                 _root.Add(Ui.Slider(L10n.Tr("innerColor.thickness"), 1, 40, _thickness * 100, v => { _thickness = v / 100; Queue(ctx); }));
             _root.Add(Ui.Text(L10n.Tr(_mode == 1 ? "innerColor.heightHint" : "innerColor.thicknessHint"), "kn-hint"));
+            _root.Add(Ui.Text(L10n.Tr("innerColor.timeHint"), "kn-hint"));
             _root.Add(Ui.Heading(L10n.Tr("innerColor.quality")));
             _root.Add(Ui.Chips(new List<string> { L10n.Tr("innerColor.size512"), L10n.Tr("innerColor.size1024") }, _size == 512 ? 0 : 1,
                 i => { _size = i == 0 ? 512 : 1024; Queue(ctx); }));
@@ -136,7 +139,7 @@ namespace Jeni.KaihenNavi
             return _root;
         }
 
-        public override void OnClosed() { CancelPending(); _preview = false; _root = null; }
+        public override void OnClosed() { CancelPending(); _preview = false; _root = null; _visibility.Clear(); _openness.Clear(); }
         private void CancelPending() { if (_pending != null) _pending.Pause(); _pending = null; }
         private void Queue(FeatureContext ctx)
         {
@@ -186,21 +189,13 @@ namespace Jeni.KaihenNavi
             }.Any(lower.Contains);
         }
 
-        private static List<SkinnedMeshRenderer> Occluders(VRCAvatarDescriptor avatar, List<SkinnedMeshRenderer> hair)
+        /// <summary>画面に出ない物は判定から除く。EditorOnly は親のタグも調べる。</summary>
+        private static bool Visible(Renderer renderer)
         {
-            var all = avatar.GetComponentsInChildren<SkinnedMeshRenderer>(true).Where(r => r.sharedMesh != null).ToList();
-            var body = AvatarFinder.FindBody(avatar);
-            var result = new HashSet<SkinnedMeshRenderer>(hair); // チェックを外した髪・髪飾りも遮る。
-            if (body != null && body.sharedMesh != null) result.Add(body);
-            if (avatar.VisemeSkinnedMesh != null && avatar.VisemeSkinnedMesh.sharedMesh != null) result.Add(avatar.VisemeSkinnedMesh);
-            // 顔と体が分かれた商品にも対応。服や髪を避けた中で一番大きなメッシュも素体の候補にする。
-            var largest = all.Where(r => !hair.Contains(r) && !PartGuesser.LooksLikeCloth(r.name))
-                .OrderByDescending(r => r.sharedMesh.vertexCount).FirstOrDefault();
-            if (largest != null) result.Add(largest);
-            foreach (var r in all)
-                if (!PartGuesser.LooksLikeCloth(r.name) && (PartGuesser.Guess(r, null, body) == BodyPart.Skin ||
-                    r.sharedMaterials.Any(m => m != null && PartGuesser.Guess(r, m, body) == BodyPart.Skin))) result.Add(r);
-            return result.OrderBy(r => r.GetInstanceID()).ToList();
+            if (!renderer.enabled || renderer.forceRenderingOff || !renderer.gameObject.activeInHierarchy) return false;
+            for (var t = renderer.transform; t != null; t = t.parent)
+                if (t.gameObject.tag == "EditorOnly") return false;
+            return true;
         }
 
         private List<Surface> Bake(VRCAvatarDescriptor avatar)
@@ -209,13 +204,11 @@ namespace Jeni.KaihenNavi
             if (head == null) throw new InvalidOperationException(L10n.Tr("innerColor.noHead"));
             var hair = HairRenderers(avatar);
             var surfaces = new List<Surface>();
-            var baked = new Dictionary<SkinnedMeshRenderer, InnerColorOpenness.Geometry>();
-            foreach (var r in hair.Where(r => !_excluded.Contains(r)))
+            foreach (var r in hair.Where(r => !_excluded.Contains(r) && Visible(r)))
             {
                 var slots = HairSlots(avatar, r).Where(i => Supported(r.sharedMaterials[i])).ToList();
                 if (slots.Count == 0) continue;
                 var geometry = InnerColorOpenness.Bake(r);
-                baked.Add(r, geometry);
                 var s = new Surface { renderer = r, geometry = geometry, uv = geometry.uv };
                 if (geometry.positions.Length == 0 || s.uv.Length != geometry.positions.Length)
                     throw new InvalidOperationException(L10n.Tr("innerColor.noUV", r.name));
@@ -229,23 +222,75 @@ namespace Jeni.KaihenNavi
                     s.materials.Add(slot, r.sharedMaterials[slot]);
                 }
                 geometry.used = s.triangles.Values.SelectMany(t => t).Distinct().OrderBy(i => i).ToArray();
-                if (s.triangles.Count > 0) surfaces.Add(s);
+                if (geometry.used.Length > 0) surfaces.Add(s);
             }
-            if (surfaces.Count == 0) return surfaces;
+            return surfaces;
+        }
+
+        /// <summary>髪・体・服・アクセを同じ姿勢で読む。シーンに測定用オブジェクトは足さない。</summary>
+        private static List<InnerColorVisibility.Source> Sources(VRCAvatarDescriptor avatar, List<Surface> surfaces)
+        {
+            var result = new List<InnerColorVisibility.Source>();
+            foreach (var renderer in avatar.GetComponentsInChildren<Renderer>(true).Where(Visible).OrderBy(r => r.GetInstanceID()))
+            {
+                var surface = surfaces.FirstOrDefault(s => s.renderer == renderer);
+                var skinned = renderer as SkinnedMeshRenderer;
+                var regular = renderer as MeshRenderer;
+                var filter = regular == null ? null : regular.GetComponent<MeshFilter>();
+                if (skinned == null && (filter == null || filter.sharedMesh == null)) continue;
+                if (skinned != null && skinned.sharedMesh == null) continue;
+                var geometry = surface != null ? surface.geometry : skinned != null ? InnerColorOpenness.Bake(skinned) : InnerColorOpenness.Bake(regular);
+                if (geometry.positions.Length == 0) continue;
+                var materials = renderer.sharedMaterials.Take(geometry.triangles.Length).ToArray();
+                var selected = new bool[materials.Length];
+                if (surface != null)
+                    foreach (var pair in surface.materials)
+                    {
+                        materials[pair.Key] = pair.Value; // プレビューの複製は元のマテリアルへ正規化済み。
+                        selected[pair.Key] = true;
+                    }
+                result.Add(new InnerColorVisibility.Source { geometry = geometry, materials = materials, selected = selected });
+            }
+            return result;
+        }
+
+        private Dictionary<Material, float[]> Masks(VRCAvatarDescriptor avatar, List<Surface> surfaces, List<Material> materials)
+        {
+            var sources = Sources(avatar, surfaces);
+            Dictionary<Material, InnerColorVisibility.Map> visibility = null;
+            try
+            {
+                visibility = _visibility.Get(sources, AvatarMeasure.Bone(avatar, HumanBodyBones.Head).position, avatar.transform.rotation, _size);
+            }
+            catch (Exception e)
+            {
+                // 描画に失敗しても元アセットは触らず、これまでの方式で続行する。
+                Debug.LogWarning("かいへんナビ: 髪の GPU 判定が使えないため、レイで調べます。" + e.Message);
+            }
+            if (visibility != null)
+                return materials.ToDictionary(m => m, m => visibility[m].Mask(_mode, _thickness, _height, _size));
+
             List<float[]> openness = null;
             if (_mode != 1)
             {
-                foreach (var r in Occluders(avatar, hair))
-                    if (!baked.ContainsKey(r)) baked.Add(r, InnerColorOpenness.Bake(r));
-                var geometry = baked.OrderBy(p => p.Key.GetInstanceID()).Select(p => p.Value).ToList();
+                var geometry = sources.Select(s => s.geometry).ToList();
                 var measured = _openness.Get(InnerColorOpenness.CacheKey(avatar.GetInstanceID(), geometry),
                     () => InnerColorOpenness.Measure(geometry));
                 openness = surfaces.Select(s => measured[geometry.IndexOf(s.geometry)]).ToList();
             }
-            InnerColorMask.Classify(surfaces.Select(s => s.positions).ToList(),
-                surfaces.Select(s => s.geometry.used).ToList(), openness,
-                _mode, _thickness, _height, (i, values) => surfaces[i].values = values);
-            return surfaces;
+            InnerColorMask.Classify(surfaces.Select(s => s.positions).ToList(), surfaces.Select(s => s.geometry.used).ToList(),
+                openness, _mode, _thickness, _height, (i, values) => surfaces[i].values = values);
+            var result = new Dictionary<Material, float[]>();
+            foreach (var material in materials)
+            {
+                var pixels = new float[_size * _size];
+                var scale = material.GetTextureScale("_MainTex"); var offset = material.GetTextureOffset("_MainTex");
+                foreach (var surface in surfaces)
+                    foreach (var slot in surface.materials.Where(p => p.Value == material).Select(p => p.Key))
+                        InnerColorMask.Paint(pixels, _size, surface.uv, surface.values, surface.triangles[slot], scale, offset);
+                result.Add(material, pixels);
+            }
+            return result;
         }
 
         private void Preview(FeatureContext ctx)
@@ -254,6 +299,7 @@ namespace Jeni.KaihenNavi
             if (ctx.Avatar == null || ctx.Avatar != _avatar || EditorApplication.isPlayingOrWillChangePlaymode) return;
             var group = -1;
             InnerColorAssetUndo journal = null;
+            var started = EditorApplication.timeSinceStartup;
             try
             {
                 var surfaces = Bake(ctx.Avatar);
@@ -283,17 +329,7 @@ namespace Jeni.KaihenNavi
                     L10n.Tr("innerColor.overwriteYes"), L10n.Tr("innerColor.cancel"))) return;
 
                 // 数値計算が全部成功してから、ファイルや見た目を変える。
-                var masks = new Dictionary<Material, float[]>();
-                foreach (var material in materials)
-                {
-                    var pixels = new float[_size * _size];
-                    var scale = material.GetTextureScale("_MainTex");
-                    var offset = material.GetTextureOffset("_MainTex");
-                    foreach (var surface in surfaces)
-                        foreach (var slot in surface.materials.Where(p => p.Value == material).Select(p => p.Key))
-                            InnerColorMask.Paint(pixels, _size, surface.uv, surface.values, surface.triangles[slot], scale, offset);
-                    masks.Add(material, pixels);
-                }
+                var masks = Masks(ctx.Avatar, surfaces, materials);
                 ctx.BeginEdit();
                 UndoHelper.Separate();
                 Undo.IncrementCurrentGroup(); group = Undo.GetCurrentGroup();
@@ -327,7 +363,7 @@ namespace Jeni.KaihenNavi
                 journal.Commit(undoName); journal = null;
                 Undo.CollapseUndoOperations(group); group = -1;
                 _preview = true;
-                _status.text = L10n.Tr("innerColor.done");
+                _status.text = L10n.Tr("innerColor.doneElapsed", (EditorApplication.timeSinceStartup - started).ToString("F1"));
                 SceneView.RepaintAll();
             }
             catch (Exception e)

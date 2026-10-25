@@ -63,7 +63,7 @@ namespace Jeni.KaihenNavi
                 _base = null;
                 Go(Mode.New);
             }));
-            choices.Add(Choice("✎", L10n.Tr("start.existing.title"), L10n.Tr("start.existing.desc"), () => Go(Mode.Existing)));
+            choices.Add(Choice("↗", L10n.Tr("start.existing.title"), L10n.Tr("start.existing.desc"), () => Go(Mode.Existing)));
             root.Add(choices);
 
             // 前からシーンに置いて改変していたアバター（改変アバターになっていないもの）
@@ -100,12 +100,11 @@ namespace Jeni.KaihenNavi
         private static VisualElement Choice(string icon, string title, string desc, Action onClick)
         {
             var card = new Button(onClick);
-            card.AddToClassList("kn-card");
             card.AddToClassList("kn-choice");
-            card.Add(Ui.Text(icon, "kn-card__icon", "kn-choice__icon"));
-            var texts = Ui.Box("kn-card__texts");
-            texts.Add(Ui.Text(title, "kn-card__title"));
-            texts.Add(Ui.Text(desc, "kn-card__desc"));
+            card.Add(Ui.Text(icon, "kn-choice__icon"));
+            var texts = Ui.Box("kn-choice__texts");
+            texts.Add(Ui.Text(title, "kn-choice__title"));
+            texts.Add(Ui.Text(desc, "kn-choice__desc"));
             card.Add(texts);
             return card;
         }
@@ -219,8 +218,7 @@ namespace Jeni.KaihenNavi
         {
             var row = Ui.Box("kn-list__row", "kn-avatar-row");
             // サムネイルを撮ってあれば、それを見せる（Prefab のプレビューより見分けやすい）
-            var shot = AssetDatabase.LoadAssetAtPath<Texture2D>(
-                System.IO.Path.GetDirectoryName(AssetDatabase.GetAssetPath(prefab)).Replace('\\', '/') + "/Thumbnail.png");
+            var shot = LoadThumbnail(AssetDatabase.GetAssetPath(prefab));
             row.Add(shot != null ? Ui.Image(shot, "kn-avatar-row__thumb") : Ui.Thumbnail(prefab, "kn-avatar-row__thumb"));
 
             var texts = Ui.Box("kn-list__texts");
@@ -302,6 +300,15 @@ namespace Jeni.KaihenNavi
             texts.Add(buttons);
             row.Add(texts);
             return row;
+        }
+
+        /// <summary>アバターの Prefab と同じフォルダに保存した画像を探す。</summary>
+        internal static Texture2D LoadThumbnail(string prefabPath)
+        {
+            if (string.IsNullOrEmpty(prefabPath)) return null;
+            var directory = Path.GetDirectoryName(prefabPath);
+            if (string.IsNullOrEmpty(directory)) return null;
+            return AssetDatabase.LoadAssetAtPath<Texture2D>(directory.Replace('\\', '/') + "/Thumbnail.png");
         }
 
         private void Pick(VRCAvatarDescriptor avatar)

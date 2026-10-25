@@ -6,13 +6,28 @@ using VRC.SDK3.Avatars.Components;
 namespace Jeni.KaihenNavi
 {
     /// <summary>
-    /// 「やりたいこと」1 つぶんの機能。カードに表示され、選ぶと操作エリアに Build() の中身が出る。
+    /// 「やりたいこと」1 つぶんの機能。ナビに表示され、選ぶと操作エリアに Build() の中身が出る。
     /// 新しい機能はこのクラスを継承して FeatureCatalog に登録する。
     /// </summary>
     internal abstract class FeatureBase
     {
         /// <summary>英小文字の識別子。言語ファイルのキー（feature.ID.title など）にも使う。</summary>
         public abstract string Id { get; }
+
+        /// <summary>ナビのグループキー。表示名は nav.group.KEY で翻訳する。</summary>
+        public virtual string Group
+        {
+            get
+            {
+                switch (Id)
+                {
+                    case "outfit": case "transform": case "toggle": case "skin": return "outfit";
+                    case "color": case "innerColor": case "light": case "pink": return "appearance";
+                    case "body": case "view": case "walk": return "body";
+                    default: return "finish";
+                }
+            }
+        }
 
         /// <summary>企画書の機能番号（1〜10）。</summary>
         public abstract int Number { get; }
@@ -33,6 +48,23 @@ namespace Jeni.KaihenNavi
 
         public string Title { get { return L10n.Tr("feature." + Id + ".title"); } }
         public string Description { get { return L10n.Tr("feature." + Id + ".desc"); } }
+
+        /// <summary>ナビでは短い名前を使い、未定義ならページの見出しを使う。</summary>
+        public string NavTitle
+        {
+            get
+            {
+                var key = "feature." + Id + ".nav";
+                var title = L10n.Tr(key);
+                return title == key ? Title : title;
+            }
+        }
+
+        /// <summary>ナビの右端に表示する件数。ナビ再構築時にだけ呼ばれる。</summary>
+        public virtual string NavBadge(VRCAvatarDescriptor avatar) => null;
+
+        /// <summary>完了済みならナビの右端に緑のチェックを出す。</summary>
+        public virtual bool IsDone(VRCAvatarDescriptor avatar) => false;
 
         /// <summary>体験版のため鍵がかかっているか。</summary>
         public bool Locked { get { return Edition.IsTrial && !InTrial; } }

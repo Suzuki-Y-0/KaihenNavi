@@ -6,11 +6,12 @@ using UnityEngine.UIElements;
 namespace Jeni.KaihenNavi
 {
     /// <summary>
-    /// 画面の文字を、言語ごとに 1 つの OS フォントでそろえる。
+    /// 画面の文字を、言語ごとに 1 つのフォントでそろえる。
     /// Unity エディタの標準フォントには日本語が無く、足りない文字ごとに別のフォントへ切り替わるため、
     /// 漢字とかなで太さや形がばらばらに見える。それを避ける。
-    /// フォントは Windows に最初から入っているものを使い、パッケージには含めない。
-    /// 見つからなければ何もしない（Unity の標準のまま）。
+    /// 日本語と英語はパッケージに同梱した LINE Seed JP（OFL、Editor フォルダの中なのでアバターには入らない）を使う。
+    /// LINE Seed JP に無い文字や、中国語・韓国語は Windows に最初から入っているフォントで補う。
+    /// どれも見つからなければ何もしない（Unity の標準のまま）。
     /// </summary>
     internal static class FontLoader
     {
@@ -19,14 +20,19 @@ namespace Jeni.KaihenNavi
         // 言語ごとの候補（上から順に、見つかったものを使う）
         private static readonly Dictionary<string, string[]> Families = new Dictionary<string, string[]>
         {
-            { "ja", new[] { "Yu Gothic UI", "Meiryo UI", "Meiryo", "MS UI Gothic" } },
+            { "ja-system", new[] { "Yu Gothic UI", "Meiryo UI", "Meiryo", "MS UI Gothic" } },
             { "zh-Hans", new[] { "Microsoft YaHei UI", "Microsoft YaHei", "SimHei" } },
             { "ko", new[] { "Malgun Gothic", "Gulim" } },
             { "en", new[] { "Segoe UI" } },
         };
 
         // アバター名などに他の言語の文字が混ざっても形がそろうよう、後ろに付ける順番
-        private static readonly string[] FallbackOrder = { "ja", "zh-Hans", "ko" };
+        private static readonly string[] FallbackOrder = { "ja-system", "zh-Hans", "ko" };
+
+        // 同梱フォントを使う言語
+        private static readonly string[] BundledLanguages = { "ja", "en" };
+        private const string BundledRegular = "/Fonts/LINESeedJP-Regular.ttf";
+        private const string BundledBold = "/Fonts/LINESeedJP-Bold.ttf";
 
         private sealed class Pair
         {
@@ -60,6 +66,15 @@ namespace Jeni.KaihenNavi
 
             var bold = FontDefinition.FromSDFFont(fonts.Bold);
             Sweeps[root] = root.schedule.Execute(() => ApplyBold(root, bold)).Every(100);
+        }
+
+        /// <summary>補助ウィンドウを閉じたら、フォント確認の予約と画面への参照を解放する。</summary>
+        public static void Release(VisualElement root)
+        {
+            IVisualElementScheduledItem sweep;
+            if (!Sweeps.TryGetValue(root, out sweep)) return;
+            sweep.Pause();
+            Sweeps.Remove(root);
         }
 
         private static void ApplyBold(VisualElement root, FontDefinition bold)
@@ -117,6 +132,13 @@ namespace Jeni.KaihenNavi
 
         private static Pair CreateNew(string language)
         {
+            if (System.Array.IndexOf(BundledLanguages, language) >= 0)
+            {
+                var regular = CreateBundled(BundledRegular);
+                if (regular != null) return new Pair { Regular = regular, Bold = CreateBundled(BundledBold) };
+                language = "ja-system";
+            }
+
             string[] names;
             if (!Families.TryGetValue(language, out names)) return null;
 
@@ -128,6 +150,25 @@ namespace Jeni.KaihenNavi
             }
 
             return null;
+        }
+
+        private static FontAsset CreateBundled(string file)
+        {
+            var font = UnityEditor.AssetDatabase.LoadAssetAtPath<Font>(PackagePaths.Editor + file);
+            if (font == null) return null;
+
+            FontAsset asset;
+            try
+            {
+                asset = FontAsset.CreateFontAsset(font);
+            }
+            catch (System.Exception)
+            {
+                asset = null;
+            }
+
+            if (asset != null) asset.hideFlags = HideFlags.HideAndDontSave;
+            return asset;
         }
 
         private static FontAsset Create(string family, string style)

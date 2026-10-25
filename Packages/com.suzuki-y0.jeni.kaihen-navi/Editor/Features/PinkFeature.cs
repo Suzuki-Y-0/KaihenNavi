@@ -73,7 +73,7 @@ namespace Jeni.KaihenNavi
             foreach (var group in problems.GroupBy(p => p.Family == null ? p.Kind : p.Family.Key))
             {
                 var first = group.First();
-                var box = Ui.Box("kn-pink");
+                var box = Ui.Box("kn-issue");
                 var title = first.Family != null
                     ? L10n.Tr("pink.needShader", first.Family.Key)
                     : L10n.Tr("pink." + first.Kind);

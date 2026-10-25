@@ -284,6 +284,16 @@ Assets/KaihenNavi/
 - 調査メモ Docs/research-asset-managers.md（KonoAsset・BLM）。BLM は今回は使わない
 - 注意: computer use で open_application("Unity") を使うと Unity Hub が前に出てユーザーの邪魔になる。Unity のウィンドウを直接クリックする
 
+### インナーカラーの GPU 判定（2026-10-25・Unity 実機は未確認）
+
+- `InnerColorVisibility.cs` / `Hidden/KaihenNavi/InnerColorVisibility`: Head を中心とした64方向の正射影。上・横を多くし、真下を除く。表示中の髪・素体・服・アクセを深度＋UV画像に描く（親の EditorOnly、非アクティブ、Renderer 無効・forceRenderingOff は除外）。SkinnedMeshRenderer は現在の姿勢を BakeMesh、MeshRenderer も遮蔽物として含む。元のメッシュ・マテリアルには書き込まない。
+- カメラ画像の UV だけを CPU で投票すると細い毛の未投票テクセルが内側になるため、UV 上の各テクセルからカメラの線形深度を照合し、GPU で票を加算する方式。読み戻しは最後にマテリアルごと2回（全方向・後ろ方向の票と、頭からの高さ・後ろ向きの条件）にまとめた。画素中心との深度差は三角形の平面で補正する。深度の誤差許容は0.1mm。髪の裏面も遮蔽物にするため両面を描く。
+- 既存の3範囲を維持。「内側の層」は全方向の見えた割合、「後ろの内側」は後ろ方向の票＋頭より後ろの条件、「下のほう」は見えた割合＋テクセルごとの高さ。重複 UV は、いずれかが外から見えれば外側を優先。島の外だけ3px広げ、既存の2pxぼかしをかける。
+- 色・範囲・モード変更では測定を再利用。姿勢・形状・選択サブメッシュ・UV・MainTex の拡縮と移動・透明度・画質・頭位置とアバターの回転が変わったら再測定。Shader.Find 失敗、シェーダーエラー、非対応 GPU、描画例外時は `InnerColorOpenness` のレイ方式へ戻る。元の複製・台帳・ファイル Undo・片付けの流れは維持。
+- 開発用設定（UI には出さない）: `UnityEditor.EditorPrefs.SetBool("KaihenNavi.InnerColor.SaveDebugMasks", true)` で最終マスクを `Library/KaihenNavi/InnerColor/*.png` に保存。`KaihenNavi.InnerColor.DisableGpu` を true にするとレイ方式を確認できる。確認後は両方 false に戻す。
+- 制限: 元シェーダーの照明は再現せず、深度と MainTex（または BaseMap）のアルファ・Color の透明度・Cutoff で測る。専用のアルファマスク、ディゾルブ、頂点シェーダーによる変形は未対応。共有・重複 UV で別々の色分けはできない。
+- `tools/check.sh` に数値テストとファイル Undo テストも追加。**Unity で必要な確認**: シェーダーのコンパイル、外側への漏れ・裏側・毛先、透明な髪、複数枠、UV の Repeat と負の拡縮、服の遮蔽と EditorOnly 除外、512/1024 の処理時間、自動保存を挟む Ctrl+Z / Redo、GPU 無効時の予備処理。画面の2〜5秒は目安で実測前。
+
 ## 5. 設計の要点
 
 - **元アセットは絶対に書き換えない**: マテリアルは初回変更時に `Assets/KaihenNavi/<アバター名>/Materials/` へ複製し、アバター内の参照をすべて差し替える（`MaterialCopier`）

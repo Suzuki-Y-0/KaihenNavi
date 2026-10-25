@@ -64,6 +64,25 @@ namespace Jeni.KaihenNavi
             finally { Object.DestroyImmediate(mesh); }
         }
 
+        /// <summary>服やアクセの通常メッシュも、元を変更せずに遮蔽物として読む。</summary>
+        internal static Geometry Bake(MeshRenderer renderer)
+        {
+            var mesh = renderer.GetComponent<MeshFilter>().sharedMesh;
+            var data = new Geometry
+            {
+                rendererId = renderer.GetInstanceID(), positions = mesh.vertices, normals = mesh.normals,
+                uv = mesh.uv, triangles = new int[mesh.subMeshCount][],
+            };
+            var normalMatrix = renderer.transform.localToWorldMatrix.inverse.transpose;
+            for (var i = 0; i < data.positions.Length; i++)
+            {
+                data.positions[i] = renderer.transform.TransformPoint(data.positions[i]);
+                if (i < data.normals.Length) data.normals[i] = normalMatrix.MultiplyVector(data.normals[i]).normalized;
+            }
+            for (var i = 0; i < data.triangles.Length; i++) data.triangles[i] = mesh.GetTriangles(i);
+            return data;
+        }
+
         // 形状・姿勢・選択が同じなら同じキー。色、範囲、モード、画質、マテリアルの参照は含めない。
         // 焼いた頂点を比較するので、ボーン・BlendShape・拡縮・元メッシュの編集も検出する。
         internal static string CacheKey(int avatarId, List<Geometry> geometry)

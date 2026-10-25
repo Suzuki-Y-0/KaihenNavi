@@ -6,7 +6,7 @@ repo="$(dirname "$here")"
 mkdir -p "$here/stubs/build"
 mapfile -t sources < <(find "$repo/Packages/com.suzuki-y0.jeni.kaihen-navi/Editor" -name '*.cs' | sort)
 mcs -nologo -target:exe -langversion:7 -define:INNER_COLOR_ASSET_TESTS -warnaserror+ -nowarn:0618 -r:System.Core.dll \
-    -out:"$here/stubs/build/InnerColorMaskTests.exe" \
+    -out:"$here/stubs/build/InnerColorTriangleTests.exe" \
     "$here/stubs/UnityStubs.cs" "$here/stubs/VrcAndMaStubs.cs" \
-    "${sources[@]}" "$here/tests/InnerColorMaskTests.cs" "$here/tests/InnerColorAssetTests.cs"
-mono "$here/stubs/build/InnerColorMaskTests.exe"
+    "${sources[@]}" "$here/tests/InnerColorTriangleTests.cs" "$here/tests/InnerColorAssetTests.cs"
+mono "$here/stubs/build/InnerColorTriangleTests.exe"

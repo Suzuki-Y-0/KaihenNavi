@@ -319,6 +319,9 @@ namespace Jeni.KaihenNavi
                 {
                     path = HierarchyPath.Get(root, r.transform),
                     materials = mats,
+                    rendererIndex = Array.IndexOf(r.GetComponents<Renderer>(), r),
+                    hasMesh = r is SkinnedMeshRenderer,
+                    mesh = r is SkinnedMeshRenderer ? ((SkinnedMeshRenderer)r).sharedMesh : null,
                 });
                 foreach (var m in mats)
                 {
@@ -457,12 +460,18 @@ namespace Jeni.KaihenNavi
             foreach (var state in snapshot.renderers)
             {
                 var t = HierarchyPath.Find(root, state.path);
-                var r = t == null ? null : t.GetComponent<Renderer>();
+                var r = t == null ? null : t.GetComponents<Renderer>().ElementAtOrDefault(state.rendererIndex);
                 if (r == null || state.materials == null) continue;
-                if (r.sharedMaterials.SequenceEqual(state.materials)) continue;
+                var skinned = r as SkinnedMeshRenderer;
+                var meshChanged = state.hasMesh && skinned != null && skinned.sharedMesh != state.mesh;
+                if (!meshChanged && r.sharedMaterials.SequenceEqual(state.materials)) continue;
                 Undo.RecordObject(r, undoName);
                 r.sharedMaterials = state.materials;
+                if (state.hasMesh && skinned != null) skinned.sharedMesh = state.mesh;
+                PrefabUtility.RecordPrefabInstancePropertyModifications(r);
             }
+
+            InnerColorBackup.RestoreMissingMeshes(avatar, snapshot, undoName);
 
             foreach (var state in snapshot.blendShapes)
             {

@@ -2,9 +2,9 @@
 == WithMA
 == Full
 == InnerColor
-InnerColor triangle tests passed (30 checks).
-InnerColor asset tests passed (14 checks).
-== Localization OK (573 keys)
+InnerColor triangle tests passed (135 checks).
+InnerColor asset tests passed (26 checks).
+== Localization OK (574 keys)
 KonoAsset checks passed (60). JSON, image decoding and Undo require Unity.
 External source files unchanged.
 Feature edit checks passed (29). Unity Undo, Prefab imports and MA preview require Unity.

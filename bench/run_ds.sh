@@ -30,7 +30,7 @@ cat > "$cfg" <<EOF
       "models": { "$model": {} }
     }
   },
-  "permission": { "edit": "allow", "bash": "allow" }
+  "permission": { "edit": "allow", "bash": "allow", "external_directory": "allow" }
 }
 EOF
 export OPENCODE_CONFIG="$cfg"

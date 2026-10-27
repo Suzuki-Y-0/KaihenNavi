@@ -1,0 +1,3845 @@
+[0m
+> build · deepseek-v4.1-flash
+[0m
+[0m$ [0mls -la && find . -maxdepth 3 -type f | sed 's#^./##' | sort | head -200
+total 92
+drwxr-xr-x 6 root root  4096 Oct 27 07:46 .
+drwx------ 3 root root  4096 Oct 27 07:46 ..
+drwxr-xr-x 8 root root  4096 Oct 27 07:46 .git
+-rw-r--r-- 1 root root    52 Oct 27 07:46 .gitignore
+drwxr-xr-x 2 root root  4096 Oct 27 07:46 Docs
+-rw-r--r-- 1 root root 56612 Oct 27 07:46 HANDOFF.md
+drwxr-xr-x 3 root root  4096 Oct 27 07:46 Packages
+-rw-r--r-- 1 root root  4359 Oct 27 07:46 README.md
+drwxr-xr-x 4 root root  4096 Oct 27 07:46 tools
+.git/FETCH_HEAD
+.git/HEAD
+.git/config
+.git/description
+.git/hooks/applypatch-msg.sample
+.git/hooks/commit-msg.sample
+.git/hooks/fsmonitor-watchman.sample
+.git/hooks/post-update.sample
+.git/hooks/pre-applypatch.sample
+.git/hooks/pre-commit.sample
+.git/hooks/pre-merge-commit.sample
+.git/hooks/pre-push.sample
+.git/hooks/pre-rebase.sample
+.git/hooks/pre-receive.sample
+.git/hooks/prepare-commit-msg.sample
+.git/hooks/push-to-checkout.sample
+.git/hooks/sendemail-validate.sample
+.git/hooks/update.sample
+.git/index
+.git/info/exclude
+.git/logs/HEAD
+.git/opencode
+.git/shallow
+.gitignore
+Docs/glossary.md
+Docs/manual-ja.md
+Docs/research-asset-managers.md
+HANDOFF.md
+Packages/com.suzuki-y0.jeni.kaihen-navi/CHANGELOG.md
+Packages/com.suzuki-y0.jeni.kaihen-navi/CHANGELOG.md.meta
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor.meta
+Packages/com.suzuki-y0.jeni.kaihen-navi/package.json
+Packages/com.suzuki-y0.jeni.kaihen-navi/package.json.meta
+README.md
+tools/check.sh
+tools/gen_meta.py
+tools/stubs/UnityStubs.cs
+tools/stubs/VrcAndMaStubs.cs
+tools/test_inner_color.sh
+tools/test_konoasset.py
+tools/tests/InnerColorAssetTests.cs
+tools/tests/InnerColorMaskTests.cs
+[0m
+[0m$ [0mfind Packages -type f | sort
+Packages/com.suzuki-y0.jeni.kaihen-navi/CHANGELOG.md
+Packages/com.suzuki-y0.jeni.kaihen-navi/CHANGELOG.md.meta
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor.meta
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Core.meta
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Core/AvatarChooser.cs
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Core/AvatarChooser.cs.meta
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Core/AvatarFinder.cs
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Core/AvatarFinder.cs.meta
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Core/AvatarMeasure.cs
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Core/AvatarMeasure.cs.meta
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Core/BackupService.cs
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Core/BackupService.cs.meta
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Core/BackupSnapshot.cs
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Core/BackupSnapshot.cs.meta
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Core/Edition.cs
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Core/Edition.cs.meta
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Core/FontLoader.cs
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Core/FontLoader.cs.meta
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Core/HierarchyPath.cs
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Core/HierarchyPath.cs.meta
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Core/ItemLedger.cs
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Core/ItemLedger.cs.meta
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Core/ItemPicker.cs
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Core/ItemPicker.cs.meta
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Core/KaihenNaviWindow.cs
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Core/KaihenNaviWindow.cs.meta
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Core/KonoAssetLedgerLinkUndo.cs
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Core/KonoAssetLedgerLinkUndo.cs.meta
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Core/KonoAssetLink.cs
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Core/KonoAssetLink.cs.meta
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Core/KonoAssetProductPicker.cs
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Core/KonoAssetProductPicker.cs.meta
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Core/L10n.cs
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Core/L10n.cs.meta
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Core/MaterialCopier.cs
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Core/MaterialCopier.cs.meta
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Core/MyAvatar.cs
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Core/MyAvatar.cs.meta
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Core/PackagePaths.cs
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Core/PackagePaths.cs.meta
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Core/PartGuesser.cs
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Core/PartGuesser.cs.meta
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Core/Ui.cs
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Core/Ui.cs.meta
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Core/UndoHelper.cs
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Core/UndoHelper.cs.meta
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Core/UploadCheck.cs
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Core/UploadCheck.cs.meta
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Core/WorkFolders.cs
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Core/WorkFolders.cs.meta
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Features.meta
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Features/BodyFeature.cs
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Features/BodyFeature.cs.meta
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Features/ColorFeature.cs
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Features/ColorFeature.cs.meta
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Features/FeatureBase.cs
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Features/FeatureBase.cs.meta
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Features/FeatureCatalog.cs
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Features/FeatureCatalog.cs.meta
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Features/InnerColorAssetUndo.cs
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Features/InnerColorAssetUndo.cs.meta
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Features/InnerColorAssets.cs
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Features/InnerColorAssets.cs.meta
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Features/InnerColorFeature.cs
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Features/InnerColorFeature.cs.meta
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Features/InnerColorMask.cs
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Features/InnerColorMask.cs.meta
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Features/InnerColorOpenness.cs
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Features/InnerColorOpenness.cs.meta
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Features/InnerColorState.cs
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Features/InnerColorState.cs.meta
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Features/LightFeature.cs
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Features/LightFeature.cs.meta
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Features/MenuFeature.cs
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Features/MenuFeature.cs.meta
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Features/OutfitFeature.cs
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Features/OutfitFeature.cs.meta
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Features/PinkFeature.cs
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Features/PinkFeature.cs.meta
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Features/SkinFeature.cs
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Features/SkinFeature.cs.meta
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Features/ThumbnailFeature.cs
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Features/ThumbnailFeature.cs.meta
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Features/ToggleFeature.cs
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Features/ToggleFeature.cs.meta
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Features/TransformFeature.cs
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Features/TransformFeature.cs.meta
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Features/ViewFeature.cs
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Features/ViewFeature.cs.meta
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Features/WalkFeature.cs
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Features/WalkFeature.cs.meta
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Fonts.meta
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Fonts/LINESeedJP-Bold.ttf
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Fonts/LINESeedJP-Bold.ttf.meta
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Fonts/LINESeedJP-OFL.txt
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Fonts/LINESeedJP-OFL.txt.meta
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Fonts/LINESeedJP-Regular.ttf
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Fonts/LINESeedJP-Regular.ttf.meta
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Jeni.KaihenNavi.Editor.asmdef
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Jeni.KaihenNavi.Editor.asmdef.meta
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Localization.meta
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Localization/en.json
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Localization/en.json.meta
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Localization/ja.json
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Localization/ja.json.meta
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Localization/ko.json
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Localization/ko.json.meta
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Localization/zh-Hans.json
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Localization/zh-Hans.json.meta
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/UI.meta
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/UI/KaihenNavi.uss
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/UI/KaihenNavi.uss.meta
+Packages/com.suzuki-y0.jeni.kaihen-navi/package.json
+Packages/com.suzuki-y0.jeni.kaihen-navi/package.json.meta
+[0m
+[0m→ [0mRead HANDOFF.md
+[0m
+[0m$ [0msed -n '296,700p' HANDOFF.md
+- **体験版／製品版**: スクリプト定義シンボル `KAIHENNAVI_FULL` があると鍵が外れる（`Edition.IsTrial`）。`Edition.BoothUrl` は仮の `https://booth.pm/`
+- **言語**: `Editor/Localization/{ja,en,zh-Hans,ko}.json`（キーと文言だけの平らな JSON）。文言を足したら 4 ファイルともキーをそろえる（`tools/check.sh` が検査）
+
+### UI の方針（2026-10-25）
+
+- **VCC / ALCOM 風、差し色は Unity の青**。Unity のダーク／ライトスキンに合わせたグレーの面、薄い枠線、角丸 4px（カード 6px）を使う。番号の丸・色付き漢字アイコン・ピンクの装飾は使わない。アバターの色見本や撮影背景の色選択は機能の内容として残す。
+- `kn-current` / `kn-status-chip`: 上部のアバター帯と小さな状態表示。`kn-upload-check` は直下の1行警告（詳細はホバー、修正前の確認ダイアログは維持）。
+- `kn-workspace` / `kn-navigation` / `kn-nav-item`: 左ナビ＋右ページ。`FeatureBase.Group` と `nav.group.*` で4グループに分け、線画アイコンを添える。`Icon` / `Accent` は画面で参照しない。体験版の製品版項目にはグレーの「製品版」を表示。
+- `kn-page-header` / `kn-panel`: タイトル・説明・更新と、既存の `Feature.Build`。ナビと本文は別々にスクロール。幅 560px 未満は `GeometryChangedEvent` で `kn-compact-window` に切り替え、ナビの代わりに `PopupField` を表示する。
+- `kn-chooser` / `kn-choice`: アバター未選択時の中央の二択。`kn-footer`: 自動バックアップ件数・履歴・控えめな元に戻すボタン。
+- `kn-step-header` は番号なし見出し、`kn-notice` は標準アイコン＋薄い枠、`kn-chip` はセグメント、`kn-list__row` は行形式。各機能の編集処理は維持し、体型図の選択点と視点マーカーも青にそろえた。
+- Unity 実機では両スキン・4言語・幅 360 / 559 / 560 / 800px で、折り返し・スクロール・ナビ／ドロップダウンの選択同期・保存／履歴／警告を確認する。
+
+## 6. ファイル構成
+
+```
+Packages/com.suzuki-y0.jeni.kaihen-navi/
+  package.json / CHANGELOG.md
+  Editor/
+    Jeni.KaihenNavi.Editor.asmdef
+    Core/  KaihenNaviWindow（画面）, BackupService / BackupSnapshot（バックアップ）,
+           MaterialCopier, PartGuesser（髪・服・目・肌の判定）, AvatarFinder, HierarchyPath,
+           WorkFolders, UndoHelper, L10n, Ui, PackagePaths, Edition
+    Features/  FeatureBase, FeatureCatalog（ナビの並び）, ColorFeature, ToggleFeature, TransformFeature
+    UI/KaihenNavi.uss
+    Localization/*.json
+tools/
+  check.sh      Unity なしのコンパイル確認（apt install mono-mcs が必要）
+  gen_meta.py   新しいファイルを足したら実行して .meta を作る（GUID はパスから固定生成）
+  stubs/        確認用の API スタブ（配布物には含めない）
+```
+
+新しい機能は `FeatureBase` を継承し、`FeatureCatalog` の `PlannedFeature` を置き換える。何かを変える直前に `ctx.BeginEdit()`、オブジェクトを作ったら `ctx.NoteCreated()` を呼ぶ。
+
+## 7. 残りのタスク（資料の順）
+
+1. Unity での動作確認と修正（Cazalis 1 体では完了。残りは 3 章「まだ確認できていないこと」）
+2. 紹介動画（30 秒程度）と説明書、BOOTH で無料体験版を公開
+3. 配布: [jeni-tools-vpm](https://github.com/Suzuki-Y-0/jeni-tools-vpm)（ID `com.suzuki-y0.jeni`）に追加するか検討＋unitypackage。ただし有料版の配布方法は別途決める
+4. 反応を見て製品版の 7 機能を追加（3 肌隠し、4 体型、5 身長、7 視点、8 ピンク修正、9 明るさ、10 サムネイル）
+5. 知恵袋や X の質問を集め、機能の優先順位を見直す
+
+## 8. 競合メモ（2026-10-11 に BOOTH を再検索）
+
+資料作成後に近いものが出ている。統合（3 機能を 1 画面で）と自動バックアップで差別化する方針は維持。
+
+- いめちぇん！（無料、lilToon 専用の色変え、複製してから変更）: https://booth.pm/ja/items/8788853 … 色変え単体ではほぼ競合
+- MO-DERA（無料＋支援版、手順を案内するアシスト。自動では変更しない）: https://booth.pm/ja/items/8966216
+- DESIREVO WARDROBE（800 円、衣装・マテリアル・メニュー設定）: https://booth.pm/ja/items/8854279
+- AvatarOutfitMenuBuilder（無料、衣装切替メニュー自動生成）: https://booth.pm/ja/items/8961880
+- Avatar Doctor（500 円〜、初心者向け診断）: https://booth.pm/ja/items/8797619
+
+## 9. 作業環境メモ
+
+- クラウドのセッションからは GitHub に新規リポジトリを作れない（既存リポジトリへの push は可）
+- リモート URL は大文字小文字込みで `https://github.com/Suzuki-Y-0/KaihenNavi.git`
+- コミット末尾に Co-Authored-By などの署名行を付けている
+- 動作確認に使ったプロジェクト: `C:\Users\NextG\Documents\VRChatCreatorCompanion\VRChatProjects\MCP Project`（`Packages/com.suzuki-y0.jeni.kaihen-navi` にコピー済み。シーンは未保存の Untitled）
+- Unity Hub はサインイン画面で止まるので、ALCOM の「Unity を開く」から起動した
+[0m
+[0m$ [0mwc -l Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Core/*.cs Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Features/*.cs Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/UI/KaihenNavi.uss Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Localization/*.json
+326 Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Core/AvatarChooser.cs
+    61 Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Core/AvatarFinder.cs
+   146 Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Core/AvatarMeasure.cs
+   385 Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Core/BackupService.cs
+    76 Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Core/BackupSnapshot.cs
+    15 Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Core/Edition.cs
+   190 Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Core/FontLoader.cs
+   102 Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Core/HierarchyPath.cs
+   451 Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Core/ItemLedger.cs
+   396 Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Core/ItemPicker.cs
+   956 Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Core/KaihenNaviWindow.cs
+    11 Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Core/KonoAssetLedgerLinkUndo.cs
+   372 Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Core/KonoAssetLink.cs
+    57 Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Core/KonoAssetProductPicker.cs
+   212 Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Core/L10n.cs
+   102 Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Core/MaterialCopier.cs
+   560 Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Core/MyAvatar.cs
+    52 Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Core/PackagePaths.cs
+   100 Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Core/PartGuesser.cs
+   348 Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Core/Ui.cs
+    58 Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Core/UndoHelper.cs
+   171 Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Core/UploadCheck.cs
+   233 Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Core/WorkFolders.cs
+   933 Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Features/BodyFeature.cs
+   335 Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Features/ColorFeature.cs
+   136 Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Features/FeatureBase.cs
+    28 Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Features/FeatureCatalog.cs
+   173 Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Features/InnerColorAssetUndo.cs
+   153 Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Features/InnerColorAssets.cs
+   486 Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Features/InnerColorFeature.cs
+   169 Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Features/InnerColorMask.cs
+   217 Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Features/InnerColorOpenness.cs
+   199 Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Features/InnerColorState.cs
+   277 Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Features/LightFeature.cs
+   637 Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Features/MenuFeature.cs
+   187 Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Features/OutfitFeature.cs
+   226 Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Features/PinkFeature.cs
+   346 Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Features/SkinFeature.cs
+   224 Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Features/ThumbnailFeature.cs
+   629 Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Features/ToggleFeature.cs
+   458 Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Features/TransformFeature.cs
+   144 Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Features/ViewFeature.cs
+   507 Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Features/WalkFeature.cs
+   289 Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/UI/KaihenNavi.uss
+   524 Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Localization/en.json
+   524 Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Localization/ja.json
+   524 Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Localization/ko.json
+   524 Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Localization/zh-Hans.json
+ 14229 total
+[0m
+[0m→ [0mRead Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Features/BodyFeature.cs
+[0m→ [0mRead Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Core/KaihenNaviWindow.cs
+[0m→ [0mRead Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Core/BackupService.cs
+[0m→ [0mRead Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Core/BackupSnapshot.cs
+[0m→ [0mRead Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Core/UndoHelper.cs
+[0m→ [0mRead Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Features/FeatureBase.cs
+[0m→ [0mRead Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Core/FontLoader.cs
+[0m→ [0mRead Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Core/L10n.cs
+[0m→ [0mRead Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/UI/KaihenNavi.uss
+[0m
+[0m$ [0mcd Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Localization && grep -n '"history\|"undo\.\|"footer\.\|"feature\.\|"restore\.' ja.json | head -120
+18:  "footer.backups": "自動バックアップ {0} 件",
+19:  "footer.history": "履歴",
+20:  "footer.restore": "元に戻す",
+21:  "restore.title": "元に戻す",
+22:  "restore.message": "{0}（{1}の前）の状態に戻します。よろしいですか？\n\nあとから Ctrl+Z でやり直すこともできます。",
+23:  "restore.historyMessage": "{0}（{1}の前）の状態に戻します。これより新しいバックアップも使い終わるため消えます。よろしいですか？",
+24:  "restore.ok": "戻す",
+25:  "history.item": "{0}　{1}の前",
+26:  "history.empty": "バックアップはまだありません",
+35:  "feature.color.title": "髪や服の色を変えたい",
+36:  "feature.color.desc": "スライダーで色味と明るさを変える",
+37:  "feature.color.icon": "色",
+38:  "feature.toggle.title": "服やアクセを脱ぎ着できるようにしたい",
+39:  "feature.toggle.desc": "VRChatのメニューから出し入れできる",
+40:  "feature.toggle.icon": "着",
+41:  "feature.transform.title": "アクセをつけたい",
+42:  "feature.transform.desc": "付ける場所をえらんで、位置や大きさも直せる",
+43:  "feature.transform.icon": "飾",
+44:  "feature.skin.title": "服からはみ出る肌を隠したい",
+45:  "feature.skin.desc": "服からはみ出る肌を縮めたり切り取ったりする",
+46:  "feature.skin.icon": "肌",
+47:  "feature.view.title": "視点の高さを直したい",
+48:  "feature.view.desc": "VRChatでの目線の位置を、目に合わせる",
+49:  "feature.view.icon": "目",
+50:  "feature.pink.title": "ピンク色を直したい",
+51:  "feature.pink.desc": "足りないシェーダーと入れ方を案内",
+52:  "feature.pink.icon": "修",
+53:  "feature.light.title": "明るさや影を整えたい",
+54:  "feature.light.desc": "明るさに関係する項目だけ表示",
+55:  "feature.light.icon": "光",
+56:  "feature.thumbnail.title": "きれいなサムネイルにしたい",
+57:  "feature.thumbnail.desc": "顔がゆがまない画角で、きれいに撮る",
+58:  "feature.thumbnail.icon": "写",
+115:  "undo.restore": "かいへんナビ: 元に戻す",
+116:  "undo.color": "かいへんナビ: 色を変える",
+117:  "undo.colorReset": "かいへんナビ: 色を戻す",
+118:  "undo.toggle": "かいへんナビ: 脱ぎ着メニューを作る",
+119:  "undo.toggleRemove": "かいへんナビ: 脱ぎ着メニューを消す",
+120:  "undo.visibility": "かいへんナビ: 表示を切り替える",
+121:  "undo.transformMove": "かいへんナビ: 位置を動かす",
+122:  "undo.transformRotate": "かいへんナビ: 向きを変える",
+123:  "undo.transformScale": "かいへんナビ: 大きさを変える",
+124:  "undo.transformReset": "かいへんナビ: 位置を戻す",
+141:  "undo.place": "アバターをシーンに出す",
+158:  "undo.newAvatar": "かいへんナビ: 改変アバターを作る",
+165:  "feature.outfit.title": "服を着せたい",
+166:  "feature.outfit.desc": "服をえらぶだけで体に合わせて着せる",
+167:  "feature.outfit.icon": "服",
+180:  "undo.outfit": "かいへんナビ: 服を着せる",
+200:  "undo.attach": "かいへんナビ: アクセをつける",
+202:  "feature.body.title": "体型・身長を変えたい",
+203:  "feature.body.desc": "影絵の上の点をつまんで、長さや太さを変える",
+204:  "feature.body.icon": "形",
+231:  "undo.body": "かいへんナビ: 体型を変える",
+232:  "undo.height": "かいへんナビ: 身長を変える",
+240:  "undo.viewAuto": "かいへんナビ: 視点を目に合わせる",
+241:  "undo.viewMove": "かいへんナビ: 視点を動かす",
+303:  "undo.skin": "かいへんナビ: 肌を隠す",
+327:  "undo.light": "かいへんナビ: 明るさや影を変える",
+337:  "feature.walk.title": "動きを変えたい",
+338:  "feature.walk.desc": "歩き方・座り方・エモートを入れ替える",
+339:  "feature.walk.icon": "動",
+366:  "undo.walk": "かいへんナビ: 動きを変える",
+376:  "feature.menu.title": "メニューを整理したい",
+377:  "feature.menu.desc": "多すぎるメニューを隠したり並べ替えたりする",
+378:  "feature.menu.icon": "整",
+404:  "undo.menu": "かいへんナビ: メニューを整理する",
+426:  "feature.innerColor.title": "髪の内側の色を変えたい",
+427:  "feature.innerColor.desc": "インナーカラー。髪の内側だけ別の色にします",
+428:  "feature.innerColor.icon": "彩",
+466:  "undo.innerColor": "髪の内側の色を変える",
+504:  "footer.status": "自動バックアップ {0} 件 · 最終 {1}",
+510:  "feature.outfit.nav": "服を着せる",
+511:  "feature.transform.nav": "アクセをつける",
+512:  "feature.toggle.nav": "脱ぎ着の切り替え",
+513:  "feature.skin.nav": "はみ出る肌を隠す",
+514:  "feature.color.nav": "色を変える",
+515:  "feature.innerColor.nav": "髪のインナーカラー",
+516:  "feature.light.nav": "明るさと影",
+517:  "feature.pink.nav": "ピンク色を直す",
+518:  "feature.body.nav": "体型・身長",
+519:  "feature.view.nav": "視点の高さ",
+520:  "feature.walk.nav": "動きを変える",
+521:  "feature.menu.nav": "メニューを整理",
+522:  "feature.thumbnail.nav": "サムネイルを撮る",
+[0m
+[0m$ [0mgrep -n "Undo\|undo" tools/stubs/UnityStubs.cs | head -80 && grep -rn "GetCurrentGroupName\|GetUndoName\|SetCurrentGroupName\|undoRedoPerformed" Packages tools/stubs
+658:        public bool ApplyModifiedPropertiesWithoutUndo() { return true; }
+781:    public static class Undo
+785:        public static event Action undoRedoPerformed;
+788:        public static void ReplayForTests() { if (undoRedoPerformed != null) undoRedoPerformed(); }
+789:        public static void RegisterFullObjectHierarchyUndo(Object o, string name) { }
+793:        public static void CollapseUndoOperations(int g) { }
+795:        public static void RegisterCreatedObjectUndo(Object o, string n) { }
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Core/BackupService.cs:150:            Undo.SetCurrentGroupName(L10n.Tr("undo.restore"));
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Core/UndoHelper.cs:25:                Undo.SetCurrentGroupName(undoName);
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Core/ItemLedger.cs:66:            Undo.undoRedoPerformed += RestoreLinks;
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Core/ItemLedger.cs:177:                Undo.SetCurrentGroupName(L10n.Tr("kono.selectProduct"));
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Core/KaihenNaviWindow.cs:92:            Undo.undoRedoPerformed += OnUndoRedo;
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Core/KaihenNaviWindow.cs:105:            Undo.undoRedoPerformed -= OnUndoRedo;
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Features/ToggleFeature.cs:356:                    Undo.SetCurrentGroupName(L10n.Tr("undo.toggleRemove"));
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Features/ToggleFeature.cs:422:            Undo.SetCurrentGroupName(undoName);
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Features/WalkFeature.cs:412:            Undo.SetCurrentGroupName(L10n.Tr("undo.walk"));
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Features/InnerColorFeature.cs:301:                Undo.SetCurrentGroupName(undoName);
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Features/InnerColorAssetUndo.cs:108:        static InnerColorAssetUndo() { Undo.undoRedoPerformed += Replay; }
+tools/stubs/UnityStubs.cs:785:        public static event Action undoRedoPerformed;
+tools/stubs/UnityStubs.cs:788:        public static void ReplayForTests() { if (undoRedoPerformed != null) undoRedoPerformed(); }
+tools/stubs/UnityStubs.cs:792:        public static void SetCurrentGroupName(string n) { }
+[0m
+[0m$ [0msed -n '760,820p' tools/stubs/UnityStubs.cs && var=$(cat tools/check.sh); echo "$var" | sed -n '1,220p'
+public static void UnpackPrefabInstance(GameObject root, PrefabUnpackMode mode, InteractionMode m) { }
+    }
+
+    public enum PrefabUnpackMode { OutermostRoot, Completely }
+    public enum ObjectMatchMode { NoMatchingPerformed, ByName, ByHierarchy }
+
+    public class PrefabReplacingSettings
+    {
+        public bool logInfo;
+        public bool changeRootNameToAssetName;
+        public ObjectMatchMode objectMatchMode;
+    }
+
+    public static class AssetPreview
+    {
+        public static Texture2D GetAssetPreview(Object o) { return null; }
+        public static Texture2D GetMiniThumbnail(Object o) { return null; }
+    }
+
+    public enum PlayModeStateChange { EnteredEditMode, ExitingEditMode, EnteredPlayMode, ExitingPlayMode }
+
+    public static class Undo
+    {
+        public static void RevertAllDownToGroup(int group) { }
+        public static void SetTransformParent(Transform t, Transform parent, string name) { }
+        public static event Action undoRedoPerformed;
+        public static Action<Object> RecordForTests;
+        public static void RecordObject(Object o, string name) { if (RecordForTests != null) RecordForTests(o); }
+        public static void ReplayForTests() { if (undoRedoPerformed != null) undoRedoPerformed(); }
+        public static void RegisterFullObjectHierarchyUndo(Object o, string name) { }
+        public static void IncrementCurrentGroup() { }
+        public static int GetCurrentGroup() { return 0; }
+        public static void SetCurrentGroupName(string n) { }
+        public static void CollapseUndoOperations(int g) { }
+        public static void DestroyObjectImmediate(Object o) { }
+        public static void RegisterCreatedObjectUndo(Object o, string n) { }
+        public static T AddComponent<T>(GameObject go) where T : Component { return null; }
+        public static Component AddComponent(GameObject go, Type type) { return null; }
+    }
+
+    public static class EditorUtility
+    {
+        public static string OpenFolderPanel(string title, string folder, string defaultName) { return ""; }
+        public static Func<Object, bool> PersistentForTests;
+        public static bool IsPersistent(Object o) { return PersistentForTests != null && PersistentForTests(o); }
+        public static Action<float> ProgressForTests;
+        public static Action ClearProgressForTests;
+        public static void DisplayProgressBar(string title, string info, float progress) { if (ProgressForTests != null) ProgressForTests(progress); }
+        public static void ClearProgressBar() { if (ClearProgressForTests != null) ClearProgressForTests(); }
+        public static void SetDirty(Object o) { }
+        public static bool IsDirty(Object target) { return false; }
+        public static Action<Object, Object> CopyForTests;
+        public static void CopySerialized(Object src, Object dst) { if (CopyForTests != null) CopyForTests(src, dst); }
+        public static bool DisplayDialog(string t, string m, string ok) { return true; }
+        public static bool DisplayDialog(string t, string m, string ok, string cancel) { return true; }
+    }
+
+    public static class EditorGUIUtility
+    {
+        public static bool isProSkin;
+        public static GUIContent IconContent(string name) { return new GUIContent(name); }
+#!/usr/bin/env bash
+# Unity を使わずに、C# の構文と型の整合をざっと確認する。
+# Unity / VRChat SDK / Modular Avatar の API はスタブ（tools/stubs）で置き換えているので、
+# 実際の API との食い違いまでは分からない。最終確認は必ず Unity 上で行うこと。
+#
+# 使い方: tools/check.sh    （Mono の mcs が必要: apt install mono-mcs）
+set -euo pipefail
+
+here="$(cd "$(dirname "$0")" && pwd)"
+repo="$(dirname "$here")"
+src="$repo/Packages/com.suzuki-y0.jeni.kaihen-navi/Editor"
+out="$here/stubs/build"
+mkdir -p "$out"
+
+mapfile -t files < <(find "$src" -name '*.cs' | sort)
+
+build() {
+  local label="$1"; shift
+  echo "== $label"
+  mcs -nologo -target:library -langversion:7 -warnaserror+ -nowarn:0618 \
+      -r:System.Core.dll \
+      -out:"$out/KaihenNavi.$label.dll" "$@" \
+      "$here/stubs/UnityStubs.cs" "$here/stubs/VrcAndMaStubs.cs" "${files[@]}"
+}
+
+build NoMA
+build WithMA -define:KAIHENNAVI_MA
+build Full -define:KAIHENNAVI_MA -define:KAIHENNAVI_FULL
+
+# 言語ファイルのキーがそろっているか
+python3 - "$src/Localization" <<'EOF'
+import json, sys, os
+folder = sys.argv[1]
+base = json.load(open(os.path.join(folder, "ja.json"), encoding="utf-8"))
+ok = True
+for code in ["en", "zh-Hans", "ko"]:
+    d = json.load(open(os.path.join(folder, code + ".json"), encoding="utf-8"))
+    missing = sorted(set(base) - set(d)); extra = sorted(set(d) - set(base))
+    if missing or extra:
+        ok = False
+        print(f"{code}: missing={missing} extra={extra}")
+print("== Localization", "OK" if ok else "NG", f"({len(base)} keys)")
+sys.exit(0 if ok else 1)
+EOF
+
+python3 "$here/test_konoasset.py"
+
+echo "All checks passed."
+[0m
+[0m$ [0mgrep -n "UndoHelper.Begin\|UndoHelper.End\|UndoHelper.Separate\|IncrementCurrentGroup\|SetCurrentGroupName\|CollapseUndoOperations\|BeginEdit" Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Features/*.cs Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Core/*.cs
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Features/BodyFeature.cs:131:                    UndoHelper.Separate();
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Features/BodyFeature.cs:383:                UndoHelper.Separate();
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Features/BodyFeature.cs:409:            UndoHelper.Separate();
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Features/BodyFeature.cs:436:            ctx.BeginEdit();
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Features/BodyFeature.cs:437:            UndoHelper.Begin("body:" + group.Key, undoName);
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Features/BodyFeature.cs:468:            UndoHelper.End();
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Features/BodyFeature.cs:480:                ctx.BeginEdit();
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Features/BodyFeature.cs:481:                UndoHelper.Separate();
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Features/BodyFeature.cs:490:            UndoHelper.Separate();
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Features/BodyFeature.cs:497:            ctx.BeginEdit();
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Features/BodyFeature.cs:498:            UndoHelper.Separate();
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Features/BodyFeature.cs:510:            UndoHelper.Separate();
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Features/BodyFeature.cs:589:            ctx.BeginEdit();
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Features/BodyFeature.cs:590:            UndoHelper.Begin("body:height", undoName);
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Features/BodyFeature.cs:599:            UndoHelper.End();
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Features/ColorFeature.cs:59:                UndoHelper.Separate();
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Features/ColorFeature.cs:139:                UndoHelper.Separate();
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Features/ColorFeature.cs:202:            ctx.BeginEdit();
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Features/ColorFeature.cs:203:            UndoHelper.Begin("color:" + _part, undoName);
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Features/ColorFeature.cs:231:            UndoHelper.End();
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Features/ColorFeature.cs:237:            ctx.BeginEdit();
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Features/ColorFeature.cs:238:            UndoHelper.Separate();
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Features/ColorFeature.cs:239:            UndoHelper.Begin("color-reset", undoName);
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Features/ColorFeature.cs:263:            UndoHelper.End();
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Features/ColorFeature.cs:264:            UndoHelper.Separate();
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Features/FeatureBase.cs:98:        public void BeginEdit()
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Features/FeatureBase.cs:100:            Backup.BeginEdit(Avatar, FeatureId);
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Features/InnerColorFeature.cs:297:                ctx.BeginEdit();
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Features/InnerColorFeature.cs:298:                UndoHelper.Separate();
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Features/InnerColorFeature.cs:299:                Undo.IncrementCurrentGroup(); group = Undo.GetCurrentGroup();
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Features/InnerColorFeature.cs:301:                Undo.SetCurrentGroupName(undoName);
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Features/InnerColorFeature.cs:328:                Undo.CollapseUndoOperations(group); group = -1;
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Features/InnerColorFeature.cs:394:            ctx.BeginEdit();
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Features/InnerColorFeature.cs:396:            UndoHelper.Separate(); UndoHelper.Begin("innerColor-reset", undoName);
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Features/InnerColorFeature.cs:414:                UndoHelper.End(); UndoHelper.Separate();
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Features/InnerColorFeature.cs:419:                UndoHelper.End(); UndoHelper.Separate();
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Features/LightFeature.cs:94:                UndoHelper.Separate();
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Features/LightFeature.cs:182:                UndoHelper.Separate();
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Features/LightFeature.cs:222:            ctx.BeginEdit();
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Features/LightFeature.cs:223:            UndoHelper.Begin("light:" + setting.Property, undoName);
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Features/LightFeature.cs:225:            UndoHelper.End();
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Features/LightFeature.cs:231:            ctx.BeginEdit();
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Features/LightFeature.cs:232:            UndoHelper.Separate();
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Features/LightFeature.cs:233:            UndoHelper.Begin("light-preset", undoName);
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Features/LightFeature.cs:241:            UndoHelper.End();
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Features/LightFeature.cs:242:            UndoHelper.Separate();
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Features/MenuFeature.cs:79:                    ctx.BeginEdit();
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Features/MenuFeature.cs:80:                    UndoHelper.Separate();
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Features/MenuFeature.cs:84:                    UndoHelper.Separate();
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Features/MenuFeature.cs:111:                ctx.BeginEdit();
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Features/MenuFeature.cs:112:                UndoHelper.Separate();
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Features/MenuFeature.cs:114:                UndoHelper.Separate();
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Features/MenuFeature.cs:257:            ctx.BeginEdit();
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Features/MenuFeature.cs:258:            UndoHelper.Separate();
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Features/MenuFeature.cs:287:            UndoHelper.Separate();
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Features/MenuFeature.cs:318:            ctx.BeginEdit();
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Features/MenuFeature.cs:319:            UndoHelper.Separate();
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Features/MenuFeature.cs:323:            UndoHelper.Separate();
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Features/OutfitFeature.cs:98:            ctx.BeginEdit();
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Features/OutfitFeature.cs:99:            UndoHelper.Separate();
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Features/OutfitFeature.cs:172:                ctx.BeginEdit();
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Features/OutfitFeature.cs:173:                UndoHelper.Separate();
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Features/SkinFeature.cs:186:                ctx.BeginEdit();
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Features/SkinFeature.cs:187:                UndoHelper.Begin("skin:" + index, undoName);
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Features/SkinFeature.cs:190:                UndoHelper.End();
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Features/SkinFeature.cs:251:            ctx.BeginEdit();
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Features/SkinFeature.cs:252:            UndoHelper.Separate();
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Features/SkinFeature.cs:268:            UndoHelper.Separate();
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Features/SkinFeature.cs:318:            ctx.BeginEdit();
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Features/SkinFeature.cs:319:            UndoHelper.Separate();
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Features/ToggleFeature.cs:353:                    ctx.BeginEdit();
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Features/ToggleFeature.cs:354:                    UndoHelper.Separate();
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Features/ToggleFeature.cs:355:                    Undo.IncrementCurrentGroup();
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Features/ToggleFeature.cs:356:                    Undo.SetCurrentGroupName(L10n.Tr("undo.toggleRemove"));
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Features/ToggleFeature.cs:418:            ctx.BeginEdit();
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Features/ToggleFeature.cs:419:            UndoHelper.Separate();
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Features/ToggleFeature.cs:420:            Undo.IncrementCurrentGroup();
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Features/ToggleFeature.cs:422:            Undo.SetCurrentGroupName(undoName);
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Features/ToggleFeature.cs:452:            Undo.CollapseUndoOperations(group);
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Features/ToggleFeature.cs:570:                    ctx.BeginEdit();
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Features/ToggleFeature.cs:571:                    UndoHelper.Separate();
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Features/TransformFeature.cs:103:                    UndoHelper.Separate();
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Features/TransformFeature.cs:119:                UndoHelper.Separate();
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Features/TransformFeature.cs:205:                ctx.BeginEdit();
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Features/TransformFeature.cs:206:                UndoHelper.Separate();
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Features/TransformFeature.cs:211:                UndoHelper.Separate();
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Features/TransformFeature.cs:298:            ctx.BeginEdit();
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Features/TransformFeature.cs:299:            UndoHelper.Separate();
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Features/TransformFeature.cs:320:            UndoHelper.Separate();
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Features/TransformFeature.cs:405:            ctx.BeginEdit();
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Features/TransformFeature.cs:406:            UndoHelper.Begin("transform-move", undoName);
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Features/TransformFeature.cs:409:            UndoHelper.End();
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Features/TransformFeature.cs:424:            ctx.BeginEdit();
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Features/TransformFeature.cs:425:            UndoHelper.Begin("transform-rotate", undoName);
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Features/TransformFeature.cs:428:            UndoHelper.End();
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Features/TransformFeature.cs:434:            ctx.BeginEdit();
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Features/TransformFeature.cs:435:            UndoHelper.Begin("transform-scale", undoName);
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Features/TransformFeature.cs:438:            UndoHelper.End();
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Features/ViewFeature.cs:85:            ctx.BeginEdit();
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Features/ViewFeature.cs:86:            UndoHelper.Begin("view", undoName);
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Features/ViewFeature.cs:90:            UndoHelper.End();
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Features/WalkFeature.cs:63:                UndoHelper.Separate();
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Features/WalkFeature.cs:254:            ctx.BeginEdit();
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Features/WalkFeature.cs:255:            UndoHelper.Separate();
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Features/WalkFeature.cs:272:            UndoHelper.Separate();
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Features/WalkFeature.cs:287:            ctx.BeginEdit();
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Features/WalkFeature.cs:288:            UndoHelper.Separate();
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Features/WalkFeature.cs:296:            UndoHelper.Separate();
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Features/WalkFeature.cs:410:            ctx.BeginEdit();
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Features/WalkFeature.cs:411:            UndoHelper.Separate();
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Features/WalkFeature.cs:412:            Undo.SetCurrentGroupName(L10n.Tr("undo.walk"));
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Features/WalkFeature.cs:430:            UndoHelper.Separate();
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Features/WalkFeature.cs:471:            ctx.BeginEdit();
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Features/WalkFeature.cs:472:            UndoHelper.Separate();
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Features/WalkFeature.cs:490:            UndoHelper.Separate();
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Core/BackupService.cs:55:        public void BeginEdit(VRCAvatarDescriptor avatar, string featureId)
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Core/BackupService.cs:148:            Undo.IncrementCurrentGroup();
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Core/BackupService.cs:150:            Undo.SetCurrentGroupName(L10n.Tr("undo.restore"));
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Core/BackupService.cs:156:            Undo.CollapseUndoOperations(group);
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Core/BackupService.cs:157:            UndoHelper.Separate();
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Core/ItemLedger.cs:176:                Undo.IncrementCurrentGroup();
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Core/ItemLedger.cs:177:                Undo.SetCurrentGroupName(L10n.Tr("kono.selectProduct"));
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Core/KaihenNaviWindow.cs:504:            UndoHelper.Separate();
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Core/KaihenNaviWindow.cs:764:            UndoHelper.Separate();
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Core/KaihenNaviWindow.cs:793:            UndoHelper.Separate();
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Core/KaihenNaviWindow.cs:949:            UndoHelper.Separate();
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Core/UndoHelper.cs:23:                Undo.IncrementCurrentGroup();
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Core/UndoHelper.cs:25:                Undo.SetCurrentGroupName(undoName);
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Core/UndoHelper.cs:35:            if (_group >= 0) Undo.CollapseUndoOperations(_group);
+[0m
+[0m$ [0msed -n '1,380p' Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Core/Ui.cs
+using System;
+using System.Collections.Generic;
+using UnityEditor;
+using UnityEngine;
+using UnityEngine.UIElements;
+
+namespace Jeni.KaihenNavi
+{
+    /// <summary>画面部品を作る小さなヘルパー。見た目は UI/KaihenNavi.uss の kn- クラスで決める。</summary>
+    internal static class Ui
+    {
+        public static VisualElement Box(params string[] classes)
+        {
+            var e = new VisualElement();
+            foreach (var c in classes) e.AddToClassList(c);
+            return e;
+        }
+
+        public static Label Text(string text, params string[] classes)
+        {
+            var label = new Label(text);
+            foreach (var c in classes) label.AddToClassList(c);
+            return label;
+        }
+
+        /// <summary>セクション見出し。既存の呼び出しとの互換性のため number は受け取るが表示しない。</summary>
+        public static VisualElement StepHeader(string number, string title)
+        {
+            var row = Box("kn-step-header");
+            row.Add(Text(title, "kn-step-title"));
+            return row;
+        }
+
+        /// <summary>小見出し。</summary>
+        public static Label Heading(string text)
+        {
+            return Text(text, "kn-heading");
+        }
+
+        /// <summary>お知らせの帯。kind は info / ok / warn。</summary>
+        public static VisualElement Notice(string text, string kind = "info")
+        {
+            var box = Box("kn-notice", "kn-notice--" + kind);
+            box.tooltip = text;
+            var content = EditorGUIUtility.IconContent(kind == "warn" ? "console.warnicon.sml" :
+                kind == "ok" ? "TestPassed" : "console.infoicon.sml");
+            var texture = content == null ? null : content.image as Texture2D;
+            if (texture != null) box.Add(Image(texture, "kn-notice__icon"));
+            box.Add(Text(text, "kn-notice__text"));
+            return box;
+        }
+
+        public static Button Button(string text, Action onClick, params string[] classes)
+        {
+            var b = new Button(onClick) { text = text };
+            b.AddToClassList("kn-button");
+            foreach (var c in classes) b.AddToClassList(c);
+            return b;
+        }
+
+        /// <summary>場所チップの列。selected が変わったら onSelect が呼ばれる。</summary>
+        public static VisualElement Chips(IList<string> labels, int selected, Action<int> onSelect)
+        {
+            var row = Box("kn-chips");
+            for (var i = 0; i < labels.Count; i++)
+            {
+                var index = i;
+                var chip = new Button(() => onSelect(index)) { text = labels[i] };
+                chip.AddToClassList("kn-chip");
+                if (i == 0) chip.AddToClassList("kn-chip--first");
+                if (i == labels.Count - 1) chip.AddToClassList("kn-chip--last");
+                if (i == selected) chip.AddToClassList("kn-chip--selected");
+                row.Add(chip);
+            }
+
+            return row;
+        }
+
+        /// <summary>スライダー。数値入力欄付き。onChange はドラッグ中も呼ばれる。</summary>
+        public static Slider Slider(string label, float min, float max, float value, Action<float> onChange)
+        {
+            var slider = new Slider(label, min, max) { showInputField = true };
+            slider.AddToClassList("kn-slider");
+            slider.SetValueWithoutNotify(value);
+            slider.RegisterValueChangedCallback(e => onChange(e.newValue));
+            return slider;
+        }
+
+        /// <summary>大きめの矢印ボタン。</summary>
+        public static Button Arrow(string glyph, string caption, Action onClick)
+        {
+            var b = new Button(onClick);
+            b.AddToClassList("kn-arrow");
+            b.Add(Text(glyph, "kn-arrow__glyph"));
+            b.Add(Text(caption, "kn-arrow__caption"));
+            return b;
+        }
+
+        /// <summary>
+        /// アセットのサムネイルを背景に出す箱。サムネイルは作られるまで少しかかるので、出来るまで何度か見に行く。
+        /// </summary>
+        public static VisualElement Thumbnail(UnityEngine.Object asset, params string[] classes)
+        {
+            var box = Box(classes);
+            SetThumbnail(box, asset, 0);
+            return box;
+        }
+
+        /// <summary>画像をそのまま背景に貼った箱。</summary>
+        public static VisualElement Image(Texture2D texture, params string[] classes)
+        {
+            var box = Box(classes);
+            if (texture != null) box.style.backgroundImage = new StyleBackground(texture);
+            return box;
+        }
+
+        private static void SetThumbnail(VisualElement box, UnityEngine.Object asset, int tries)
+        {
+            if (asset == null) return;
+            var texture = UnityEditor.AssetPreview.GetAssetPreview(asset);
+            if (texture != null)
+            {
+                box.style.backgroundImage = new StyleBackground(texture);
+                return;
+            }
+
+            if (tries == 0) box.style.backgroundImage = new StyleBackground(UnityEditor.AssetPreview.GetMiniThumbnail(asset));
+            if (tries < 20) box.schedule.Execute(() => SetThumbnail(box, asset, tries + 1)).StartingIn(250);
+        }
+
+        /// <summary>ツールチップ付きの線画アイコンボタン。</summary>
+        public static Button IconButton(string id, string tooltip, Action onClick)
+        {
+            var button = new Button(onClick) { tooltip = tooltip };
+            button.AddToClassList("kn-icon-button");
+            button.Add(NavigationIcon(id));
+            return button;
+        }
+
+        /// <summary>24×24 の線画を 16px に縮める。色はテーマと選択状態を USS から受け取る。</summary>
+        public static VisualElement NavigationIcon(string id)
+        {
+            var icon = Box("kn-nav-icon");
+            icon.generateVisualContent += context =>
+            {
+                var painter = context.painter2D;
+                painter.strokeColor = icon.resolvedStyle.color;
+                painter.lineWidth = 1.6f * 2f / 3f;
+                painter.lineCap = LineCap.Round;
+                painter.lineJoin = LineJoin.Round;
+                switch (id)
+                {
+                    case "outfit":
+                        Stroke(painter, 8, 3, 4, 6, 6, 10, 8, 9, 8, 21, 16, 21, 16, 9, 18, 10, 20, 6, 16, 3);
+                        Curve(painter, 16, 3, 16, 7, 8, 7, 8, 3);
+                        break;
+                    case "transform":
+                        Circle(painter, 12, 14, 6);
+                        Stroke(painter, 9, 4, 12, 8, 15, 4);
+                        break;
+                    case "toggle":
+                        Curve(painter, 7, 8, 1.7f, 8, 1.7f, 16, 7, 16);
+                        Stroke(painter, 7, 16, 17, 16);
+                        Curve(painter, 17, 16, 22.3f, 16, 22.3f, 8, 17, 8);
+                        Stroke(painter, 17, 8, 7, 8);
+                        Circle(painter, 16, 12, 2.5f);
+                        break;
+                    case "skin":
+                        Stroke(painter, 12, 3, 19, 7, 19, 12);
+                        Curve(painter, 19, 12, 19, 17, 16, 20, 12, 21);
+                        Curve(painter, 12, 21, 8, 20, 5, 17, 5, 12);
+                        Stroke(painter, 5, 12, 5, 7, 12, 3);
+                        break;
+                    case "color":
+                        painter.BeginPath();
+                        painter.MoveTo(Point(12, 3));
+                        painter.BezierCurveTo(Point(0, 3), Point(0, 21), Point(12, 21));
+                        painter.BezierCurveTo(Point(16, 21), Point(12, 18), Point(14, 16));
+                        painter.BezierCurveTo(Point(16, 14), Point(21, 17), Point(21, 12));
+                        painter.BezierCurveTo(Point(21, 7), Point(17, 3), Point(12, 3));
+                        painter.Stroke();
+                        Circle(painter, 8, 10, 1); Circle(painter, 12, 7, 1); Circle(painter, 16, 10, 1);
+                        break;
+                    case "innerColor":
+                        Curve(painter, 5, 20, 5, -1, 19, -1, 19, 20);
+                        Curve(painter, 10, 9, 9, 13, 9, 17, 10, 20);
+                        break;
+                    case "light":
+                        Circle(painter, 12, 12, 4);
+                        Stroke(painter, 12, 2, 12, 4); Stroke(painter, 12, 20, 12, 22);
+                        Stroke(painter, 2, 12, 4, 12); Stroke(painter, 20, 12, 22, 12);
+                        Stroke(painter, 5, 5, 6.5f, 6.5f); Stroke(painter, 17.5f, 17.5f, 19, 19);
+                        Stroke(painter, 5, 19, 6.5f, 17.5f); Stroke(painter, 17.5f, 6.5f, 19, 5);
+                        break;
+                    case "pink":
+                        Stroke(painter, 4, 20, 14, 10); Stroke(painter, 14, 4, 14, 7);
+                        Stroke(painter, 18, 6, 16, 8); Stroke(painter, 20, 10, 17, 10);
+                        break;
+                    case "body":
+                        Circle(painter, 12, 5, 2);
+                        Stroke(painter, 12, 7, 12, 14, 9, 21);
+                        Stroke(painter, 8, 10, 16, 10); Stroke(painter, 12, 14, 15, 21);
+                        break;
+                    case "view":
+                        Curve(painter, 2, 12, 7, 3, 17, 3, 22, 12);
+                        Curve(painter, 22, 12, 17, 21, 7, 21, 2, 12);
+                        Circle(painter, 12, 12, 3);
+                        break;
+                    case "walk":
+                        Circle(painter, 14, 4, 2);
+                        Stroke(painter, 8, 21, 11, 14, 14, 17, 16, 21);
+                        Stroke(painter, 11, 14, 13, 8, 17, 11, 21, 11);
+                        Stroke(painter, 13, 8, 9, 9, 6, 13);
+                        break;
+                    case "menu":
+                        for (var y = 6; y <= 18; y += 6)
+                        {
+                            Circle(painter, 4, y, 0.7f);
+                            Stroke(painter, 9, y, 21, y);
+                        }
+                        break;
+                    case "thumbnail":
+                        Stroke(painter, 3, 7, 7, 7, 9, 4, 15, 4, 17, 7, 21, 7, 21, 20, 3, 20, 3, 7);
+                        Circle(painter, 12, 13, 4);
+                        break;
+                    case "uploadCheck":
+                        Stroke(painter, 12, 16, 12, 4); Stroke(painter, 7, 9, 12, 4, 17, 9);
+                        Stroke(painter, 4, 16, 4, 20, 20, 20, 20, 16);
+                        break;
+                    case "undo":
+                        Stroke(painter, 9, 14, 4, 9, 9, 4);
+                        Stroke(painter, 4, 9, 14, 9);
+                        Curve(painter, 14, 9, 22, 9, 22, 21, 14, 21);
+                        Stroke(painter, 14, 21, 11, 21);
+                        break;
+                    case "history":
+                        Circle(painter, 12, 12, 9);
+                        Stroke(painter, 12, 7, 12, 12, 15, 14);
+                        break;
+                    case "more":
+                        Circle(painter, 5, 12, 1); Circle(painter, 12, 12, 1); Circle(painter, 19, 12, 1);
+                        break;
+                    default:
+                        Stroke(painter, 5, 12, 10, 17, 19, 7);
+                        break;
+                }
+            };
+            return icon;
+        }
+
+        private static Vector2 Point(float x, float y)
+        {
+            return new Vector2(x * 2f / 3f, y * 2f / 3f);
+        }
+
+        private static void Stroke(Painter2D painter, params float[] points)
+        {
+            painter.BeginPath();
+            painter.MoveTo(Point(points[0], points[1]));
+            for (var i = 2; i < points.Length; i += 2) painter.LineTo(Point(points[i], points[i + 1]));
+            painter.Stroke();
+        }
+
+        private static void Curve(Painter2D painter, float x, float y, float c1x, float c1y, float c2x, float c2y, float ex, float ey)
+        {
+            painter.BeginPath();
+            painter.MoveTo(Point(x, y));
+            painter.BezierCurveTo(Point(c1x, c1y), Point(c2x, c2y), Point(ex, ey));
+            painter.Stroke();
+        }
+
+        private static void Circle(Painter2D painter, float x, float y, float radius)
+        {
+            var c = radius * 0.5522848f;
+            painter.BeginPath();
+            painter.MoveTo(Point(x + radius, y));
+            painter.BezierCurveTo(Point(x + radius, y + c), Point(x + c, y + radius), Point(x, y + radius));
+            painter.BezierCurveTo(Point(x - c, y + radius), Point(x - radius, y + c), Point(x - radius, y));
+            painter.BezierCurveTo(Point(x - radius, y - c), Point(x - c, y - radius), Point(x, y - radius));
+            painter.BezierCurveTo(Point(x + c, y - radius), Point(x + radius, y - c), Point(x + radius, y));
+            painter.ClosePath();
+            painter.Stroke();
+        }
+
+        /// <summary>USS の実線を使わず、4px の線と 4px の空白で角丸のドロップ枠を描く。</summary>
+        public static void DashedBorder(VisualElement element)
+        {
+            element.generateVisualContent += context =>
+            {
+                // contentRect ではなく外周を使い、内側の余白を保つ。
+                var width = element.layout.width - 1f;
+                var height = element.layout.height - 1f;
+                if (width < 12f || height < 12f) return;
+                var radius = 6f;
+                var horizontal = width - radius * 2f;
+                var vertical = height - radius * 2f;
+                var arc = Mathf.PI * radius * 0.5f;
+                var perimeter = (horizontal + vertical) * 2f + arc * 4f;
+                var painter = context.painter2D;
+                painter.lineWidth = 1f;
+                painter.strokeColor = element.resolvedStyle.color;
+                for (var offset = 0f; offset < perimeter; offset += 8f)
+                {
+                    painter.BeginPath();
+                    painter.MoveTo(BorderPoint(offset, width, height, radius));
+                    // 角の短い円弧も折れずにつながるよう 1px ごとにたどる。
+                    for (var d = 1f; d <= 4f && offset + d <= perimeter; d += 1f)
+                        painter.LineTo(BorderPoint(offset + d, width, height, radius));
+                    painter.Stroke();
+                }
+            };
+        }
+
+        private static Vector2 BorderPoint(float distance, float width, float height, float radius)
+        {
+            var horizontal = width - radius * 2f;
+            var vertical = height - radius * 2f;
+            var arc = Mathf.PI * radius * 0.5f;
+            for (var side = 0; side < 4; side++)
+            {
+                var length = side % 2 == 0 ? horizontal : vertical;
+                if (distance <= length)
+                {
+                    if (side == 0) return new Vector2(radius + distance + 0.5f, 0.5f);
+                    if (side == 1) return new Vector2(width + 0.5f, radius + distance + 0.5f);
+                    if (side == 2) return new Vector2(width - radius - distance + 0.5f, height + 0.5f);
+                    return new Vector2(0.5f, height - radius - distance + 0.5f);
+                }
+                distance -= length;
+                if (distance <= arc)
+                {
+                    var angle = -Mathf.PI * 0.5f + side * Mathf.PI * 0.5f + distance / radius;
+                    var cx = side == 0 || side == 1 ? width - radius : radius;
+                    var cy = side == 1 || side == 2 ? height - radius : radius;
+                    return new Vector2(cx + Mathf.Cos(angle) * radius + 0.5f, cy + Mathf.Sin(angle) * radius + 0.5f);
+                }
+                distance -= arc;
+            }
+            return new Vector2(radius + 0.5f, 0.5f);
+        }
+
+        public static Color Hex(string hex)
+        {
+            Color c;
+            return ColorUtility.TryParseHtmlString(hex, out c) ? c : Color.gray;
+        }
+    }
+}
+[0m
+[0m$ [0mcd Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Localization && grep -n 'close\|閉じ\|cancel\|dialog' ja.json en.json | head -60
+ja.json:27:  "dialog.ok": "OK",
+ja.json:28:  "dialog.cancel": "キャンセル",
+ja.json:188:  "attach.cancel": "えらび直す",
+ja.json:456:  "innerColor.cancel": "やめる",
+en.json:27:  "dialog.ok": "OK",
+en.json:28:  "dialog.cancel": "Cancel",
+en.json:188:  "attach.cancel": "Choose again",
+en.json:233:  "view.intro": "This is where your eyes are in VRChat. If it is off, the floor looks too close or your body looks odd. The blue ball in the scene shows the current point.",
+en.json:244:  "thumb.face": "Face close-up",
+en.json:456:  "innerColor.cancel": "Cancel",
+[0m
+[0m$ [0mcat tools/gen_meta.py && git status --short && cat Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Core/BackupService.cs.meta
+#!/usr/bin/env python3
+"""パッケージ内のファイルに .meta を作る（既にあるものはそのまま）。
+
+GUID はパッケージ内の相対パスから決まるので、何度実行しても同じになる。
+バックアップ（.asset）はスクリプトを GUID で参照するため、GUID を固定しておく必要がある。
+
+使い方: python3 tools/gen_meta.py
+"""
+import hashlib
+import os
+import sys
+
+REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+PACKAGE = os.path.join(REPO, "Packages", "com.suzuki-y0.jeni.kaihen-navi")
+SEED = "com.suzuki-y0.jeni.kaihen-navi/"
+
+COMMON_TAIL = "  userData: \n  assetBundleName: \n  assetBundleVariant: \n"
+
+TEMPLATES = {
+    "folder": "folderAsset: yes\nDefaultImporter:\n  externalObjects: {}\n" + COMMON_TAIL,
+    ".cs": (
+        "MonoImporter:\n  externalObjects: {}\n  serializedVersion: 2\n  defaultReferences: []\n"
+        "  executionOrder: 0\n  icon: {instanceID: 0}\n" + COMMON_TAIL
+    ),
+    ".asmdef": "AssemblyDefinitionImporter:\n  externalObjects: {}\n" + COMMON_TAIL,
+    ".json": "TextScriptImporter:\n  externalObjects: {}\n" + COMMON_TAIL,
+    ".md": "TextScriptImporter:\n  externalObjects: {}\n" + COMMON_TAIL,
+    ".txt": "TextScriptImporter:\n  externalObjects: {}\n" + COMMON_TAIL,
+    ".ttf": (
+        "TrueTypeFontImporter:\n  externalObjects: {}\n  serializedVersion: 4\n  fontSize: 16\n"
+        "  forceTextureCase: -2\n  characterSpacing: 0\n  characterPadding: 1\n  includeFontData: 1\n"
+        "  fontNames: []\n  fallbackFontReferences: []\n  customCharacters: \n  fontRenderingMode: 0\n"
+        "  ascentCalculationMode: 1\n  useLegacyBoundsCalculation: 0\n  shouldRoundAdvanceValue: 1\n"
+        + COMMON_TAIL
+    ),
+    ".uss": (
+        "ScriptedImporter:\n  internalIDToNameTable: []\n  externalObjects: {}\n  serializedVersion: 2\n"
+        + COMMON_TAIL
+        + "  script: {fileID: 12385, guid: 0000000000000000e000000000000000, type: 0}\n"
+        "  disableValidation: 0\n"
+    ),
+}
+
+PACKAGE_MANIFEST = "PackageManifestImporter:\n  externalObjects: {}\n" + COMMON_TAIL
+
+
+def guid_for(rel):
+    return hashlib.md5((SEED + rel).encode("utf-8")).hexdigest()
+
+
+def body_for(path, rel):
+    if os.path.isdir(path):
+        return TEMPLATES["folder"]
+    if rel == "package.json":
+        return PACKAGE_MANIFEST
+    ext = os.path.splitext(path)[1].lower()
+    return TEMPLATES.get(ext)
+
+
+def main():
+    created = 0
+    for dirpath, dirnames, filenames in os.walk(PACKAGE):
+        dirnames[:] = [d for d in dirnames if not d.startswith(".")]
+        entries = [os.path.join(dirpath, d) for d in dirnames] + [
+            os.path.join(dirpath, f) for f in filenames if not f.endswith(".meta") and not f.startswith(".")
+        ]
+        for path in entries:
+            meta = path + ".meta"
+            if os.path.exists(meta):
+                continue
+            rel = os.path.relpath(path, PACKAGE).replace(os.sep, "/")
+            body = body_for(path, rel)
+            if body is None:
+                print("skip (unknown type):", rel, file=sys.stderr)
+                continue
+            with open(meta, "w", encoding="utf-8", newline="\n") as f:
+                f.write("fileFormatVersion: 2\nguid: %s\n%s" % (guid_for(rel), body))
+            created += 1
+    print("created %d .meta files" % created)
+
+
+if __name__ == "__main__":
+    main()
+fileFormatVersion: 2
+guid: 3ebf6a90ca4180f66cd54c827dcdee7e
+MonoImporter:
+  externalObjects: {}
+  serializedVersion: 2
+  defaultReferences: []
+  executionOrder: 0
+  icon: {instanceID: 0}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant:
+[0m
+[0m$ [0mcd Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Localization && sed -n '1,35p' ja.json && echo --- && sed -n '495,524p' ja.json && echo ===EN=== && sed -n '1,35p' en.json && sed -n '495,524p' en.json
+{
+  "app.name": "かいへんナビ",
+  "app.easyMode": "やさしいモード",
+  "app.trial": "体験版",
+  "step.avatar": "アバターをえらぶ",
+  "step.feature": "やりたいことをえらぶ",
+  "step.adjust": "調整する",
+  "card.full": "製品版",
+  "card.soon": "近日追加",
+  "panel.chooseFeature": "やりたいことを一覧から選んでください。",
+  "panel.chooseAvatar": "先に「アバターをえらぶ」でアバターをえらんでください。",
+  "panel.locked": "この機能は製品版で使えます。体験版でつかえる「色を変える」「脱ぎ着」「位置と大きさ」で、使い心地をためしてみてください。",
+  "panel.aboutFull": "製品版について見る",
+  "panel.refresh": "更新",
+  "panel.refreshTip": "アバターに服を追加したときなどに押すと、一覧が新しくなります",
+  "panel.error": "うまく表示できませんでした：{0}",
+  "planned.notice": "この機能は準備中です。追加されるまでお待ちください。",
+  "footer.backups": "自動バックアップ {0} 件",
+  "footer.history": "履歴",
+  "footer.restore": "元に戻す",
+  "restore.title": "元に戻す",
+  "restore.message": "{0}（{1}の前）の状態に戻します。よろしいですか？\n\nあとから Ctrl+Z でやり直すこともできます。",
+  "restore.historyMessage": "{0}（{1}の前）の状態に戻します。これより新しいバックアップも使い終わるため消えます。よろしいですか？",
+  "restore.ok": "戻す",
+  "history.item": "{0}　{1}の前",
+  "history.empty": "バックアップはまだありません",
+  "dialog.ok": "OK",
+  "dialog.cancel": "キャンセル",
+  "common.where": "場所",
+  "part.hair": "髪",
+  "part.cloth": "服",
+  "part.eye": "目",
+  "part.skin": "肌",
+  "part.other": "その他",
+  "feature.color.title": "髪や服の色を変えたい",
+---
+  "nav.chooseFeature": "やりたいことを選ぶ",
+  "nav.empty": "左からやりたいことを選んでください。",
+  "nav.emptyCompact": "上の一覧からやりたいことを選んでください。",
+  "nav.save": "保存",
+  "nav.more": "そのほか",
+  "nav.openLocation": "保存場所を開く",
+  "nav.uploadCheck": "アップロード確認",
+  "nav.saved": "保存済み",
+  "nav.unsaved": "未保存の変更あり",
+  "footer.status": "自動バックアップ {0} 件 · 最終 {1}",
+  "check.description": "アップロード前に、モデルの設定とアップロード先を確認します。",
+  "check.none": "問題は見つかりませんでした",
+  "check.fixAll": "まとめて直す",
+  "pick.file": "ファイルから選ぶ…",
+  "pick.dropHint": "Project の青い箱のアイコン",
+  "feature.outfit.nav": "服を着せる",
+  "feature.transform.nav": "アクセをつける",
+  "feature.toggle.nav": "脱ぎ着の切り替え",
+  "feature.skin.nav": "はみ出る肌を隠す",
+  "feature.color.nav": "色を変える",
+  "feature.innerColor.nav": "髪のインナーカラー",
+  "feature.light.nav": "明るさと影",
+  "feature.pink.nav": "ピンク色を直す",
+  "feature.body.nav": "体型・身長",
+  "feature.view.nav": "視点の高さ",
+  "feature.walk.nav": "動きを変える",
+  "feature.menu.nav": "メニューを整理",
+  "feature.thumbnail.nav": "サムネイルを撮る",
+  "nav.sceneAdvice": "改変はシーンにだけ残ります。自動保存するには「…」から改変アバターを作ってください。"
+}
+===EN===
+{
+  "app.name": "Kaihen Navi",
+  "app.easyMode": "Easy mode",
+  "app.trial": "Trial",
+  "step.avatar": "Choose an avatar",
+  "step.feature": "What do you want to do?",
+  "step.adjust": "Adjust",
+  "card.full": "Full version",
+  "card.soon": "Coming soon",
+  "panel.chooseFeature": "Choose what you want to do from the list.",
+  "panel.chooseAvatar": "First, choose an avatar under \"Choose an avatar\".",
+  "panel.locked": "This feature is available in the full version. Try the trial features (color, outfit toggles, position and size) to see how they work.",
+  "panel.aboutFull": "About the full version",
+  "panel.refresh": "Refresh",
+  "panel.refreshTip": "Click after adding an outfit to the avatar to refresh the lists",
+  "panel.error": "Could not display this panel: {0}",
+  "planned.notice": "This feature is being prepared. Please wait for an update.",
+  "footer.backups": "Auto backups: {0}",
+  "footer.history": "History",
+  "footer.restore": "Restore",
+  "restore.title": "Restore",
+  "restore.message": "Restore the state from {0} (before \"{1}\")?\n\nYou can press Ctrl+Z afterwards to undo the restore.",
+  "restore.historyMessage": "Restore the state from {0} (before \"{1}\")? Newer backups will also be used up and removed.",
+  "restore.ok": "Restore",
+  "history.item": "{0}  before \"{1}\"",
+  "history.empty": "No backups yet",
+  "dialog.ok": "OK",
+  "dialog.cancel": "Cancel",
+  "common.where": "Show",
+  "part.hair": "Hair",
+  "part.cloth": "Outfits",
+  "part.eye": "Eyes",
+  "part.skin": "Skin",
+  "part.other": "Other",
+  "feature.color.title": "Change hair or outfit color",
+  "nav.chooseFeature": "Choose what to do",
+  "nav.empty": "Choose what you want to do from the left.",
+  "nav.emptyCompact": "Choose what you want to do from the list above.",
+  "nav.save": "Save",
+  "nav.more": "More",
+  "nav.openLocation": "Show save location",
+  "nav.uploadCheck": "Upload check",
+  "nav.saved": "Saved",
+  "nav.unsaved": "Unsaved changes",
+  "footer.status": "Auto backups: {0} · Latest {1}",
+  "check.description": "Check model settings and the upload destination before uploading.",
+  "check.none": "No issues found",
+  "check.fixAll": "Fix all",
+  "pick.file": "Choose file…",
+  "pick.dropHint": "The blue box icon in Project",
+  "feature.outfit.nav": "Dress avatar",
+  "feature.transform.nav": "Add accessories",
+  "feature.toggle.nav": "Clothing toggles",
+  "feature.skin.nav": "Hide exposed skin",
+  "feature.color.nav": "Change colors",
+  "feature.innerColor.nav": "Inner hair color",
+  "feature.light.nav": "Lighting & shadows",
+  "feature.pink.nav": "Fix pink materials",
+  "feature.body.nav": "Body & height",
+  "feature.view.nav": "Viewpoint height",
+  "feature.walk.nav": "Change animations",
+  "feature.menu.nav": "Organize menu",
+  "feature.thumbnail.nav": "Take thumbnail",
+  "nav.sceneAdvice": "Edits are saved only in the scene. Create an edited avatar from “More” to enable auto-save."
+}
+[0m
+[0m$ [0mcd Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Localization && grep -n 'history.empty\|restore.ok\|footer.history' zh-Hans.json ko.json
+zh-Hans.json:19:  "footer.history": "历史",
+zh-Hans.json:24:  "restore.ok": "恢复",
+zh-Hans.json:26:  "history.empty": "还没有备份",
+ko.json:19:  "footer.history": "기록",
+ko.json:24:  "restore.ok": "되돌리기",
+ko.json:26:  "history.empty": "아직 백업이 없습니다",
+[0m
+[0m← [0mWrite Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Core/UndoHistory.cs
+Wrote file successfully.
+[0m
+[0m$ [0mcd /tmp/knbench-yjvgVG/kaihennavi-ds-c && python3 - <<'PY'
+from pathlib import Path
+p=Path('Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Features/BodyFeature.cs')
+s=p.read_text()
+s=s.replace('''        private VisualElement _canvas;
+        private Slider _length;
+        private Slider _width;
+        private Label _heightLabel;
+        private bool _dragging;''','''        private VisualElement _canvas;
+        private VisualElement _parts;
+        private VisualElement _controls;
+        private readonly List<Button> _partButtons = new List<Button>();
+        private Slider _length;
+        private Slider _width;
+        private Label _heightLabel;
+        private bool _dragging;''')
+s=s.replace('''            var side = Ui.Box("kn-figure__side");
+            side.Add(BuildPartList(ctx));
+            layout.Add(side);
+            root.Add(layout);
+
+            root.Add(BuildControls(ctx));
+            Refresh();''','''            var side = Ui.Box("kn-figure__side");
+            _parts = BuildPartList(ctx);
+            side.Add(_parts);
+            layout.Add(side);
+            root.Add(layout);
+
+            root.Add(BuildControls(ctx));
+            Refresh();''')
+s=s.replace('''            if (_silhouette != null) Object.DestroyImmediate(_silhouette);
+            _silhouette = null;
+            _canvas = null;''','''            if (_refresh != null)
+            {
+                _refresh.Pause();
+                _refresh = null;
+            }
+
+            if (_silhouette != null) Object.DestroyImmediate(_silhouette);
+            _silhouette = null;
+            _canvas = null;
+            _parts = null;
+            _controls = null;
+            _partButtons.Clear();''')
+old='''        private VisualElement BuildPartList(FeatureContext ctx)
+        {
+            var list = Ui.Box("kn-figure__parts");
+            for (var i = 0; i < Groups.Length; i++)
+            {
+                var index = i;
+                var button = Ui.Button(L10n.Tr(Groups[i].Key), () =>
+                {
+                    _selected = index;
+                    UndoHelper.Separate();
+                    ctx.Rebuild();
+                }, "kn-button--small", "kn-figure__part");
+                if (i == _selected) button.AddToClassList("kn-figure__part--selected");
+                list.Add(button);
+            }
+
+            return list;
+        }
+
+        private VisualElement BuildControls(FeatureContext ctx)
+        {
+            var box = Ui.Box("kn-figure__controls");
+            var group = Groups[_selected];
+            box.Add(Ui.Heading(L10n.Tr(group.Key)));'''
+new='''        private VisualElement BuildPartList(FeatureContext ctx)
+        {
+            var list = Ui.Box("kn-figure__parts");
+            _partButtons.Clear();
+            for (var i = 0; i < Groups.Length; i++)
+            {
+                var index = i;
+                var button = Ui.Button(L10n.Tr(Groups[i].Key), () => SelectPart(ctx, index),
+                    "kn-button--small", "kn-figure__part");
+                if (i == _selected) button.AddToClassList("kn-figure__part--selected");
+                list.Add(button);
+                _partButtons.Add(button);
+            }
+
+            return list;
+        }
+
+        /// <summary>
+        /// 部位を選び直す。ウィンドウ全体は作り直さず、このページの選択表示と操作欄、影絵の点だけ更新する。
+        /// </summary>
+        private void SelectPart(FeatureContext ctx, int index)
+        {
+            if (index < 0 || index >= Groups.Length || index == _selected) return;
+            _selected = index;
+            UpdatePartSelection();
+            RefreshControls(ctx);
+            if (_canvas != null) _canvas.MarkDirtyRepaint();
+        }
+
+        private void UpdatePartSelection()
+        {
+            for (var i = 0; i < _partButtons.Count; i++)
+                _partButtons[i].EnableInClassList("kn-figure__part--selected", i == _selected);
+        }
+
+        private VisualElement BuildControls(FeatureContext ctx)
+        {
+            _controls = Ui.Box("kn-figure__controls");
+            FillControls(ctx);
+            return _controls;
+        }
+
+        /// <summary>操作欄だけを作り直す（部位を変えたとき・戻したとき）。</summary>
+        private void RefreshControls(FeatureContext ctx)
+        {
+            if (_controls == null) return;
+            FillControls(ctx);
+        }
+
+        private void FillControls(FeatureContext ctx)
+        {
+            var box = _controls;
+            box.Clear();
+            _length = null;
+            _width = null;
+            _heightLabel = null;
+            var group = Groups[_selected];
+            box.Add(Ui.Heading(L10n.Tr(group.Key)));'''
+if old not in s:
+    raise SystemExit('old controls not found')
+s=s.replace(old,new)
+s=s.replace('''            box.Add(Ui.Text(L10n.Tr(group.Whole ? "body.dragHintWhole" : "body.dragHint"), "kn-hint"));
+            return box;
+        }''','''            box.Add(Ui.Text(L10n.Tr(group.Whole ? "body.dragHintWhole" : "body.dragHint"), "kn-hint"));
+        }''')
+s=s.replace('''            if (hit != _selected)
+            {
+                _selected = hit;
+                UndoHelper.Separate();
+                ctx.Rebuild();
+                return;
+            }''','''            if (hit != _selected)
+            {
+                SelectPart(ctx, hit);
+                return;
+            }''')
+s=s.replace('''            UndoHelper.Separate();
+            ctx.Rebuild();
+        }
+
+        private void ResetAll(FeatureContext ctx)''','''            UndoHelper.Separate();
+            RefreshControls(ctx);
+            Refresh();
+        }
+
+        private void ResetAll(FeatureContext ctx)''')
+s=s.replace('''            SetHeight(ctx, 100f);
+            UndoHelper.Separate();
+            ctx.Rebuild();
+        }''','''            SetHeight(ctx, 100f);
+            UndoHelper.Separate();
+            RefreshControls(ctx);
+            Refresh();
+        }''')
+p.write_text(s)
+PY
+grep -n "ctx.Rebuild\|_controls\|_parts\|FillControls\|ResetGroup\|ResetAll" Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Features/BodyFeature.cs
+60:        private VisualElement _parts;
+61:        private VisualElement _controls;
+100:            _parts = BuildPartList(ctx);
+101:            side.Add(_parts);
+126:            _parts = null;
+127:            _controls = null;
+137:            var list = Ui.Box("kn-figure__parts");
+172:            _controls = Ui.Box("kn-figure__controls");
+173:            FillControls(ctx);
+174:            return _controls;
+180:            if (_controls == null) return;
+181:            FillControls(ctx);
+184:        private void FillControls(FeatureContext ctx)
+186:            var box = _controls;
+228:            buttons.Add(Ui.Button(L10n.Tr("body.resetPart"), () => ResetGroup(ctx, group), "kn-button--small"));
+229:            buttons.Add(Ui.Button(L10n.Tr("body.resetAll"), () => ResetAll(ctx), "kn-button--small", "kn-button--ghost"));
+516:        private void ResetGroup(FeatureContext ctx, BoneGroup group)
+539:        private void ResetAll(FeatureContext ctx)
+[0m
+[0m$ [0msed -n '130,245p' Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Features/BodyFeature.cs && sed -n '500,575p' Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Features/BodyFeature.cs
+}
+
+#if KAIHENNAVI_MA
+        // ---------------------------------------------------------------- 画面
+
+        private VisualElement BuildPartList(FeatureContext ctx)
+        {
+            var list = Ui.Box("kn-figure__parts");
+            _partButtons.Clear();
+            for (var i = 0; i < Groups.Length; i++)
+            {
+                var index = i;
+                var button = Ui.Button(L10n.Tr(Groups[i].Key), () => SelectPart(ctx, index),
+                    "kn-button--small", "kn-figure__part");
+                if (i == _selected) button.AddToClassList("kn-figure__part--selected");
+                list.Add(button);
+                _partButtons.Add(button);
+            }
+
+            return list;
+        }
+
+        /// <summary>
+        /// 部位を選び直す。ウィンドウ全体は作り直さず、このページの選択表示と操作欄、影絵の点だけ更新する。
+        /// </summary>
+        private void SelectPart(FeatureContext ctx, int index)
+        {
+            if (index < 0 || index >= Groups.Length || index == _selected) return;
+            _selected = index;
+            UpdatePartSelection();
+            RefreshControls(ctx);
+            if (_canvas != null) _canvas.MarkDirtyRepaint();
+        }
+
+        private void UpdatePartSelection()
+        {
+            for (var i = 0; i < _partButtons.Count; i++)
+                _partButtons[i].EnableInClassList("kn-figure__part--selected", i == _selected);
+        }
+
+        private VisualElement BuildControls(FeatureContext ctx)
+        {
+            _controls = Ui.Box("kn-figure__controls");
+            FillControls(ctx);
+            return _controls;
+        }
+
+        /// <summary>操作欄だけを作り直す（部位を変えたとき・戻したとき）。</summary>
+        private void RefreshControls(FeatureContext ctx)
+        {
+            if (_controls == null) return;
+            FillControls(ctx);
+        }
+
+        private void FillControls(FeatureContext ctx)
+        {
+            var box = _controls;
+            box.Clear();
+            _length = null;
+            _width = null;
+            _heightLabel = null;
+            var group = Groups[_selected];
+            box.Add(Ui.Heading(L10n.Tr(group.Key)));
+
+            if (group.Whole)
+            {
+                var armature = Armature(_avatar);
+                var percent = armature == null ? 100f : armature.localScale.y / BaseArmatureScale(armature) * 100f;
+                _heightLabel = Ui.Text("", "kn-readout");
+                box.Add(_heightLabel);
+                _length = Ui.Slider(L10n.Tr("body.height"), 80f, 120f, percent, v => SetHeight(ctx, v));
+                box.Add(_length);
+                _width = null;
+                UpdateHeightLabel();
+            }
+            else
+            {
+                Vector3 current;
+                int axis;
+                Read(group, out current, out axis);
+                if (group.Uniform)
+                {
+                    _length = Ui.Slider(L10n.Tr("body.size"), 50f, 150f, current.x * 100f, v => SetPart(ctx, group, v, v));
+                    _width = null;
+                }
+                else
+                {
+                    var thick = axis == 0 ? current.y : current.x;
+                    _length = Ui.Slider(L10n.Tr("body.length"), 50f, 150f, current[axis] * 100f, v => SetPart(ctx, group, v, _width != null ? _width.value : 100f));
+                    _width = Ui.Slider(L10n.Tr("body.width"), 50f, 150f, thick * 100f, v => SetPart(ctx, group, _length.value, v));
+                    box.Add(_length);
+                    box.Add(_width);
+                }
+
+                if (group.Uniform) box.Add(_length);
+            }
+
+            var buttons = Ui.Box("kn-row");
+            buttons.Add(Ui.Button(L10n.Tr("body.resetPart"), () => ResetGroup(ctx, group), "kn-button--small"));
+            buttons.Add(Ui.Button(L10n.Tr("body.resetAll"), () => ResetAll(ctx), "kn-button--small", "kn-button--ghost"));
+            box.Add(buttons);
+            box.Add(Ui.Text(L10n.Tr(group.Whole ? "body.dragHintWhole" : "body.dragHint"), "kn-hint"));
+        }
+
+        // ---------------------------------------------------------------- シルエットとボーン図
+
+        /// <summary>シルエットを撮り直す（変更のたびに呼ばれるので、少し待ってまとめて撮る）。</summary>
+        private void Refresh()
+        {
+            if (_canvas == null) return;
+            if (_refresh != null) _refresh.Pause();
+            // スライダーを動かしている間は待ち、止まったら 1 回だけ測り直して撮る（メッシュを測るのが重いため）
+            _refresh = _canvas.schedule.Execute(() =>
+            {
+                AvatarMeasure.Forget();
+                UpdateHeightLabel();
+
+                var adjuster = bone.GetComponent<ModularAvatarScaleAdjuster>();
+                if (adjuster == null) adjuster = Undo.AddComponent<ModularAvatarScaleAdjuster>(bone.gameObject);
+                var old = adjuster.Scale;
+                Undo.RecordObject(adjuster, undoName);
+                adjuster.Scale = scale;
+                EditorUtility.SetDirty(adjuster);
+                BoneFollow.Apply(bone, animator, old, scale, undoName);
+            }
+
+            BoneFollow.KeepFeetOnFloor(animator, feetBefore, undoName);
+            FollowView(viewBefore, undoName);
+            UndoHelper.End();
+            Refresh();
+        }
+
+        private void ResetGroup(FeatureContext ctx, BoneGroup group)
+        {
+            if (group.Whole)
+            {
+                SetHeight(ctx, 100f);
+            }
+            else
+            {
+                ctx.BeginEdit();
+                UndoHelper.Separate();
+                var viewBefore = AvatarMeasure.EyeCenter(_avatar);
+                var animator = AvatarMeasure.HumanAnimator(_avatar);
+                var feetBefore = BoneFollow.FeetHeight(animator);
+                foreach (var b in group.Bones) RemoveAdjuster(_avatar, AvatarMeasure.Bone(_avatar, b));
+                BoneFollow.KeepFeetOnFloor(animator, feetBefore, L10n.Tr("undo.body"));
+                FollowView(viewBefore, L10n.Tr("undo.body"));
+            }
+
+            UndoHelper.Separate();
+            RefreshControls(ctx);
+            Refresh();
+        }
+
+        private void ResetAll(FeatureContext ctx)
+        {
+            if (!EditorUtility.DisplayDialog(L10n.Tr("app.name"), L10n.Tr("body.resetAllConfirm"), L10n.Tr("body.resetAll"), L10n.Tr("dialog.cancel"))) return;
+            ctx.BeginEdit();
+            UndoHelper.Separate();
+            var allAnimator = AvatarMeasure.HumanAnimator(_avatar);
+            var allFeet = BoneFollow.FeetHeight(allAnimator);
+            foreach (var g in Groups)
+            {
+                if (g.Whole) continue;
+                foreach (var b in g.Bones) RemoveAdjuster(_avatar, AvatarMeasure.Bone(_avatar, b));
+            }
+
+            BoneFollow.KeepFeetOnFloor(allAnimator, allFeet, L10n.Tr("undo.body"));
+
+            SetHeight(ctx, 100f);
+            UndoHelper.Separate();
+            RefreshControls(ctx);
+            Refresh();
+        }
+
+        private static void RemoveAdjuster(VRCAvatarDescriptor avatar, Transform bone)
+        {
+            if (bone == null) return;
+            var adjuster = bone.GetComponent<ModularAvatarScaleAdjuster>();
+            // 子の位置も元に戻す（Scale Adjuster が無くても、前の版でずれたままの子を直す）
+            BoneFollow.Apply(bone, AvatarMeasure.HumanAnimator(avatar), adjuster != null ? adjuster.Scale : Vector3.one, Vector3.one, L10n.Tr("undo.body"));
+            if (adjuster != null) Undo.DestroyObjectImmediate(adjuster);
+            // 頭・手・足は骨ごとの大きさも元に戻す
+            if (BoneFollow.IsUniform(AvatarMeasure.HumanAnimator(avatar), bone)) BoneFollow.SetUniformScale(bone, 1f, L10n.Tr("undo.body"));
+        }
+
+        /// <summary>
+        /// 脚や胴の長さが変わると目の高さも変わるので、視点を同じだけ動かす。
+        /// 視点の機能で微調整した分を消さないよう、置き直すのではなく差の分だけずらす。
+        /// </summary>
+        /// <param name="before">変える前の目の位置（ワールド）。</param>
+[0m
+[0m$ [0mcd /tmp/knbench-yjvgVG/kaihennavi-ds-c && python3 - <<'PY'
+from pathlib import Path
+p=Path('Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Core/KaihenNaviWindow.cs')
+s=p.read_text()
+s=s.replace('''        private readonly Dictionary<FeatureBase, VisualElement> _navigationItems = new Dictionary<FeatureBase, VisualElement>();
+''','''        private readonly Dictionary<FeatureBase, VisualElement> _navigationItems = new Dictionary<FeatureBase, VisualElement>();
+        private readonly Dictionary<FeatureBase, Label> _navigationBadges = new Dictionary<FeatureBase, Label>();
+        private readonly Dictionary<FeatureBase, VisualElement> _navigationDone = new Dictionary<FeatureBase, VisualElement>();
+        private VisualElement _historyPopover;
+        private VisualElement _historyContent;
+        private long _historyExpanded = long.MinValue;
+''')
+s=s.replace('''            EditorSceneManager.sceneClosing += OnSceneClosing;
+            _backup.Changed += RefreshFooter;
+''','''            EditorSceneManager.sceneClosing += OnSceneClosing;
+            _backup.Changed += OnBackupChanged;
+            UndoHistory.Changed += OnHistoryChanged;
+            UndoHistory.Attach();
+''')
+s=s.replace('''            EditorSceneManager.sceneClosing -= OnSceneClosing;
+            _backup.Changed -= RefreshFooter;
+            SaveNow();''','''            EditorSceneManager.sceneClosing -= OnSceneClosing;
+            _backup.Changed -= OnBackupChanged;
+            UndoHistory.Changed -= OnHistoryChanged;
+            UndoHistory.Detach();
+            HideHistoryPopover();
+            SaveNow();''')
+s=s.replace('''        private void RefreshKono() { RebuildAll(); }
+''','''        private void RefreshKono() { RebuildAll(); }
+
+        private void OnBackupChanged()
+        {
+            RefreshFooter();
+            if (_historyPopover != null) FillHistoryPopover();
+        }
+
+        private void OnHistoryChanged()
+        {
+            if (_historyPopover != null) FillHistoryPopover();
+        }
+''')
+s=s.replace('''        private void RebuildAll()
+        {
+            titleContent = new GUIContent(L10n.Tr("app.name"));
+
+            var root = rootVisualElement;
+            root.Clear();''','''        private void RebuildAll()
+        {
+            titleContent = new GUIContent(L10n.Tr("app.name"));
+
+            HideHistoryPopover();
+            var root = rootVisualElement;
+            root.Clear();''')
+# BuildNavigation: replace clear and badge/done block
+s=s.replace('''            _navigationList.Clear();
+            _navigationFooter.Clear();
+            _navigationItems.Clear();
+            _compactArea.Clear();''','''            _navigationList.Clear();
+            _navigationFooter.Clear();
+            _navigationItems.Clear();
+            _navigationBadges.Clear();
+            _navigationDone.Clear();
+            _compactArea.Clear();''')
+old='''                    // 件数の検出はナビを組み直すときだけ行う。
+                    var badge = f.NavBadge(_avatar);
+                    if (!string.IsNullOrEmpty(badge)) item.Add(Ui.Text(badge, "kn-nav-badge"));
+                    if (f.IsDone(_avatar))
+                    {
+                        var done = Ui.NavigationIcon("check");
+                        done.AddToClassList("kn-nav-done");
+                        item.Add(done);
+                    }
+                    // Unity のアイコン取得に依存せず、製品版の表示を常に保証する。'''
+new='''                    // 件数と完了の印は、ヒエラルキーが変わったときにもここだけ更新する。
+                    var badge = Ui.Text("", "kn-nav-badge");
+                    _navigationBadges[f] = badge;
+                    item.Add(badge);
+                    var done = Ui.NavigationIcon("check");
+                    done.AddToClassList("kn-nav-done");
+                    _navigationDone[f] = done;
+                    item.Add(done);
+                    // Unity のアイコン取得に依存せず、製品版の表示を常に保証する。'''
+if old not in s: raise SystemExit('badge block not found')
+s=s.replace(old,new)
+s=s.replace('''            _compactArea.Add(_featurePopup);
+            UpdateNavigationSelection();
+            RefreshUploadCheck();
+        }
+''','''            _compactArea.Add(_featurePopup);
+            UpdateNavigationSelection();
+            RefreshNavigationBadges();
+            RefreshUploadCheck();
+        }
+
+        /// <summary>
+        /// ナビの件数・完了の印だけを更新する。ヒエラルキーの変化で一覧そのものは変わらないので、
+        /// ボタンや文字を作り直さない（作り直すと太字フォントの当て直しなどで画面がちらつく）。
+        /// </summary>
+        private void RefreshNavigationBadges()
+        {
+            foreach (var pair in _navigationBadges)
+            {
+                var text = pair.Key.NavBadge(_avatar);
+                pair.Value.text = text ?? "";
+                pair.Value.style.display = string.IsNullOrEmpty(text) ? DisplayStyle.None : DisplayStyle.Flex;
+            }
+
+            foreach (var pair in _navigationDone)
+                pair.Value.style.display = pair.Key.IsDone(_avatar) ? DisplayStyle.Flex : DisplayStyle.None;
+        }
+''')
+# RunQueuedScan nav part
+old='''            // 位置だけの変更では件数を数え直さず、服やアクセの構成が変わったときだけナビを更新する。
+            if (HierarchyHash(true) != _navigationHierarchyHash || current != _avatar) BuildNavigation();
+            else RefreshUploadCheck();
+        }'''
+new='''            // 位置だけの変更では件数を数え直さず、服やアクセの構成が変わったときだけナビを更新する。
+            var navigationHash = HierarchyHash(true);
+            if (current != _avatar)
+            {
+                BuildNavigation();
+            }
+            else if (navigationHash != _navigationHierarchyHash)
+            {
+                // ナビ全体は作り直さず、件数と完了の印だけを更新する
+                _navigationHierarchyHash = navigationHash;
+                RefreshNavigationBadges();
+                RefreshUploadCheck();
+            }
+            else
+            {
+                RefreshUploadCheck();
+            }
+        }'''
+if old not in s: raise SystemExit('runqueued not found')
+s=s.replace(old,new)
+# ScanAvatars context update
+s=s.replace('''            _avatarId = _avatar == null ? null : BackupService.AvatarId(_avatar);
+        }
+''','''            _avatarId = _avatar == null ? null : BackupService.AvatarId(_avatar);
+            UndoHistory.SetContext(_avatarId, () => _selected == null ? null : _selected.Id);
+        }
+''',1)
+# History methods replace
+old='''        private void ShowHistoryMenu()
+        {
+            if (_avatar == null) return;
+            var menu = new GenericMenu();
+            var list = _backup.List(_avatar);
+            foreach (var snapshot in list)
+            {
+                var s = snapshot;
+                var label = L10n.Tr("history.item", s.CreatedAt.ToString("M/d HH:mm:ss"), FeatureTitle(s.featureId));
+                menu.AddItem(new GUIContent(label), false, () => RestoreFromHistory(s));
+            }
+
+            if (list.Count == 0) menu.AddDisabledItem(new GUIContent(L10n.Tr("history.empty")));
+            menu.ShowAsContext();
+        }
+
+        private void RestoreFromHistory(BackupSnapshot snapshot)
+        {
+            if (!EditorUtility.DisplayDialog(
+                    L10n.Tr("restore.title"),
+                    L10n.Tr("restore.historyMessage", snapshot.CreatedAt.ToString("M/d HH:mm:ss"), FeatureTitle(snapshot.featureId)),
+                    L10n.Tr("restore.ok"),
+                    L10n.Tr("dialog.cancel")))
+            {
+                return;
+            }
+
+            if (_selected != null) _selected.OnClosed();
+            _backup.Restore(_avatar, snapshot);
+            BuildNavigation();
+            BuildPanel();
+            RefreshFooter();
+        }
+'''
+new='''        /// <summary>
+        /// 履歴のポップオーバー。GenericMenu は日付の「/」をサブメニューと解釈して
+        /// 月だけの項目（「10」など）が出るため使わず、UI Toolkit で作る。
+        /// </summary>
+        private void ToggleHistoryPopover()
+        {
+            if (_historyPopover != null)
+            {
+                HideHistoryPopover();
+                return;
+            }
+
+            ShowHistoryPopover();
+        }
+
+        private void ShowHistoryPopover()
+        {
+            if (_avatar == null || _historyButton == null) return;
+            HideHistoryPopover();
+
+            var popover = Ui.Box("kn-popover");
+            _historyPopover = popover;
+            rootVisualElement.Add(popover);
+
+            var header = Ui.Box("kn-popover__header");
+            header.Add(Ui.Text(L10n.Tr("history.title"), "kn-popover__title"));
+            header.Add(Ui.Button(L10n.Tr("history.close"), HideHistoryPopover, "kn-button--small", "kn-button--ghost"));
+            popover.Add(header);
+
+            var scroll = new ScrollView(ScrollViewMode.Vertical);
+            scroll.AddToClassList("kn-popover__scroll");
+            _historyContent = Ui.Box("kn-popover__content");
+            scroll.Add(_historyContent);
+            popover.Add(scroll);
+
+            var bounds = _historyButton.worldBound;
+            var rootBounds = rootVisualElement.worldBound;
+            var width = 320f;
+            popover.style.left = Mathf.Max(8f, Mathf.Min(bounds.xMax - rootBounds.x - width, rootBounds.width - width - 8f));
+            popover.style.top = bounds.yMax - rootBounds.y + 4f;
+
+            FillHistoryPopover();
+            rootVisualElement.RegisterCallback<PointerDownEvent>(OnHistoryPointerDown, TrickleDown.TrickleDown);
+            rootVisualElement.RegisterCallback<KeyDownEvent>(OnHistoryKeyDown, TrickleDown.TrickleDown);
+        }
+
+        private void HideHistoryPopover()
+        {
+            rootVisualElement.UnregisterCallback<PointerDownEvent>(OnHistoryPointerDown, TrickleDown.TrickleDown);
+            rootVisualElement.UnregisterCallback<KeyDownEvent>(OnHistoryKeyDown, TrickleDown.TrickleDown);
+            if (_historyPopover != null) _historyPopover.RemoveFromHierarchy();
+            _historyPopover = null;
+            _historyContent = null;
+        }
+
+        private void OnHistoryPointerDown(PointerDownEvent e)
+        {
+            if (_historyPopover == null) return;
+            var target = e.target as VisualElement;
+            for (var element = target; element != null; element = element.parent)
+            {
+                if (element == _historyPopover || element == _historyButton) return;
+            }
+
+            HideHistoryPopover();
+        }
+
+        private void OnHistoryKeyDown(KeyDownEvent e)
+        {
+            if (e.keyCode != KeyCode.Escape) return;
+            HideHistoryPopover();
+            e.StopPropagation();
+        }
+
+        /// <summary>
+        /// 1 段目は自動バックアップのまとまり（機能・時刻）、2 段目は Undo の 1 手順。
+        /// まとまりの時刻から次のまとまりまでを、そのまとまりの手順として並べる。
+        /// </summary>
+        private void FillHistoryPopover()
+        {
+            if (_historyContent == null || _avatar == null) return;
+            _historyContent.Clear();
+
+            var snapshots = _backup.List(_avatar);
+            var steps = UndoHistory.List(BackupService.AvatarId(_avatar));
+            if (snapshots.Count == 0)
+            {
+                _historyContent.Add(Ui.Text(L10n.Tr("history.empty"), "kn-history__empty"));
+                return;
+            }
+
+            var bySnapshot = new Dictionary<long, List<UndoHistory.Step>>();
+            foreach (var step in steps)
+            {
+                BackupSnapshot owner = null;
+                foreach (var snapshot in snapshots)
+                {
+                    if (step.Time < snapshot.CreatedAt) continue;
+                    owner = snapshot;
+                    break;
+                }
+
+                if (owner == null) continue;
+                List<UndoHistory.Step> list;
+                if (!bySnapshot.TryGetValue(owner.createdTicks, out list))
+                {
+                    list = new List<UndoHistory.Step>();
+                    bySnapshot[owner.createdTicks] = list;
+                }
+
+                list.Add(step);
+            }
+
+            var expandedStillExists = false;
+            foreach (var snapshot in snapshots)
+            {
+                List<UndoHistory.Step> groupSteps;
+                if (!bySnapshot.TryGetValue(snapshot.createdTicks, out groupSteps)) groupSteps = new List<UndoHistory.Step>();
+                if (snapshot.createdTicks == _historyExpanded) expandedStillExists = true;
+                _historyContent.Add(BuildHistoryGroup(snapshot, groupSteps));
+            }
+
+            if (!expandedStillExists) _historyExpanded = long.MinValue;
+        }
+
+        private VisualElement BuildHistoryGroup(BackupSnapshot snapshot, List<UndoHistory.Step> steps)
+        {
+            var expanded = snapshot.createdTicks == _historyExpanded;
+            var group = Ui.Box("kn-history__group-wrap");
+
+            var row = new Button(() =>
+                {
+                    _historyExpanded = expanded ? long.MinValue : snapshot.createdTicks;
+                    FillHistoryPopover();
+                });
+            row.AddToClassList("kn-history__group");
+            var texts = Ui.Box("kn-history__texts");
+            texts.Add(Ui.Text(FeatureTitle(snapshot.featureId), "kn-history__title"));
+            texts.Add(Ui.Text(L10n.Tr("history.groupMeta", snapshot.CreatedAt.ToString("M/d HH:mm"), steps.Count), "kn-history__meta"));
+            row.Add(texts);
+            row.Add(Ui.Text(expanded ? "▾" : "▸", "kn-history__chevron"));
+            group.Add(row);
+
+            if (!expanded) return group;
+            var list = Ui.Box("kn-history__steps");
+            if (steps.Count == 0)
+            {
+                var empty = Ui.Box("kn-history__empty-row");
+                empty.Add(Ui.Text(L10n.Tr("history.noSteps"), "kn-history__meta"));
+                empty.Add(Ui.Button(L10n.Tr("history.restoreGroup"), () => RestoreFromHistory(snapshot),
+                    "kn-button--small", "kn-button--ghost"));
+                list.Add(empty);
+            }
+            else
+            {
+                foreach (var step in steps)
+                {
+                    var rowStep = step;
+                    var item = Ui.Box("kn-history__step");
+                    var stepTexts = Ui.Box("kn-history__texts");
+                    stepTexts.Add(Ui.Text(HistoryNames.Describe(rowStep.Name), "kn-history__title"));
+                    stepTexts.Add(Ui.Text(rowStep.Time.ToString("M/d HH:mm:ss"), "kn-history__meta"));
+                    item.Add(stepTexts);
+                    item.Add(Ui.Button(L10n.Tr("history.restoreHere"), () => RestoreToStep(rowStep, snapshot),
+                        "kn-button--small", "kn-button--ghost", "kn-history__restore"));
+                    list.Add(item);
+                }
+            }
+
+            group.Add(list);
+            return group;
+        }
+
+        /// <summary>
+        /// 1 手順の前に戻す。Undo に残っている手順は Undo で、残っていなければ
+        /// そのまとまりのバックアップから戻す（バックアップの設計と食い違わないようにする）。
+        /// </summary>
+        private void RestoreToStep(UndoHistory.Step step, BackupSnapshot owner)
+        {
+            if (_avatar == null) return;
+            var undoable = step.Group >= 0 && step.Group <= Undo.GetCurrentGroup();
+            if (!undoable)
+            {
+                if (owner == null)
+                {
+                    EditorUtility.DisplayDialog(L10n.Tr("app.name"), L10n.Tr("history.unavailable"), L10n.Tr("dialog.ok"));
+                    return;
+                }
+
+                RestoreFromHistory(owner);
+                return;
+            }
+
+            if (!EditorUtility.DisplayDialog(
+                    L10n.Tr("restore.title"),
+                    L10n.Tr("history.restoreStepMessage", HistoryNames.Describe(step.Name), step.Time.ToString("M/d HH:mm:ss")),
+                    L10n.Tr("restore.ok"),
+                    L10n.Tr("dialog.cancel")))
+            {
+                return;
+            }
+
+            if (_selected != null) _selected.OnClosed();
+            HideHistoryPopover();
+            _backup.EndSession();
+            Undo.RevertAllDownToGroup(step.Group);
+            UndoHistory.ForgetFrom(step.AvatarId, step.Group);
+            // 戻した先より新しいまとまりのバックアップは、今の状態より先のものになるので使わない
+            if (owner != null) _backup.DiscardNewer(_avatar, owner);
+            UndoHelper.Separate();
+            BuildNavigation();
+            BuildPanel();
+            RefreshFooter();
+        }
+
+        private void RestoreFromHistory(BackupSnapshot snapshot)
+        {
+            if (!EditorUtility.DisplayDialog(
+                    L10n.Tr("restore.title"),
+                    L10n.Tr("restore.historyMessage", snapshot.CreatedAt.ToString("M/d HH:mm:ss"), FeatureTitle(snapshot.featureId)),
+                    L10n.Tr("restore.ok"),
+                    L10n.Tr("dialog.cancel")))
+            {
+                return;
+            }
+
+            if (_selected != null) _selected.OnClosed();
+            HideHistoryPopover();
+            _backup.Restore(_avatar, snapshot);
+            UndoHistory.Clear(_avatarId);
+            BuildNavigation();
+            BuildPanel();
+            RefreshFooter();
+        }
+'''
+if old not in s: raise SystemExit('history block not found')
+s=s.replace(old,new)
+# button callback
+s=s.replace('_historyButton = Ui.IconButton("history", L10n.Tr("footer.history"), ShowHistoryMenu);',
+            '_historyButton = Ui.IconButton("history", L10n.Tr("footer.history"), ToggleHistoryPopover);')
+# hide on avatar/page change
+s=s.replace('''        private void SelectAvatar(VRCAvatarDescriptor avatar)
+        {
+            if (avatar == _avatar) return;
+            SaveNow();''','''        private void SelectAvatar(VRCAvatarDescriptor avatar)
+        {
+            if (avatar == _avatar) return;
+            HideHistoryPopover();
+            SaveNow();''')
+s=s.replace('''        private void SelectPage(FeatureBase feature, string id)
+        {
+            if (_featureId == id) return;
+            SaveNow();''','''        private void SelectPage(FeatureBase feature, string id)
+        {
+            if (_featureId == id) return;
+            HideHistoryPopover();
+            SaveNow();''')
+# RestoreLatest clear steps
+s=s.replace('''            if (_selected != null) _selected.OnClosed();
+            _backup.Restore(_avatar, latest);
+            BuildNavigation();''','''            if (_selected != null) _selected.OnClosed();
+            _backup.Restore(_avatar, latest);
+            UndoHistory.Clear(_avatarId);
+            BuildNavigation();''')
+p.write_text(s)
+PY
+grep -n "ShowHistory\|ToggleHistory\|HideHistory\|UndoHistory\|RefreshNavigationBadges\|DiscardNewer\|historyPopover\|historyExpanded" Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Core/KaihenNaviWindow.cs
+61:        private VisualElement _historyPopover;
+63:        private long _historyExpanded = long.MinValue;
+102:            UndoHistory.Changed += OnHistoryChanged;
+103:            UndoHistory.Attach();
+119:            UndoHistory.Changed -= OnHistoryChanged;
+120:            UndoHistory.Detach();
+121:            HideHistoryPopover();
+139:            if (_historyPopover != null) FillHistoryPopover();
+144:            if (_historyPopover != null) FillHistoryPopover();
+158:            HideHistoryPopover();
+377:            _historyButton = Ui.IconButton("history", L10n.Tr("footer.history"), ToggleHistoryPopover);
+679:            RefreshNavigationBadges();
+687:        private void RefreshNavigationBadges()
+802:            HideHistoryPopover();
+832:            HideHistoryPopover();
+864:            UndoHistory.SetContext(_avatarId, () => _selected == null ? null : _selected.Id);
+930:                RefreshNavigationBadges();
+959:            UndoHistory.Clear(_avatarId);
+969:        private void ToggleHistoryPopover()
+971:            if (_historyPopover != null)
+973:                HideHistoryPopover();
+977:            ShowHistoryPopover();
+980:        private void ShowHistoryPopover()
+983:            HideHistoryPopover();
+986:            _historyPopover = popover;
+991:            header.Add(Ui.Button(L10n.Tr("history.close"), HideHistoryPopover, "kn-button--small", "kn-button--ghost"));
+1011:        private void HideHistoryPopover()
+1015:            if (_historyPopover != null) _historyPopover.RemoveFromHierarchy();
+1016:            _historyPopover = null;
+1022:            if (_historyPopover == null) return;
+1026:                if (element == _historyPopover || element == _historyButton) return;
+1029:            HideHistoryPopover();
+1035:            HideHistoryPopover();
+1049:            var steps = UndoHistory.List(BackupService.AvatarId(_avatar));
+1056:            var bySnapshot = new Dictionary<long, List<UndoHistory.Step>>();
+1068:                List<UndoHistory.Step> list;
+1071:                    list = new List<UndoHistory.Step>();
+1081:                List<UndoHistory.Step> groupSteps;
+1082:                if (!bySnapshot.TryGetValue(snapshot.createdTicks, out groupSteps)) groupSteps = new List<UndoHistory.Step>();
+1083:                if (snapshot.createdTicks == _historyExpanded) expandedStillExists = true;
+1087:            if (!expandedStillExists) _historyExpanded = long.MinValue;
+1090:        private VisualElement BuildHistoryGroup(BackupSnapshot snapshot, List<UndoHistory.Step> steps)
+1092:            var expanded = snapshot.createdTicks == _historyExpanded;
+1097:                    _historyExpanded = expanded ? long.MinValue : snapshot.createdTicks;
+1142:        private void RestoreToStep(UndoHistory.Step step, BackupSnapshot owner)
+1168:            HideHistoryPopover();
+1171:            UndoHistory.ForgetFrom(step.AvatarId, step.Group);
+1173:            if (owner != null) _backup.DiscardNewer(_avatar, owner);
+1192:            HideHistoryPopover();
+1194:            UndoHistory.Clear(_avatarId);
+[0m
+[0m$ [0mcd /tmp/knbench-yjvgVG/kaihennavi-ds-c && python3 - <<'PY'
+from pathlib import Path
+p=Path('Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Core/BackupService.cs')
+s=p.read_text()
+old='''        public static string AvatarId(VRCAvatarDescriptor avatar)
+        {'''
+new='''        /// <summary>
+        /// 指定したバックアップより新しいもの（今の状態より先の状態）を消す。
+        /// 履歴から Undo で手順を戻したとき、残っているバックアップと食い違わないようにする。
+        /// </summary>
+        public void DiscardNewer(VRCAvatarDescriptor avatar, BackupSnapshot keep)
+        {
+            if (avatar == null || keep == null) return;
+            var newer = List(avatar).Where(s => s.createdTicks > keep.createdTicks).ToList();
+            if (newer.Count == 0) return;
+            foreach (var snapshot in newer) AssetDatabase.DeleteAsset(AssetDatabase.GetAssetPath(snapshot));
+            AssetDatabase.SaveAssets();
+            RaiseChanged();
+        }
+
+        public static string AvatarId(VRCAvatarDescriptor avatar)
+        {'''
+if old not in s: raise SystemExit('not found')
+s=s.replace(old,new)
+p.write_text(s)
+PY
+sed -n '955,1010p' Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Core/KaihenNaviWindow.cs
+}
+
+            if (_selected != null) _selected.OnClosed();
+            _backup.Restore(_avatar, latest);
+            UndoHistory.Clear(_avatarId);
+            BuildNavigation();
+            BuildPanel();
+            RefreshFooter();
+        }
+
+        /// <summary>
+        /// 履歴のポップオーバー。GenericMenu は日付の「/」をサブメニューと解釈して
+        /// 月だけの項目（「10」など）が出るため使わず、UI Toolkit で作る。
+        /// </summary>
+        private void ToggleHistoryPopover()
+        {
+            if (_historyPopover != null)
+            {
+                HideHistoryPopover();
+                return;
+            }
+
+            ShowHistoryPopover();
+        }
+
+        private void ShowHistoryPopover()
+        {
+            if (_avatar == null || _historyButton == null) return;
+            HideHistoryPopover();
+
+            var popover = Ui.Box("kn-popover");
+            _historyPopover = popover;
+            rootVisualElement.Add(popover);
+
+            var header = Ui.Box("kn-popover__header");
+            header.Add(Ui.Text(L10n.Tr("history.title"), "kn-popover__title"));
+            header.Add(Ui.Button(L10n.Tr("history.close"), HideHistoryPopover, "kn-button--small", "kn-button--ghost"));
+            popover.Add(header);
+
+            var scroll = new ScrollView(ScrollViewMode.Vertical);
+            scroll.AddToClassList("kn-popover__scroll");
+            _historyContent = Ui.Box("kn-popover__content");
+            scroll.Add(_historyContent);
+            popover.Add(scroll);
+
+            var bounds = _historyButton.worldBound;
+            var rootBounds = rootVisualElement.worldBound;
+            var width = 320f;
+            popover.style.left = Mathf.Max(8f, Mathf.Min(bounds.xMax - rootBounds.x - width, rootBounds.width - width - 8f));
+            popover.style.top = bounds.yMax - rootBounds.y + 4f;
+
+            FillHistoryPopover();
+            rootVisualElement.RegisterCallback<PointerDownEvent>(OnHistoryPointerDown, TrickleDown.TrickleDown);
+            rootVisualElement.RegisterCallback<KeyDownEvent>(OnHistoryKeyDown, TrickleDown.TrickleDown);
+        }
+[0m
+[0m$ [0mcd /tmp/knbench-yjvgVG/kaihennavi-ds-c && python3 - <<'PY'
+from pathlib import Path
+base=Path('Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Localization')
+additions={
+'ja.json': '''  "history.item": "{0}　{1}の前",
+  "history.empty": "バックアップはまだありません",
+  "history.title": "これまでの操作",
+  "history.close": "閉じる",
+  "history.groupMeta": "{0} · 手順 {1} 件",
+  "history.restoreHere": "ここまで戻す",
+  "history.restoreStepMessage": "{0}（{1}）より前の状態に戻します。このあとの手順もいっしょに戻ります。よろしいですか？",
+  "history.noSteps": "このまとまりの細かい手順は残っていません。まとまりごと戻せます。",
+  "history.restoreGroup": "このまとまりの前に戻す",
+  "history.unavailable": "この手順は戻せません。バックアップも見つかりませんでした。",
+  "history.step.unknown": "操作",
+  "history.step.other": "操作（{0}）",
+  "history.step.move": "移動",
+  "history.step.create": "オブジェクトを追加",
+  "history.step.delete": "削除",
+  "history.step.duplicate": "複製",
+  "history.step.rename": "名前を変更",
+  "history.step.addComponent": "設定を追加",
+  "history.step.removeComponent": "設定を削除",
+  "history.step.paste": "貼り付け",''',
+'en.json': '''  "history.item": "{0}  before \\"{1}\\"",
+  "history.empty": "No backups yet",
+  "history.title": "Recent actions",
+  "history.close": "Close",
+  "history.groupMeta": "{0} · {1} steps",
+  "history.restoreHere": "Restore to here",
+  "history.restoreStepMessage": "Restore the state before \\"{0}\\" ({1})? Later steps will also be undone.",
+  "history.noSteps": "Detailed steps for this group are no longer available. You can restore the whole group.",
+  "history.restoreGroup": "Restore before this group",
+  "history.unavailable": "This step cannot be restored. No backup was found.",
+  "history.step.unknown": "Action",
+  "history.step.other": "Action ({0})",
+  "history.step.move": "Move",
+  "history.step.create": "Add object",
+  "history.step.delete": "Delete",
+  "history.step.duplicate": "Duplicate",
+  "history.step.rename": "Rename",
+  "history.step.addComponent": "Add settings",
+  "history.step.removeComponent": "Remove settings",
+  "history.step.paste": "Paste",''',
+'zh-Hans.json': '''  "history.item": "{0}　{1}之前",
+  "history.empty": "还没有备份",
+  "history.title": "操作历史",
+  "history.close": "关闭",
+  "history.groupMeta": "{0} · {1} 个步骤",
+  "history.restoreHere": "恢复到此处",
+  "history.restoreStepMessage": "恢复到“{0}”（{1}）之前的状态吗？之后的操作也会一并恢复。",
+  "history.noSteps": "这组操作的详细步骤已不在记录中。可以按整组恢复。",
+  "history.restoreGroup": "恢复到这组操作之前",
+  "history.unavailable": "无法恢复此步骤，也没有找到备份。",
+  "history.step.unknown": "操作",
+  "history.step.other": "操作（{0}）",
+  "history.step.move": "移动",
+  "history.step.create": "添加对象",
+  "history.step.delete": "删除",
+  "history.step.duplicate": "复制",
+  "history.step.rename": "重命名",
+  "history.step.addComponent": "添加设置",
+  "history.step.removeComponent": "删除设置",
+  "history.step.paste": "粘贴",''',
+'ko.json': '''  "history.item": "{0}　{1} 이전",
+  "history.empty": "아직 백업이 없습니다",
+  "history.title": "작업 기록",
+  "history.close": "닫기",
+  "history.groupMeta": "{0} · {1}단계",
+  "history.restoreHere": "여기까지 되돌리기",
+  "history.restoreStepMessage": "\\"{0}\\"({1}) 이전 상태로 되돌립니다. 이후 단계도 함께 되돌아갑니다. 계속할까요?",
+  "history.noSteps": "이 묶음의 자세한 단계는 남아 있지 않습니다. 묶음 단위로 되돌릴 수 있습니다.",
+  "history.restoreGroup": "이 묶음 이전으로 되돌리기",
+  "history.unavailable": "이 단계는 되돌릴 수 없고 백업도 찾지 못했습니다.",
+  "history.step.unknown": "작업",
+  "history.step.other": "작업({0})",
+  "history.step.move": "이동",
+  "history.step.create": "오브젝트 추가",
+  "history.step.delete": "삭제",
+  "history.step.duplicate": "복제",
+  "history.step.rename": "이름 변경",
+  "history.step.addComponent": "설정 추가",
+  "history.step.removeComponent": "설정 삭제",
+  "history.step.paste": "붙여넣기",''',
+}
+for name, addition in additions.items():
+    p=base/name
+    s=p.read_text()
+    old={
+      'ja.json':'  "history.item": "{0}　{1}の前",\n  "history.empty": "バックアップはまだありません",',
+      'en.json':'  "history.item": "{0}  before \\"{1}\\"",\n  "history.empty": "No backups yet",',
+      'zh-Hans.json':'  "history.item": "{0}　{1}之前",\n  "history.empty": "还没有备份",',
+      'ko.json':'  "history.item": "{0}　{1} 이전",\n  "history.empty": "아직 백업이 없습니다",',
+    }[name]
+    if old not in s: raise SystemExit(f'old not found {name}')
+    s=s.replace(old, addition, 1)
+    p.write_text(s)
+print('ok')
+PY
+python3 - <<'PY'
+import json,glob
+for f in glob.glob('Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Localization/*.json'):
+    d=json.load(open(f,encoding='utf-8'))
+    print(f, len(d))
+PY
+old not found zh-Hans.json
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Localization/ja.json 540
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Localization/en.json 540
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Localization/zh-Hans.json 522
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Localization/ko.json 522
+[0m
+[0m$ [0mcd /tmp/knbench-yjvgVG/kaihennavi-ds-c && sed -n '23,29p' Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Localization/zh-Hans.json && sed -n '23,29p' Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Localization/ko.json
+"restore.historyMessage": "要恢复到 {0}（“{1}”之前）的状态吗？比它更新的备份也会一并用完并删除。",
+  "restore.ok": "恢复",
+  "history.item": "{0}　“{1}”之前",
+  "history.empty": "还没有备份",
+  "dialog.ok": "确定",
+  "dialog.cancel": "取消",
+  "common.where": "定位",
+  "restore.historyMessage": "{0}(\"{1}\" 전)의 상태로 되돌릴까요? 이보다 새로운 백업도 함께 사용한 뒤 삭제됩니다.",
+  "restore.ok": "되돌리기",
+  "history.item": "{0}  \"{1}\" 전",
+  "history.empty": "아직 백업이 없습니다",
+  "dialog.ok": "확인",
+  "dialog.cancel": "취소",
+  "common.where": "위치 보기",
+[0m
+[0m$ [0mcd /tmp/knbench-yjvgVG/kaihennavi-ds-c && python3 - <<'PY'
+from pathlib import Path
+base=Path('Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Localization')
+additions={
+'zh-Hans.json': '''  "history.item": "{0}　“{1}”之前",
+  "history.empty": "还没有备份",
+  "history.title": "操作历史",
+  "history.close": "关闭",
+  "history.groupMeta": "{0} · {1} 个步骤",
+  "history.restoreHere": "恢复到此处",
+  "history.restoreStepMessage": "恢复到“{0}”（{1}）之前的状态吗？之后的操作也会一并恢复。",
+  "history.noSteps": "这组操作的详细步骤已不在记录中。可以按整组恢复。",
+  "history.restoreGroup": "恢复到这组操作之前",
+  "history.unavailable": "无法恢复此步骤，也没有找到备份。",
+  "history.step.unknown": "操作",
+  "history.step.other": "操作（{0}）",
+  "history.step.move": "移动",
+  "history.step.create": "添加对象",
+  "history.step.delete": "删除",
+  "history.step.duplicate": "复制",
+  "history.step.rename": "重命名",
+  "history.step.addComponent": "添加设置",
+  "history.step.removeComponent": "删除设置",
+  "history.step.paste": "粘贴",''',
+'ko.json': '''  "history.item": "{0}  \\"{1}\\" 전",
+  "history.empty": "아직 백업이 없습니다",
+  "history.title": "작업 기록",
+  "history.close": "닫기",
+  "history.groupMeta": "{0} · {1}단계",
+  "history.restoreHere": "여기까지 되돌리기",
+  "history.restoreStepMessage": "\\"{0}\\"({1}) 이전 상태로 되돌립니다. 이후 단계도 함께 되돌아갑니다. 계속할까요?",
+  "history.noSteps": "이 묶음의 자세한 단계는 남아 있지 않습니다. 묶음 단위로 되돌릴 수 있습니다.",
+  "history.restoreGroup": "이 묶음 이전으로 되돌리기",
+  "history.unavailable": "이 단계는 되돌릴 수 없고 백업도 찾지 못했습니다.",
+  "history.step.unknown": "작업",
+  "history.step.other": "작업({0})",
+  "history.step.move": "이동",
+  "history.step.create": "오브젝트 추가",
+  "history.step.delete": "삭제",
+  "history.step.duplicate": "복제",
+  "history.step.rename": "이름 변경",
+  "history.step.addComponent": "설정 추가",
+  "history.step.removeComponent": "설정 삭제",
+  "history.step.paste": "붙여넣기",''',
+}
+old={
+'zh-Hans.json':'  "history.item": "{0}　“{1}”之前",\n  "history.empty": "还没有备份",',
+'ko.json':'  "history.item": "{0}  \\"{1}\\" 전",\n  "history.empty": "아직 백업이 없습니다",',
+}
+for name, addition in additions.items():
+    p=base/name
+    s=p.read_text()
+    o=old[name]
+    if o not in s: raise SystemExit(f'old not found {name}')
+    s=s.replace(o, addition, 1)
+    p.write_text(s)
+print('ok')
+PY
+python3 - <<'PY'
+import json,glob
+base=None
+for f in sorted(glob.glob('Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Localization/*.json')):
+    d=json.load(open(f,encoding='utf-8'))
+    print(f, len(d))
+PY
+ok
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Localization/en.json 540
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Localization/ja.json 540
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Localization/ko.json 540
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Localization/zh-Hans.json 540
+[0m
+[0m$ [0mcd /tmp/knbench-yjvgVG/kaihennavi-ds-c && cat >> Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/UI/KaihenNavi.uss <<'EOF'
+/* 履歴。ウィンドウ内に出す小さなパネル（GenericMenu は使わない）。 */
+.kn-popover {
+    position: absolute;
+    width: 320px;
+    max-height: 380px;
+    padding: 6px;
+    border-width: 1px;
+    border-color: var(--kn-border);
+    border-radius: 6px;
+    background-color: var(--kn-surface);
+}
+.kn-popover__header { flex-direction: row; align-items: center; margin: 0 2px 6px 2px; flex-shrink: 0; }
+.kn-popover__title { flex-grow: 1; font-size: 12px; -unity-font-style: bold; color: var(--kn-text); margin: 0; white-space: normal; }
+.kn-popover__header .kn-button { margin: 0; }
+.kn-popover__scroll { max-height: 332px; }
+.kn-popover__content { flex-direction: column; }
+.kn-history__group-wrap { flex-shrink: 0; }
+.kn-history__group {
+    flex-direction: row;
+    align-items: center;
+    min-height: 38px;
+    height: auto;
+    margin: 0;
+    padding: 5px 8px;
+    border-width: 0;
+    border-radius: 4px;
+    background-color: transparent;
+    color: var(--kn-text);
+    -unity-text-align: middle-left;
+}
+.kn-history__group:hover { background-color: var(--kn-surface-hover); }
+.kn-history__texts { flex-grow: 1; flex-shrink: 1; min-width: 0; }
+.kn-history__title { font-size: 12px; color: var(--kn-text); white-space: normal; margin: 0; }
+.kn-history__meta { font-size: 11px; color: var(--kn-text-sub); white-space: normal; margin: 1px 0 0 0; }
+.kn-history__chevron { width: 16px; flex-shrink: 0; color: var(--kn-text-sub); -unity-text-align: middle-center; margin: 0 0 0 4px; }
+.kn-history__steps { margin: 0 0 6px 10px; padding-left: 8px; border-left-width: 1px; border-left-color: var(--kn-border); }
+.kn-history__step { flex-direction: row; align-items: center; min-height: 34px; padding: 3px 6px; border-radius: 4px; }
+.kn-history__step:hover { background-color: var(--kn-surface-hover); }
+.kn-history__restore { margin: 0 0 0 6px; }
+.kn-history__empty-row { flex-direction: row; flex-wrap: wrap; align-items: center; padding: 4px 6px; }
+.kn-history__empty-row .kn-history__meta { flex-grow: 1; flex-basis: 140px; }
+.kn-history__empty { color: var(--kn-text-sub); white-space: normal; margin: 8px; }
+EOF
+python3 tools/gen_meta.py
+created 1 .meta files
+[0m
+[0m$ [0mcd /tmp/knbench-yjvgVG/kaihennavi-ds-c && python3 - <<'PY'
+from pathlib import Path
+p=Path('tools/stubs/UnityStubs.cs')
+s=p.read_text()
+old='''        public static int GetCurrentGroup() { return 0; }
+        public static void SetCurrentGroupName(string n) { }'''
+new='''        public static int GetCurrentGroup() { return 0; }
+        public static string GetCurrentGroupName() { return ""; }
+        public static void SetCurrentGroupName(string n) { }'''
+if old not in s: raise SystemExit('not found')
+s=s.replace(old,new)
+p.write_text(s)
+PY
+bash tools/check.sh
+== NoMA
+/tmp/knbench-yjvgVG/kaihennavi-ds-c/Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Core/KaihenNaviWindow.cs(1032,39): error CS0246: The type or namespace name `KeyDownEvent' could not be found. Are you missing an assembly reference?
+Compilation failed: 1 error(s), 0 warnings
+[0m
+[0m$ [0mcd /tmp/knbench-yjvgVG/kaihennavi-ds-c && grep -n "class .*Event\|PointerDownEvent\|KeyDown\|TrickleDown" tools/stubs/UnityStubs.cs | head -60
+454:    public abstract class EventBase { public object target; }
+455:    public class MouseDownEvent : EventBase { public int clickCount; }
+456:    public class FocusOutEvent : EventBase { }
+457:    public class DragUpdatedEvent : EventBase { }
+458:    public abstract class PointerEventBase : EventBase
+463:    public class PointerDownEvent : PointerEventBase { }
+464:    public class PointerMoveEvent : PointerEventBase { }
+465:    public class PointerUpEvent : PointerEventBase { }
+489:    public class DragLeaveEvent : EventBase { }
+490:    public class DragPerformEvent : EventBase { }
+548:    public class ChangeEvent<T> : EventBase
+567:    public class Button : TextElement { public Action clicked; public Button() { } public Button(Action clickEvent) { } }
+586:    public class GeometryChangedEvent : EventBase { public UnityEngine.Rect newRect; }
+825:    public static class AssemblyReloadEvents
+[0m
+[0m$ [0mcd /tmp/knbench-yjvgVG/kaihennavi-ds-c && sed -n '430,475p' tools/stubs/UnityStubs.cs && sed -n '540,600p' tools/stubs/UnityStubs.cs
+{
+        public static implicit operator StyleFontDefinition(FontDefinition f) { return default(StyleFontDefinition); }
+    }
+
+    public interface IStyle
+    {
+        float flexGrow { get; set; }
+        StyleFontDefinition unityFontDefinition { get; set; }
+        StyleEnum<UnityEngine.FontStyle> unityFontStyleAndWeight { get; set; }
+        StyleEnum<DisplayStyle> display { get; set; }
+        StyleColor backgroundColor { get; set; }
+        StyleBackground backgroundImage { get; set; }
+        StyleLength paddingLeft { get; set; }
+        StyleLength minHeight { get; set; }
+    }
+
+    public class StyleSheet : UnityEngine.ScriptableObject { }
+
+    public class VisualElementStyleSheetSet
+    {
+        public bool Contains(StyleSheet s) { return false; }
+        public void Add(StyleSheet s) { }
+    }
+
+    public abstract class EventBase { public object target; }
+    public class MouseDownEvent : EventBase { public int clickCount; }
+    public class FocusOutEvent : EventBase { }
+    public class DragUpdatedEvent : EventBase { }
+    public abstract class PointerEventBase : EventBase
+    {
+        public UnityEngine.Vector3 localPosition;
+        public int pointerId;
+    }
+    public class PointerDownEvent : PointerEventBase { }
+    public class PointerMoveEvent : PointerEventBase { }
+    public class PointerUpEvent : PointerEventBase { }
+
+    public enum LineCap { Butt, Round, Square }
+    public enum LineJoin { Miter, Round, Bevel }
+
+    public class Painter2D
+    {
+        public float lineWidth;
+        public LineCap lineCap;
+        public LineJoin lineJoin;
+        public UnityEngine.Color strokeColor, fillColor;
+        public void AddToClassList(string c) { }
+        public void RemoveFromClassList(string c) { }
+        public void EnableInClassList(string c, bool enable) { }
+        public void SetEnabled(bool value) { }
+        public void RegisterCallback<T>(EventCallback<T> callback) where T : EventBase { }
+        public void UnregisterCallback<T>(EventCallback<T> callback) where T : EventBase { }
+    }
+
+    public class ChangeEvent<T> : EventBase
+    {
+        public T previousValue;
+        public T newValue;
+    }
+
+    public abstract class BaseField<T> : VisualElement
+    {
+        public T value;
+        public void SetValueWithoutNotify(T v) { }
+    }
+
+    public static class INotifyValueChangedExtensions
+    {
+        public static bool RegisterValueChangedCallback<T>(this BaseField<T> control, EventCallback<ChangeEvent<T>> callback) { return true; }
+    }
+
+    public class TextElement : VisualElement { public string text; }
+    public class Label : TextElement { public Label() { } public Label(string text) { } }
+    public class Button : TextElement { public Action clicked; public Button() { } public Button(Action clickEvent) { } }
+    public class Foldout : BaseField<bool> { public string text; }
+    public class Toggle : BaseField<bool> { public Toggle() { } public Toggle(string label) { } }
+    public class TextField : BaseField<string> { public string label; }
+    public class Slider : BaseField<float>
+    {
+        public Slider(string label, float start, float end) { }
+        public float lowValue, highValue;
+        public bool showInputField;
+    }
+
+    public class DropdownField : BaseField<string>
+    {
+        public DropdownField(List<string> choices, int defaultIndex) { }
+        public DropdownField(string label, List<string> choices, int defaultIndex) { }
+    }
+
+    public enum ScrollViewMode { Vertical, Horizontal }
+    public class ScrollView : VisualElement { public ScrollView(ScrollViewMode mode) { } public VisualElement contentViewport; }
+    public class GeometryChangedEvent : EventBase { public UnityEngine.Rect newRect; }
+}
+
+namespace UnityEditor.UIElements
+{
+    public class ColorField : UnityEngine.UIElements.BaseField<UnityEngine.Color>
+    {
+        public ColorField(string label) { }
+        public bool showAlpha, hdr;
+    }
+
+    public class ObjectField : UnityEngine.UIElements.BaseField<UnityEngine.Object>
+    {
+        public ObjectField(string label) { }
+        public Type objectType;
+[0m
+[0m$ [0mcd /tmp/knbench-yjvgVG/kaihennavi-ds-c && grep -n "TrickleDown\|enum KeyCode\|KeyCode" tools/stubs/UnityStubs.cs | head -20
+(no output)
+[0m
+[0m$ [0mcd /tmp/knbench-yjvgVG/kaihennavi-ds-c && grep -rn "TrickleDown\|KeyCode" tools/stubs || true
+(no output)
+[0m
+[0m$ [0mcd /tmp/knbench-yjvgVG/kaihennavi-ds-c && sed -n '1,60p' tools/stubs/UnityStubs.cs && grep -n "namespace UnityEngine.UIElements" tools/stubs/UnityStubs.cs
+// Unity なしでコンパイル確認をするための最小限のスタブ。
+// かいへんナビが使う API の「形」だけを真似ている。配布物には含めない。
+#pragma warning disable 0067, 0414, 0649, 1591
+using System;
+using System.Collections.Generic;
+
+namespace UnityEngine
+{
+    public enum FontStyle { Normal, Bold, Italic, BoldAndItalic }
+
+    public struct Rect
+    {
+        public float x, y, width, height;
+        public Rect(float x, float y, float w, float h) { this.x = x; this.y = y; width = w; height = h; }
+    }
+
+    public static class Resources
+    {
+        public static Func<Type, Object[]> FindForTests;
+        public static T[] FindObjectsOfTypeAll<T>() where T : Object
+        { return FindForTests == null ? new T[0] : Array.ConvertAll(FindForTests(typeof(T)), o => (T)o); }
+    }
+
+    public class Object
+    {
+        public string name;
+        public HideFlags hideFlags;
+        public int GetInstanceID() { return 0; }
+        public static Func<Object, Object> InstantiateForTests;
+        public static T Instantiate<T>(T original) where T : Object
+        { return InstantiateForTests == null ? original : (T)InstantiateForTests(original); }
+        public static void DestroyImmediate(Object o) { }
+        public static implicit operator bool(Object o) { return !ReferenceEquals(o, null); }
+    }
+
+    [Flags] public enum HideFlags { None = 0, HideInHierarchy = 1, DontSave = 52, HideAndDontSave = 61 }
+
+    public class Component : Object
+    {
+        public GameObject gameObject;
+        public Transform transform;
+        public T GetComponent<T>() { return default(T); }
+        public T[] GetComponents<T>() { return gameObject == null ? new T[0] : gameObject.GetComponents<T>(); }
+        public T[] GetComponentsInChildren<T>(bool includeInactive) { return gameObject == null ? new T[0] : gameObject.GetComponentsInChildren<T>(includeInactive); }
+        public T GetComponentInChildren<T>(bool includeInactive) { return default(T); }
+    }
+
+    public class Behaviour : Component { public bool enabled; }
+    public class MonoBehaviour : Behaviour { }
+
+    public class GameObject : Object
+    {
+        public GameObject() { }
+        public GameObject(string name) { }
+        public Transform transform;
+        public UnityEngine.SceneManagement.Scene scene;
+        public bool activeSelf;
+        public bool activeInHierarchy;
+        public string tag;
+        public int layer;
+400:namespace UnityEngine.UIElements
+[0m
+[0m$ [0mcd /tmp/knbench-yjvgVG/kaihennavi-ds-c && python3 - <<'PY'
+from pathlib import Path
+p=Path('tools/stubs/UnityStubs.cs')
+s=p.read_text()
+s=s.replace('namespace UnityEngine\n{\n    public enum FontStyle { Normal, Bold, Italic, BoldAndItalic }\n',
+'''namespace UnityEngine
+{
+    public enum FontStyle { Normal, Bold, Italic, BoldAndItalic }
+    public enum KeyCode { None, Escape, Return, KeypadEnter }
+''')
+s=s.replace('''    public class PointerDownEvent : PointerEventBase { }
+    public class PointerMoveEvent : PointerEventBase { }
+    public class PointerUpEvent : PointerEventBase { }
+''','''    public class PointerDownEvent : PointerEventBase { }
+    public class PointerMoveEvent : PointerEventBase { }
+    public class PointerUpEvent : PointerEventBase { }
+    public class KeyDownEvent : EventBase { public UnityEngine.KeyCode keyCode; public void StopPropagation() { } }
+    public enum TrickleDown { NoTrickleDown, TrickleDown }
+''')
+p.write_text(s)
+PY
+bash tools/check.sh
+== NoMA
+/tmp/knbench-yjvgVG/kaihennavi-ds-c/Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Core/KaihenNaviWindow.cs(1000,41): error CS1061: Type `UnityEngine.UIElements.Button' does not contain a definition for `worldBound' and no extension method `worldBound' of type `UnityEngine.UIElements.Button' could be found. Are you missing an assembly reference?
+/tmp/knbench-yjvgVG/kaihennavi-ds-c/tools/stubs/UnityStubs.cs(570,18): (Location of the symbol related to previous error)
+/tmp/knbench-yjvgVG/kaihennavi-ds-c/Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Core/KaihenNaviWindow.cs(1001,48): error CS1061: Type `UnityEngine.UIElements.VisualElement' does not contain a definition for `worldBound' and no extension method `worldBound' of type `UnityEngine.UIElements.VisualElement' could be found. Are you missing an assembly reference?
+/tmp/knbench-yjvgVG/kaihennavi-ds-c/tools/stubs/UnityStubs.cs(526,18): (Location of the symbol related to previous error)
+/tmp/knbench-yjvgVG/kaihennavi-ds-c/Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Core/KaihenNaviWindow.cs(1003,27): error CS1061: Type `UnityEngine.UIElements.IStyle' does not contain a definition for `left' and no extension method `left' of type `UnityEngine.UIElements.IStyle' could be found. Are you missing an assembly reference?
+/tmp/knbench-yjvgVG/kaihennavi-ds-c/tools/stubs/UnityStubs.cs(435,22): (Location of the symbol related to previous error)
+/tmp/knbench-yjvgVG/kaihennavi-ds-c/Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Core/KaihenNaviWindow.cs(1004,27): error CS1061: Type `UnityEngine.UIElements.IStyle' does not contain a definition for `top' and no extension method `top' of type `UnityEngine.UIElements.IStyle' could be found. Are you missing an assembly reference?
+/tmp/knbench-yjvgVG/kaihennavi-ds-c/tools/stubs/UnityStubs.cs(435,22): (Location of the symbol related to previous error)
+/tmp/knbench-yjvgVG/kaihennavi-ds-c/Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Core/KaihenNaviWindow.cs(1007,31): error CS1501: No overload for method `RegisterCallback' takes `2' arguments
+/tmp/knbench-yjvgVG/kaihennavi-ds-c/tools/stubs/UnityStubs.cs(547,21): (Location of the symbol related to previous error)
+/tmp/knbench-yjvgVG/kaihennavi-ds-c/Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Core/KaihenNaviWindow.cs(1008,31): error CS1501: No overload for method `RegisterCallback' takes `2' arguments
+/tmp/knbench-yjvgVG/kaihennavi-ds-c/tools/stubs/UnityStubs.cs(547,21): (Location of the symbol related to previous error)
+/tmp/knbench-yjvgVG/kaihennavi-ds-c/Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Core/KaihenNaviWindow.cs(1013,31): error CS1501: No overload for method `UnregisterCallback' takes `2' arguments
+/tmp/knbench-yjvgVG/kaihennavi-ds-c/tools/stubs/UnityStubs.cs(548,21): (Location of the symbol related to previous error)
+/tmp/knbench-yjvgVG/kaihennavi-ds-c/Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Core/KaihenNaviWindow.cs(1014,31): error CS1501: No overload for method `UnregisterCallback' takes `2' arguments
+/tmp/knbench-yjvgVG/kaihennavi-ds-c/tools/stubs/UnityStubs.cs(548,21): (Location of the symbol related to previous error)
+/tmp/knbench-yjvgVG/kaihennavi-ds-c/Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Core/KaihenNaviWindow.cs(1015,58): error CS1061: Type `UnityEngine.UIElements.VisualElement' does not contain a definition for `RemoveFromHierarchy' and no extension method `RemoveFromHierarchy' of type `UnityEngine.UIElements.VisualElement' could be found. Are you missing an assembly reference?
+/tmp/knbench-yjvgVG/kaihennavi-ds-c/tools/stubs/UnityStubs.cs(526,18): (Location of the symbol related to previous error)
+/tmp/knbench-yjvgVG/kaihennavi-ds-c/Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Core/KaihenNaviWindow.cs(1024,75): error CS1061: Type `UnityEngine.UIElements.VisualElement' does not contain a definition for `parent' and no extension method `parent' of type `UnityEngine.UIElements.VisualElement' could be found. Are you missing an assembly reference?
+/tmp/knbench-yjvgVG/kaihennavi-ds-c/tools/stubs/UnityStubs.cs(526,18): (Location of the symbol related to previous error)
+/tmp/knbench-yjvgVG/kaihennavi-ds-c/Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Core/UndoHistory.cs(42,31): error CS0117: `UnityEditor.EditorApplication' does not contain a definition for `update'
+/tmp/knbench-yjvgVG/kaihennavi-ds-c/tools/stubs/UnityStubs.cs(833,25): (Location of the symbol related to previous error)
+/tmp/knbench-yjvgVG/kaihennavi-ds-c/Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Core/UndoHistory.cs(50,31): error CS0117: `UnityEditor.EditorApplication' does not contain a definition for `update'
+/tmp/knbench-yjvgVG/kaihennavi-ds-c/tools/stubs/UnityStubs.cs(833,25): (Location of the symbol related to previous error)
+Compilation failed: 12 error(s), 0 warnings
+[0m
+[0m$ [0mcd /tmp/knbench-yjvgVG/kaihennavi-ds-c && sed -n '400,455p' tools/stubs/UnityStubs.cs && sed -n '505,560p' tools/stubs/UnityStubs.cs && sed -n '825,850p' tools/stubs/UnityStubs.cs
+namespace UnityEngine.UIElements
+{
+    public struct StyleBackground
+    {
+        public StyleBackground(UnityEngine.Texture2D t) { }
+    }
+
+    public struct StyleColor
+    {
+        public static implicit operator StyleColor(UnityEngine.Color c) { return default(StyleColor); }
+    }
+
+    public struct StyleLength
+    {
+        public static implicit operator StyleLength(float f) { return default(StyleLength); }
+    }
+
+    public enum DisplayStyle { Flex, None }
+
+    public struct StyleEnum<T> where T : struct
+    {
+        public static implicit operator StyleEnum<T>(T v) { return default(StyleEnum<T>); }
+    }
+
+    public struct FontDefinition
+    {
+        public static FontDefinition FromSDFFont(UnityEngine.TextCore.Text.FontAsset f) { return default(FontDefinition); }
+    }
+
+    public struct StyleFontDefinition
+    {
+        public static implicit operator StyleFontDefinition(FontDefinition f) { return default(StyleFontDefinition); }
+    }
+
+    public interface IStyle
+    {
+        float flexGrow { get; set; }
+        StyleFontDefinition unityFontDefinition { get; set; }
+        StyleEnum<UnityEngine.FontStyle> unityFontStyleAndWeight { get; set; }
+        StyleEnum<DisplayStyle> display { get; set; }
+        StyleColor backgroundColor { get; set; }
+        StyleBackground backgroundImage { get; set; }
+        StyleLength paddingLeft { get; set; }
+        StyleLength minHeight { get; set; }
+    }
+
+    public class StyleSheet : UnityEngine.ScriptableObject { }
+
+    public class VisualElementStyleSheetSet
+    {
+        public bool Contains(StyleSheet s) { return false; }
+        public void Add(StyleSheet s) { }
+    }
+
+    public abstract class EventBase { public object target; }
+        IVisualElementScheduledItem Execute(Action timerUpdateEvent);
+    }
+
+    public interface IResolvedStyle
+    {
+        UnityEngine.FontStyle unityFontStyleAndWeight { get; }
+        UnityEngine.Color color { get; }
+    }
+
+    public struct UQueryBuilder<T> where T : VisualElement
+    {
+        public void ForEach(Action<T> funcCall) { }
+    }
+
+    public static class UQueryExtensions
+    {
+        public static UQueryBuilder<T> Query<T>(this VisualElement e) where T : VisualElement { return default(UQueryBuilder<T>); }
+    }
+
+    public interface IPanel { }
+
+    public class VisualElement
+    {
+        public UnityEngine.Rect layout;
+        public IStyle style;
+        public IPanel panel;
+        public IResolvedStyle resolvedStyle;
+        public IVisualElementScheduler schedule;
+        public bool ClassListContains(string c) { return false; }
+        public UnityEngine.Rect contentRect;
+        public Action<MeshGenerationContext> generateVisualContent;
+        public void MarkDirtyRepaint() { }
+        public void CapturePointer(int id) { }
+        public void ReleasePointer(int id) { }
+        public string tooltip;
+        public VisualElementStyleSheetSet styleSheets;
+        public void Add(VisualElement child) { }
+        public void Clear() { }
+        public void AddToClassList(string c) { }
+        public void RemoveFromClassList(string c) { }
+        public void EnableInClassList(string c, bool enable) { }
+        public void SetEnabled(bool value) { }
+        public void RegisterCallback<T>(EventCallback<T> callback) where T : EventBase { }
+        public void UnregisterCallback<T>(EventCallback<T> callback) where T : EventBase { }
+    }
+
+    public class ChangeEvent<T> : EventBase
+    {
+        public T previousValue;
+        public T newValue;
+    }
+
+    public abstract class BaseField<T> : VisualElement
+    {
+        public T value;
+        public void SetValueWithoutNotify(T v) { }
+        public static void PingObject(Object o) { }
+    }
+
+    public static class AssemblyReloadEvents
+    {
+        public static Action beforeAssemblyReload;
+    }
+
+    public static class EditorApplication
+    {
+        public static double timeSinceStartup;
+        public static bool isPlayingOrWillChangePlaymode;
+        public static Action hierarchyChanged;
+        public static bool ExecuteMenuItem(string path) { return false; }
+        public static Action<PlayModeStateChange> playModeStateChanged;
+        public static CallbackFunction delayCall;
+        public delegate void CallbackFunction();
+    }
+
+    public static class Selection
+    {
+        public static GameObject activeGameObject;
+        public static Transform activeTransform;
+    }
+
+    public class SceneView : EditorWindow
+[0m
+[0m$ [0mcd /tmp/knbench-yjvgVG/kaihennavi-ds-c && python3 - <<'PY'
+from pathlib import Path
+p=Path('tools/stubs/UnityStubs.cs')
+s=p.read_text()
+s=s.replace('''        StyleLength paddingLeft { get; set; }
+        StyleLength minHeight { get; set; }
+    }''','''        StyleLength paddingLeft { get; set; }
+        StyleLength minHeight { get; set; }
+        StyleLength left { get; set; }
+        StyleLength top { get; set; }
+    }''')
+s=s.replace('''        public UnityEngine.Rect layout;
+        public IStyle style;''','''        public UnityEngine.Rect layout;
+        public UnityEngine.Rect worldBound;
+        public VisualElement parent;
+        public IStyle style;''')
+s=s.replace('''        public void RegisterCallback<T>(EventCallback<T> callback) where T : EventBase { }
+        public void UnregisterCallback<T>(EventCallback<T> callback) where T : EventBase { }
+    }''','''        public void RegisterCallback<T>(EventCallback<T> callback) where T : EventBase { }
+        public void RegisterCallback<T>(EventCallback<T> callback, TrickleDown useTrickleDown) where T : EventBase { }
+        public void UnregisterCallback<T>(EventCallback<T> callback) where T : EventBase { }
+        public void UnregisterCallback<T>(EventCallback<T> callback, TrickleDown useTrickleDown) where T : EventBase { }
+        public void RemoveFromHierarchy() { }
+    }''')
+s=s.replace('''        public static Action hierarchyChanged;
+        public static bool ExecuteMenuItem(string path) { return false; }''','''        public static Action hierarchyChanged;
+        public static Action update;
+        public static bool ExecuteMenuItem(string path) { return false; }''')
+p.write_text(s)
+PY
+bash tools/check.sh
+== NoMA
+/tmp/knbench-yjvgVG/kaihennavi-ds-c/Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Core/KaihenNaviWindow.cs(1003,65): error CS1061: Type `UnityEngine.Rect' does not contain a definition for `xMax' and no extension method `xMax' of type `UnityEngine.Rect' could be found. Are you missing an assembly reference?
+/tmp/knbench-yjvgVG/kaihennavi-ds-c/tools/stubs/UnityStubs.cs(12,19): (Location of the symbol related to previous error)
+/tmp/knbench-yjvgVG/kaihennavi-ds-c/Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Core/KaihenNaviWindow.cs(1004,40): error CS1061: Type `UnityEngine.Rect' does not contain a definition for `yMax' and no extension method `yMax' of type `UnityEngine.Rect' could be found. Are you missing an assembly reference?
+/tmp/knbench-yjvgVG/kaihennavi-ds-c/tools/stubs/UnityStubs.cs(12,19): (Location of the symbol related to previous error)
+Compilation failed: 2 error(s), 0 warnings
+[0m
+[0m$ [0mcd /tmp/knbench-yjvgVG/kaihennavi-ds-c && python3 - <<'PY'
+from pathlib import Path
+p=Path('tools/stubs/UnityStubs.cs')
+s=p.read_text()
+s=s.replace('''        public Rect(float x, float y, float w, float h) { this.x = x; this.y = y; width = w; height = h; }
+    }''','''        public Rect(float x, float y, float w, float h) { this.x = x; this.y = y; width = w; height = h; }
+        public float xMin { get { return x; } }
+        public float yMin { get { return y; } }
+        public float xMax { get { return x + width; } }
+        public float yMax { get { return y + height; } }
+    }''')
+p.write_text(s)
+PY
+bash tools/check.sh
+== NoMA
+== WithMA
+== Full
+== Localization OK (540 keys)
+KonoAsset checks passed (34). JSON, image decoding and Undo require Unity.
+External source files unchanged.
+All checks passed.
+[0m
+[0m$ [0mcd /tmp/knbench-yjvgVG/kaihennavi-ds-c && sed -n '590,740p' Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Core/KaihenNaviWindow.cs && sed -n '890,950p' Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Core/KaihenNaviWindow.cs
+SaveNow();
+        }
+
+        /// <summary>今すぐ保存する（ウィンドウを閉じる・シーンを閉じる・Play の前など）。</summary>
+        /// <param name="manual">「保存」ボタンから呼んだとき true（変更がなくても保存時刻を更新する）。</param>
+        private void SaveNow(bool manual = false)
+        {
+            if (_avatar == null) return;
+            var materialsChanged = HasUnsavedMaterials();
+            MyAvatar.SaveMaterials(_avatar);
+            var saved = MyAvatar.Save(_avatar);
+            _savedGroup = Undo.GetCurrentGroup();
+            if (saved || materialsChanged || manual) _lastSavedAt = System.DateTime.Now;
+            UpdateSaveLabel();
+        }
+
+        private void OnPlayModeChanged(PlayModeStateChange change)
+        {
+            if (change == PlayModeStateChange.ExitingEditMode) SaveNow();
+        }
+
+        private void OnSceneClosing(UnityEngine.SceneManagement.Scene scene, bool removingScene)
+        {
+            SaveNow();
+        }
+
+        private void BuildNavigation()
+        {
+            _navigationHierarchyHash = HierarchyHash(true);
+            _navigationList.Clear();
+            _navigationFooter.Clear();
+            _navigationItems.Clear();
+            _navigationBadges.Clear();
+            _navigationDone.Clear();
+            _compactArea.Clear();
+            _navigationFeatures = new List<FeatureBase>();
+            foreach (var group in _features.GroupBy(f => f.Group))
+            {
+                _navigationList.Add(Ui.Text(L10n.Tr("nav.group." + group.Key), "kn-nav-group"));
+                foreach (var feature in group)
+                {
+                    var f = feature;
+                    _navigationFeatures.Add(f);
+                    var item = new Button(() => SelectFeature(f));
+                    item.AddToClassList("kn-nav-item");
+                    item.tooltip = f.Title + "\n" + f.Description;
+                    item.Add(Ui.Box("kn-nav-item__indicator"));
+                    item.Add(Ui.NavigationIcon(f.Id));
+                    item.Add(Ui.Text(f.NavTitle, "kn-nav-item__title"));
+                    // 件数と完了の印は、ヒエラルキーが変わったときにもここだけ更新する。
+                    var badge = Ui.Text("", "kn-nav-badge");
+                    _navigationBadges[f] = badge;
+                    item.Add(badge);
+                    var done = Ui.NavigationIcon("check");
+                    done.AddToClassList("kn-nav-done");
+                    _navigationDone[f] = done;
+                    item.Add(done);
+                    // Unity のアイコン取得に依存せず、製品版の表示を常に保証する。
+                    if (f.Locked) item.Add(Ui.Text(L10n.Tr("card.full"), "kn-nav-item__lock"));
+                    _navigationList.Add(item);
+                    _navigationItems[f] = item;
+                }
+            }
+
+            _uploadNavigationItem = new Button(SelectUploadCheck);
+            _uploadNavigationItem.AddToClassList("kn-nav-item");
+            _uploadNavigationItem.Add(Ui.Box("kn-nav-item__indicator"));
+            _uploadNavigationItem.Add(Ui.NavigationIcon("uploadCheck"));
+            _uploadNavigationItem.Add(Ui.Text(L10n.Tr("nav.uploadCheck"), "kn-nav-item__title"));
+            _uploadBadge = Ui.Text("", "kn-nav-badge", "kn-nav-badge--warn");
+            _uploadNavigationItem.Add(_uploadBadge);
+            _navigationFooter.Add(_uploadNavigationItem);
+
+            _featureChoices = new List<string> { L10n.Tr("nav.chooseFeature") };
+            _featureChoices.AddRange(_navigationFeatures.Select(f => L10n.Tr("nav.group." + f.Group) + " / " + f.NavTitle +
+                (f.Locked ? " (" + L10n.Tr("card.full") + ")" : "")));
+            _featureChoices.Add(L10n.Tr("nav.uploadCheck"));
+            _featurePopup = new PopupField<string>(_featureChoices, 0);
+            _featurePopup.AddToClassList("kn-feature-popup");
+            _featurePopup.tooltip = L10n.Tr("nav.chooseFeature");
+            _featurePopup.RegisterValueChangedCallback(e =>
+            {
+                var index = _featureChoices.IndexOf(e.newValue) - 1;
+                if (index == _navigationFeatures.Count) SelectUploadCheck();
+                else if (index >= 0) SelectFeature(_navigationFeatures[index]);
+                else UpdateNavigationSelection();
+            });
+            _compactArea.Add(_featurePopup);
+            UpdateNavigationSelection();
+            RefreshNavigationBadges();
+            RefreshUploadCheck();
+        }
+
+        /// <summary>
+        /// ナビの件数・完了の印だけを更新する。ヒエラルキーの変化で一覧そのものは変わらないので、
+        /// ボタンや文字を作り直さない（作り直すと太字フォントの当て直しなどで画面がちらつく）。
+        /// </summary>
+        private void RefreshNavigationBadges()
+        {
+            foreach (var pair in _navigationBadges)
+            {
+                var text = pair.Key.NavBadge(_avatar);
+                pair.Value.text = text ?? "";
+                pair.Value.style.display = string.IsNullOrEmpty(text) ? DisplayStyle.None : DisplayStyle.Flex;
+            }
+
+            foreach (var pair in _navigationDone)
+                pair.Value.style.display = pair.Key.IsDone(_avatar) ? DisplayStyle.Flex : DisplayStyle.None;
+        }
+
+        private void UpdateNavigationSelection()
+        {
+            foreach (var pair in _navigationItems)
+                pair.Value.EnableInClassList("kn-nav-item--selected", pair.Key == _selected);
+            if (_uploadNavigationItem != null)
+                _uploadNavigationItem.EnableInClassList("kn-nav-item--selected", _featureId == "uploadCheck");
+            if (_featurePopup != null)
+                _featurePopup.SetValueWithoutNotify(_featureChoices[_featureId == "uploadCheck" ?
+                    _featureChoices.Count - 1 : _navigationFeatures.IndexOf(_selected) + 1]);
+        }
+
+        private void BuildPanel()
+        {
+            // 手動更新や機能切り替えでも比較の基準を更新し、同じ変更で二度作り直さない。
+            _panelHierarchyHash = HierarchyHash();
+            _panelArea.Clear();
+            _pageHeader.Clear();
+            _panelArea.EnableInClassList("kn-panel--empty", _selected == null && _featureId != "uploadCheck");
+            if (_featureId == "uploadCheck")
+            {
+                BuildUploadCheckPage();
+                return;
+            }
+            if (_selected == null)
+            {
+                _panelArea.Add(Ui.Text(L10n.Tr(_compact ? "nav.emptyCompact" : "nav.empty"), "kn-empty"));
+                return;
+            }
+
+            var header = Ui.Box("kn-page-header__row");
+            var titles = Ui.Box("kn-page-header__texts");
+            titles.Add(Ui.Text(_selected.Title, "kn-page-title"));
+            titles.Add(Ui.Text(_selected.Description, "kn-page-description"));
+            header.Add(titles);
+            var refresh = Ui.Button(L10n.Tr("panel.refresh"), () => BuildPanel(), "kn-button--small", "kn-button--ghost");
+            refresh.tooltip = L10n.Tr("panel.refreshTip");
+            header.Add(refresh);
+            _pageHeader.Add(header);
+
+            if (_selected.Locked)
+            {
+        private void QueueScan()
+        {
+            if (_scanQueued) return;
+            _scanQueued = true;
+            // 同じフレームの変更をまとめ、入力イベントの処理が終わってから作り直す。
+            EditorApplication.delayCall += RunQueuedScan;
+        }
+
+        private void RunQueuedScan()
+        {
+            _scanQueued = false;
+            if (this == null || _avatarArea == null) return;
+
+            var before = _avatars.ToList();
+            var current = _avatar;
+            ScanAvatars();
+
+            if (!before.SequenceEqual(_avatars) || current != _avatar) BuildAvatarArea();
+            if (current != _avatar)
+            {
+                BuildPanel();
+                RefreshFooter();
+            }
+            else if (_avatar != null && _selected != null && _selected.RefreshOnHierarchyChange &&
+                     HierarchyHash() != _panelHierarchyHash)
+            {
+                // ツール自身のスライダーなどで通知されても、構成が同じなら入力を保つ。
+                BuildPanel();
+            }
+
+            // 位置だけの変更では件数を数え直さず、服やアクセの構成が変わったときだけナビを更新する。
+            var navigationHash = HierarchyHash(true);
+            if (current != _avatar)
+            {
+                BuildNavigation();
+            }
+            else if (navigationHash != _navigationHierarchyHash)
+            {
+                // ナビ全体は作り直さず、件数と完了の印だけを更新する
+                _navigationHierarchyHash = navigationHash;
+                RefreshNavigationBadges();
+                RefreshUploadCheck();
+            }
+            else
+            {
+                RefreshUploadCheck();
+            }
+        }
+
+        // ---------------------------------------------------------------- 元に戻す
+
+        private void RestoreLatest()
+        {
+            if (_avatar == null) return;
+            var list = _backup.List(_avatar);
+            if (list.Count == 0) return;
+
+            var latest = list[0];
+            if (!EditorUtility.DisplayDialog(
+                    L10n.Tr("restore.title"),
+                    L10n.Tr("restore.message", latest.CreatedAt.ToString("M/d HH:mm"), FeatureTitle(latest.featureId)),
+[0m
+[0m$ [0mcd /tmp/knbench-yjvgVG/kaihennavi-ds-c && git status --short && git diff --stat && git diff -- Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Features/BodyFeature.cs | sed -n '1,240p'
+M Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Core/BackupService.cs
+ M Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Core/KaihenNaviWindow.cs
+ M Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Features/BodyFeature.cs
+ M Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Localization/en.json
+ M Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Localization/ja.json
+ M Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Localization/ko.json
+ M Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Localization/zh-Hans.json
+ M Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/UI/KaihenNavi.uss
+ M tools/stubs/UnityStubs.cs
+?? Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Core/UndoHistory.cs
+?? Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Core/UndoHistory.cs.meta
+ .../Editor/Core/BackupService.cs                   |  14 +
+ .../Editor/Core/KaihenNaviWindow.cs                | 306 +++++++++++++++++++--
+ .../Editor/Features/BodyFeature.cs                 |  74 ++++-
+ .../Editor/Localization/en.json                    |  18 ++
+ .../Editor/Localization/ja.json                    |  18 ++
+ .../Editor/Localization/ko.json                    |  18 ++
+ .../Editor/Localization/zh-Hans.json               |  18 ++
+ .../Editor/UI/KaihenNavi.uss                       |  42 +++
+ tools/stubs/UnityStubs.cs                          |  16 ++
+ 9 files changed, 487 insertions(+), 37 deletions(-)
+diff --git a/Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Features/BodyFeature.cs b/Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Features/BodyFeature.cs
+index 69a718a..ffd334f 100644
+--- a/Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Features/BodyFeature.cs
++++ b/Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Features/BodyFeature.cs
+@@ -57,6 +57,9 @@ namespace Jeni.KaihenNavi
+         private readonly Dictionary<HumanBodyBones, Vector2> _points = new Dictionary<HumanBodyBones, Vector2>();
+         private readonly List<KeyValuePair<HumanBodyBones, HumanBodyBones>> _lines = new List<KeyValuePair<HumanBodyBones, HumanBodyBones>>();
+         private VisualElement _canvas;
++        private VisualElement _parts;
++        private VisualElement _controls;
++        private readonly List<Button> _partButtons = new List<Button>();
+         private Slider _length;
+         private Slider _width;
+         private Label _heightLabel;
+@@ -94,7 +97,8 @@ namespace Jeni.KaihenNavi
+             layout.Add(_canvas);
+ 
+             var side = Ui.Box("kn-figure__side");
+-            side.Add(BuildPartList(ctx));
++            _parts = BuildPartList(ctx);
++            side.Add(_parts);
+             layout.Add(side);
+             root.Add(layout);
+ 
+@@ -110,9 +114,18 @@ namespace Jeni.KaihenNavi
+         public override void OnClosed()
+         {
+ #if KAIHENNAVI_MA
++            if (_refresh != null)
++            {
++                _refresh.Pause();
++                _refresh = null;
++            }
++
+             if (_silhouette != null) Object.DestroyImmediate(_silhouette);
+             _silhouette = null;
+             _canvas = null;
++            _parts = null;
++            _controls = null;
++            _partButtons.Clear();
+ #endif
+         }
+ 
+@@ -122,25 +135,59 @@ namespace Jeni.KaihenNavi
+         private VisualElement BuildPartList(FeatureContext ctx)
+         {
+             var list = Ui.Box("kn-figure__parts");
++            _partButtons.Clear();
+             for (var i = 0; i < Groups.Length; i++)
+             {
+                 var index = i;
+-                var button = Ui.Button(L10n.Tr(Groups[i].Key), () =>
+-                {
+-                    _selected = index;
+-                    UndoHelper.Separate();
+-                    ctx.Rebuild();
+-                }, "kn-button--small", "kn-figure__part");
++                var button = Ui.Button(L10n.Tr(Groups[i].Key), () => SelectPart(ctx, index),
++                    "kn-button--small", "kn-figure__part");
+                 if (i == _selected) button.AddToClassList("kn-figure__part--selected");
+                 list.Add(button);
++                _partButtons.Add(button);
+             }
+ 
+             return list;
+         }
+ 
++        /// <summary>
++        /// 部位を選び直す。ウィンドウ全体は作り直さず、このページの選択表示と操作欄、影絵の点だけ更新する。
++        /// </summary>
++        private void SelectPart(FeatureContext ctx, int index)
++        {
++            if (index < 0 || index >= Groups.Length || index == _selected) return;
++            _selected = index;
++            UpdatePartSelection();
++            RefreshControls(ctx);
++            if (_canvas != null) _canvas.MarkDirtyRepaint();
++        }
++
++        private void UpdatePartSelection()
++        {
++            for (var i = 0; i < _partButtons.Count; i++)
++                _partButtons[i].EnableInClassList("kn-figure__part--selected", i == _selected);
++        }
++
+         private VisualElement BuildControls(FeatureContext ctx)
+         {
+-            var box = Ui.Box("kn-figure__controls");
++            _controls = Ui.Box("kn-figure__controls");
++            FillControls(ctx);
++            return _controls;
++        }
++
++        /// <summary>操作欄だけを作り直す（部位を変えたとき・戻したとき）。</summary>
++        private void RefreshControls(FeatureContext ctx)
++        {
++            if (_controls == null) return;
++            FillControls(ctx);
++        }
++
++        private void FillControls(FeatureContext ctx)
++        {
++            var box = _controls;
++            box.Clear();
++            _length = null;
++            _width = null;
++            _heightLabel = null;
+             var group = Groups[_selected];
+             box.Add(Ui.Heading(L10n.Tr(group.Key)));
+ 
+@@ -182,7 +229,6 @@ namespace Jeni.KaihenNavi
+             buttons.Add(Ui.Button(L10n.Tr("body.resetAll"), () => ResetAll(ctx), "kn-button--small", "kn-button--ghost"));
+             box.Add(buttons);
+             box.Add(Ui.Text(L10n.Tr(group.Whole ? "body.dragHintWhole" : "body.dragHint"), "kn-hint"));
+-            return box;
+         }
+ 
+         // ---------------------------------------------------------------- シルエットとボーン図
+@@ -379,9 +425,7 @@ namespace Jeni.KaihenNavi
+             if (hit < 0) return;
+             if (hit != _selected)
+             {
+-                _selected = hit;
+-                UndoHelper.Separate();
+-                ctx.Rebuild();
++                SelectPart(ctx, hit);
+                 return;
+             }
+ 
+@@ -488,7 +532,8 @@ namespace Jeni.KaihenNavi
+             }
+ 
+             UndoHelper.Separate();
+-            ctx.Rebuild();
++            RefreshControls(ctx);
++            Refresh();
+         }
+ 
+         private void ResetAll(FeatureContext ctx)
+@@ -508,7 +553,8 @@ namespace Jeni.KaihenNavi
+ 
+             SetHeight(ctx, 100f);
+             UndoHelper.Separate();
+-            ctx.Rebuild();
++            RefreshControls(ctx);
++            Refresh();
+         }
+ 
+         private static void RemoveAdjuster(VRCAvatarDescriptor avatar, Transform bone)
+[0m
+[0m$ [0mcd /tmp/knbench-yjvgVG/kaihennavi-ds-c && sed -n '1000,1210p' Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Core/KaihenNaviWindow.cs
+var bounds = _historyButton.worldBound;
+            var rootBounds = rootVisualElement.worldBound;
+            var width = 320f;
+            popover.style.left = Mathf.Max(8f, Mathf.Min(bounds.xMax - rootBounds.x - width, rootBounds.width - width - 8f));
+            popover.style.top = bounds.yMax - rootBounds.y + 4f;
+
+            FillHistoryPopover();
+            rootVisualElement.RegisterCallback<PointerDownEvent>(OnHistoryPointerDown, TrickleDown.TrickleDown);
+            rootVisualElement.RegisterCallback<KeyDownEvent>(OnHistoryKeyDown, TrickleDown.TrickleDown);
+        }
+
+        private void HideHistoryPopover()
+        {
+            rootVisualElement.UnregisterCallback<PointerDownEvent>(OnHistoryPointerDown, TrickleDown.TrickleDown);
+            rootVisualElement.UnregisterCallback<KeyDownEvent>(OnHistoryKeyDown, TrickleDown.TrickleDown);
+            if (_historyPopover != null) _historyPopover.RemoveFromHierarchy();
+            _historyPopover = null;
+            _historyContent = null;
+        }
+
+        private void OnHistoryPointerDown(PointerDownEvent e)
+        {
+            if (_historyPopover == null) return;
+            var target = e.target as VisualElement;
+            for (var element = target; element != null; element = element.parent)
+            {
+                if (element == _historyPopover || element == _historyButton) return;
+            }
+
+            HideHistoryPopover();
+        }
+
+        private void OnHistoryKeyDown(KeyDownEvent e)
+        {
+            if (e.keyCode != KeyCode.Escape) return;
+            HideHistoryPopover();
+            e.StopPropagation();
+        }
+
+        /// <summary>
+        /// 1 段目は自動バックアップのまとまり（機能・時刻）、2 段目は Undo の 1 手順。
+        /// まとまりの時刻から次のまとまりまでを、そのまとまりの手順として並べる。
+        /// </summary>
+        private void FillHistoryPopover()
+        {
+            if (_historyContent == null || _avatar == null) return;
+            _historyContent.Clear();
+
+            var snapshots = _backup.List(_avatar);
+            var steps = UndoHistory.List(BackupService.AvatarId(_avatar));
+            if (snapshots.Count == 0)
+            {
+                _historyContent.Add(Ui.Text(L10n.Tr("history.empty"), "kn-history__empty"));
+                return;
+            }
+
+            var bySnapshot = new Dictionary<long, List<UndoHistory.Step>>();
+            foreach (var step in steps)
+            {
+                BackupSnapshot owner = null;
+                foreach (var snapshot in snapshots)
+                {
+                    if (step.Time < snapshot.CreatedAt) continue;
+                    owner = snapshot;
+                    break;
+                }
+
+                if (owner == null) continue;
+                List<UndoHistory.Step> list;
+                if (!bySnapshot.TryGetValue(owner.createdTicks, out list))
+                {
+                    list = new List<UndoHistory.Step>();
+                    bySnapshot[owner.createdTicks] = list;
+                }
+
+                list.Add(step);
+            }
+
+            var expandedStillExists = false;
+            foreach (var snapshot in snapshots)
+            {
+                List<UndoHistory.Step> groupSteps;
+                if (!bySnapshot.TryGetValue(snapshot.createdTicks, out groupSteps)) groupSteps = new List<UndoHistory.Step>();
+                if (snapshot.createdTicks == _historyExpanded) expandedStillExists = true;
+                _historyContent.Add(BuildHistoryGroup(snapshot, groupSteps));
+            }
+
+            if (!expandedStillExists) _historyExpanded = long.MinValue;
+        }
+
+        private VisualElement BuildHistoryGroup(BackupSnapshot snapshot, List<UndoHistory.Step> steps)
+        {
+            var expanded = snapshot.createdTicks == _historyExpanded;
+            var group = Ui.Box("kn-history__group-wrap");
+
+            var row = new Button(() =>
+                {
+                    _historyExpanded = expanded ? long.MinValue : snapshot.createdTicks;
+                    FillHistoryPopover();
+                });
+            row.AddToClassList("kn-history__group");
+            var texts = Ui.Box("kn-history__texts");
+            texts.Add(Ui.Text(FeatureTitle(snapshot.featureId), "kn-history__title"));
+            texts.Add(Ui.Text(L10n.Tr("history.groupMeta", snapshot.CreatedAt.ToString("M/d HH:mm"), steps.Count), "kn-history__meta"));
+            row.Add(texts);
+            row.Add(Ui.Text(expanded ? "▾" : "▸", "kn-history__chevron"));
+            group.Add(row);
+
+            if (!expanded) return group;
+            var list = Ui.Box("kn-history__steps");
+            if (steps.Count == 0)
+            {
+                var empty = Ui.Box("kn-history__empty-row");
+                empty.Add(Ui.Text(L10n.Tr("history.noSteps"), "kn-history__meta"));
+                empty.Add(Ui.Button(L10n.Tr("history.restoreGroup"), () => RestoreFromHistory(snapshot),
+                    "kn-button--small", "kn-button--ghost"));
+                list.Add(empty);
+            }
+            else
+            {
+                foreach (var step in steps)
+                {
+                    var rowStep = step;
+                    var item = Ui.Box("kn-history__step");
+                    var stepTexts = Ui.Box("kn-history__texts");
+                    stepTexts.Add(Ui.Text(HistoryNames.Describe(rowStep.Name), "kn-history__title"));
+                    stepTexts.Add(Ui.Text(rowStep.Time.ToString("M/d HH:mm:ss"), "kn-history__meta"));
+                    item.Add(stepTexts);
+                    item.Add(Ui.Button(L10n.Tr("history.restoreHere"), () => RestoreToStep(rowStep, snapshot),
+                        "kn-button--small", "kn-button--ghost", "kn-history__restore"));
+                    list.Add(item);
+                }
+            }
+
+            group.Add(list);
+            return group;
+        }
+
+        /// <summary>
+        /// 1 手順の前に戻す。Undo に残っている手順は Undo で、残っていなければ
+        /// そのまとまりのバックアップから戻す（バックアップの設計と食い違わないようにする）。
+        /// </summary>
+        private void RestoreToStep(UndoHistory.Step step, BackupSnapshot owner)
+        {
+            if (_avatar == null) return;
+            var undoable = step.Group >= 0 && step.Group <= Undo.GetCurrentGroup();
+            if (!undoable)
+            {
+                if (owner == null)
+                {
+                    EditorUtility.DisplayDialog(L10n.Tr("app.name"), L10n.Tr("history.unavailable"), L10n.Tr("dialog.ok"));
+                    return;
+                }
+
+                RestoreFromHistory(owner);
+                return;
+            }
+
+            if (!EditorUtility.DisplayDialog(
+                    L10n.Tr("restore.title"),
+                    L10n.Tr("history.restoreStepMessage", HistoryNames.Describe(step.Name), step.Time.ToString("M/d HH:mm:ss")),
+                    L10n.Tr("restore.ok"),
+                    L10n.Tr("dialog.cancel")))
+            {
+                return;
+            }
+
+            if (_selected != null) _selected.OnClosed();
+            HideHistoryPopover();
+            _backup.EndSession();
+            Undo.RevertAllDownToGroup(step.Group);
+            UndoHistory.ForgetFrom(step.AvatarId, step.Group);
+            // 戻した先より新しいまとまりのバックアップは、今の状態より先のものになるので使わない
+            if (owner != null) _backup.DiscardNewer(_avatar, owner);
+            UndoHelper.Separate();
+            BuildNavigation();
+            BuildPanel();
+            RefreshFooter();
+        }
+
+        private void RestoreFromHistory(BackupSnapshot snapshot)
+        {
+            if (!EditorUtility.DisplayDialog(
+                    L10n.Tr("restore.title"),
+                    L10n.Tr("restore.historyMessage", snapshot.CreatedAt.ToString("M/d HH:mm:ss"), FeatureTitle(snapshot.featureId)),
+                    L10n.Tr("restore.ok"),
+                    L10n.Tr("dialog.cancel")))
+            {
+                return;
+            }
+
+            if (_selected != null) _selected.OnClosed();
+            HideHistoryPopover();
+            _backup.Restore(_avatar, snapshot);
+            UndoHistory.Clear(_avatarId);
+            BuildNavigation();
+            BuildPanel();
+            RefreshFooter();
+        }
+
+        private string FeatureTitle(string id)
+        {
+            var feature = _features.FirstOrDefault(f => f.Id == id);
+            return feature == null ? id : feature.Title;
+        }
+
+        private void OnUndoRedo()
+        {
+            if (_panelArea == null) return;
+            UndoHelper.Separate();
+            BuildNavigation();
+[0m
+[0m$ [0mcd /tmp/knbench-yjvgVG/kaihennavi-ds-c && python3 - <<'PY'
+from pathlib import Path
+p=Path('Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Core/KaihenNaviWindow.cs')
+s=p.read_text()
+s=s.replace('''                List<UndoHistory.Step> list;
+                if (!bySnapshot.TryGetValue(owner.createdTicks, out list))
+                {
+                    list = new List<UndoHistory.Step>();
+                    bySnapshot[owner.createdTicks] = list;
+                }
+
+                list.Add(step);''','''                List<UndoHistory.Step> bucket;
+                if (!bySnapshot.TryGetValue(owner.createdTicks, out bucket))
+                {
+                    bucket = new List<UndoHistory.Step>();
+                    bySnapshot[owner.createdTicks] = bucket;
+                }
+
+                bucket.Add(step);''')
+s=s.replace('''        private string FeatureTitle(string id)
+        {
+            var feature = _features.FirstOrDefault(f => f.Id == id);
+            return feature == null ? id : feature.Title;
+        }''','''        private string FeatureTitle(string id)
+        {
+            if (string.IsNullOrEmpty(id)) return L10n.Tr("history.step.unknown");
+            var feature = _features.FirstOrDefault(f => f.Id == id);
+            return feature == null ? id : feature.Title;
+        }''')
+p.write_text(s)
+p=Path('Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/UI/KaihenNavi.uss')
+s=p.read_text().replace('''    width: 320px;
+    max-height: 380px;''','''    width: 320px;
+    max-width: 92%;
+    max-height: 380px;''')
+p.write_text(s)
+PY
+bash tools/check.sh
+== NoMA
+== WithMA
+== Full
+== Localization OK (540 keys)
+KonoAsset checks passed (34). JSON, image decoding and Undo require Unity.
+External source files unchanged.
+All checks passed.
+[0m
+[0m$ [0mcd /tmp/knbench-yjvgVG/kaihennavi-ds-c && git diff -- Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Core/BackupService.cs tools/stubs/UnityStubs.cs Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/UI/KaihenNavi.uss | sed -n '1,260p' && echo '--- meta ---' && cat Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Core/UndoHistory.cs.meta
+diff --git a/Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Core/BackupService.cs b/Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Core/BackupService.cs
+index 051a18f..12771d5 100644
+--- a/Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Core/BackupService.cs
++++ b/Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Core/BackupService.cs
+@@ -162,6 +162,20 @@ namespace Jeni.KaihenNavi
+             RaiseChanged();
+         }
+ 
++        /// <summary>
++        /// 指定したバックアップより新しいもの（今の状態より先の状態）を消す。
++        /// 履歴から Undo で手順を戻したとき、残っているバックアップと食い違わないようにする。
++        /// </summary>
++        public void DiscardNewer(VRCAvatarDescriptor avatar, BackupSnapshot keep)
++        {
++            if (avatar == null || keep == null) return;
++            var newer = List(avatar).Where(s => s.createdTicks > keep.createdTicks).ToList();
++            if (newer.Count == 0) return;
++            foreach (var snapshot in newer) AssetDatabase.DeleteAsset(AssetDatabase.GetAssetPath(snapshot));
++            AssetDatabase.SaveAssets();
++            RaiseChanged();
++        }
++
+         public static string AvatarId(VRCAvatarDescriptor avatar)
+         {
+             return GlobalObjectId.GetGlobalObjectIdSlow(avatar.gameObject).ToString();
+diff --git a/Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/UI/KaihenNavi.uss b/Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/UI/KaihenNavi.uss
+index a1ea5f6..7e84b37 100644
+--- a/Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/UI/KaihenNavi.uss
++++ b/Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/UI/KaihenNavi.uss
+@@ -287,3 +287,46 @@
+ .kn-issue { margin: 8px 0; padding: 8px; border-radius: 6px; border-width: 1px; border-color: var(--kn-border); background-color: var(--kn-surface); }
+ .kn-menu__row--hidden { opacity: 0.55; }
+ .kn-menu__icon { width: 28px; height: 28px; margin-right: 8px; flex-shrink: 0; border-radius: 4px; -unity-background-scale-mode: scale-to-fit; }
++/* 履歴。ウィンドウ内に出す小さなパネル（GenericMenu は使わない）。 */
++.kn-popover {
++    position: absolute;
++    width: 320px;
++    max-width: 92%;
++    max-height: 380px;
++    padding: 6px;
++    border-width: 1px;
++    border-color: var(--kn-border);
++    border-radius: 6px;
++    background-color: var(--kn-surface);
++}
++.kn-popover__header { flex-direction: row; align-items: center; margin: 0 2px 6px 2px; flex-shrink: 0; }
++.kn-popover__title { flex-grow: 1; font-size: 12px; -unity-font-style: bold; color: var(--kn-text); margin: 0; white-space: normal; }
++.kn-popover__header .kn-button { margin: 0; }
++.kn-popover__scroll { max-height: 332px; }
++.kn-popover__content { flex-direction: column; }
++.kn-history__group-wrap { flex-shrink: 0; }
++.kn-history__group {
++    flex-direction: row;
++    align-items: center;
++    min-height: 38px;
++    height: auto;
++    margin: 0;
++    padding: 5px 8px;
++    border-width: 0;
++    border-radius: 4px;
++    background-color: transparent;
++    color: var(--kn-text);
++    -unity-text-align: middle-left;
++}
++.kn-history__group:hover { background-color: var(--kn-surface-hover); }
++.kn-history__texts { flex-grow: 1; flex-shrink: 1; min-width: 0; }
++.kn-history__title { font-size: 12px; color: var(--kn-text); white-space: normal; margin: 0; }
++.kn-history__meta { font-size: 11px; color: var(--kn-text-sub); white-space: normal; margin: 1px 0 0 0; }
++.kn-history__chevron { width: 16px; flex-shrink: 0; color: var(--kn-text-sub); -unity-text-align: middle-center; margin: 0 0 0 4px; }
++.kn-history__steps { margin: 0 0 6px 10px; padding-left: 8px; border-left-width: 1px; border-left-color: var(--kn-border); }
++.kn-history__step { flex-direction: row; align-items: center; min-height: 34px; padding: 3px 6px; border-radius: 4px; }
++.kn-history__step:hover { background-color: var(--kn-surface-hover); }
++.kn-history__restore { margin: 0 0 0 6px; }
++.kn-history__empty-row { flex-direction: row; flex-wrap: wrap; align-items: center; padding: 4px 6px; }
++.kn-history__empty-row .kn-history__meta { flex-grow: 1; flex-basis: 140px; }
++.kn-history__empty { color: var(--kn-text-sub); white-space: normal; margin: 8px; }
+diff --git a/tools/stubs/UnityStubs.cs b/tools/stubs/UnityStubs.cs
+index 9e72270..1979632 100644
+--- a/tools/stubs/UnityStubs.cs
++++ b/tools/stubs/UnityStubs.cs
+@@ -7,11 +7,16 @@ using System.Collections.Generic;
+ namespace UnityEngine
+ {
+     public enum FontStyle { Normal, Bold, Italic, BoldAndItalic }
++    public enum KeyCode { None, Escape, Return, KeypadEnter }
+ 
+     public struct Rect
+     {
+         public float x, y, width, height;
+         public Rect(float x, float y, float w, float h) { this.x = x; this.y = y; width = w; height = h; }
++        public float xMin { get { return x; } }
++        public float yMin { get { return y; } }
++        public float xMax { get { return x + width; } }
++        public float yMax { get { return y + height; } }
+     }
+ 
+     public static class Resources
+@@ -441,6 +446,8 @@ namespace UnityEngine.UIElements
+         StyleBackground backgroundImage { get; set; }
+         StyleLength paddingLeft { get; set; }
+         StyleLength minHeight { get; set; }
++        StyleLength left { get; set; }
++        StyleLength top { get; set; }
+     }
+ 
+     public class StyleSheet : UnityEngine.ScriptableObject { }
+@@ -463,6 +470,8 @@ namespace UnityEngine.UIElements
+     public class PointerDownEvent : PointerEventBase { }
+     public class PointerMoveEvent : PointerEventBase { }
+     public class PointerUpEvent : PointerEventBase { }
++    public class KeyDownEvent : EventBase { public UnityEngine.KeyCode keyCode; public void StopPropagation() { } }
++    public enum TrickleDown { NoTrickleDown, TrickleDown }
+ 
+     public enum LineCap { Butt, Round, Square }
+     public enum LineJoin { Miter, Round, Bevel }
+@@ -523,6 +532,8 @@ namespace UnityEngine.UIElements
+     public class VisualElement
+     {
+         public UnityEngine.Rect layout;
++        public UnityEngine.Rect worldBound;
++        public VisualElement parent;
+         public IStyle style;
+         public IPanel panel;
+         public IResolvedStyle resolvedStyle;
+@@ -542,7 +553,10 @@ namespace UnityEngine.UIElements
+         public void EnableInClassList(string c, bool enable) { }
+         public void SetEnabled(bool value) { }
+         public void RegisterCallback<T>(EventCallback<T> callback) where T : EventBase { }
++        public void RegisterCallback<T>(EventCallback<T> callback, TrickleDown useTrickleDown) where T : EventBase { }
+         public void UnregisterCallback<T>(EventCallback<T> callback) where T : EventBase { }
++        public void UnregisterCallback<T>(EventCallback<T> callback, TrickleDown useTrickleDown) where T : EventBase { }
++        public void RemoveFromHierarchy() { }
+     }
+ 
+     public class ChangeEvent<T> : EventBase
+@@ -789,6 +803,7 @@ namespace UnityEditor
+         public static void RegisterFullObjectHierarchyUndo(Object o, string name) { }
+         public static void IncrementCurrentGroup() { }
+         public static int GetCurrentGroup() { return 0; }
++        public static string GetCurrentGroupName() { return ""; }
+         public static void SetCurrentGroupName(string n) { }
+         public static void CollapseUndoOperations(int g) { }
+         public static void DestroyObjectImmediate(Object o) { }
+@@ -831,6 +846,7 @@ namespace UnityEditor
+         public static double timeSinceStartup;
+         public static bool isPlayingOrWillChangePlaymode;
+         public static Action hierarchyChanged;
++        public static Action update;
+         public static bool ExecuteMenuItem(string path) { return false; }
+         public static Action<PlayModeStateChange> playModeStateChanged;
+         public static CallbackFunction delayCall;
+--- meta ---
+fileFormatVersion: 2
+guid: 6f8192b663f30a44f9775d95c648c2ba
+MonoImporter:
+  externalObjects: {}
+  serializedVersion: 2
+  defaultReferences: []
+  executionOrder: 0
+  icon: {instanceID: 0}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant:
+[0m
+[0m$ [0mcd /tmp/knbench-yjvgVG/kaihennavi-ds-c && sed -n '400,420p' Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Features/WalkFeature.cs && sed -n '410,430p' Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Features/ToggleFeature.cs && sed -n '78,95p' Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Features/ViewFeature.cs
+Object.DestroyImmediate(outer != null && outer != contents ? outer : g);
+                    }
+
+                    return true;
+                });
+                if (ok) ctx.Rebuild();
+                return;
+            }
+
+            var avatar = ctx.Avatar;
+            ctx.BeginEdit();
+            UndoHelper.Separate();
+            Undo.SetCurrentGroupName(L10n.Tr("undo.walk"));
+            var revertInherited = false;
+            foreach (var r in Replacers(avatar.gameObject))
+            {
+                if (r == null) continue;
+                if (basePrefab != null && IsFromBase(r.gameObject, basePrefab))
+                {
+                    // ベースから来たものは消せないので、このアバターでの上書きだけを取り消す（下でまとめて）
+                    revertInherited = true;
+            if (menuRoot != null) Undo.DestroyObjectImmediate(menuRoot.gameObject);
+        }
+
+        private static void CreateMenu(FeatureContext ctx, List<Candidate> targets)
+        {
+            var avatar = ctx.Avatar;
+            var undoName = L10n.Tr("undo.toggle");
+
+            ctx.BeginEdit();
+            UndoHelper.Separate();
+            Undo.IncrementCurrentGroup();
+            var group = Undo.GetCurrentGroup();
+            Undo.SetCurrentGroupName(undoName);
+
+            RemoveMenu(avatar, undoName);
+
+            var used = new HashSet<string>();
+            var data = new MenuData { menuName = L10n.Tr("toggle.menuName") };
+            foreach (var c in targets)
+            {
+                var label = string.IsNullOrEmpty(c.Label) ? c.Target.name : c.Label;
+        {
+            HideMarker();
+        }
+
+        private void Set(FeatureContext ctx, Vector3 value, string undoName)
+        {
+            var avatar = ctx.Avatar;
+            ctx.BeginEdit();
+            UndoHelper.Begin("view", undoName);
+            Undo.RecordObject(avatar, undoName);
+            avatar.ViewPosition = value;
+            EditorUtility.SetDirty(avatar);
+            UndoHelper.End();
+            UpdateReadout(avatar);
+            SceneView.RepaintAll();
+        }
+
+        private void Move(FeatureContext ctx, Vector3 direction)
+[0m
+[0m$ [0mcd /tmp/knbench-yjvgVG/kaihennavi-ds-c && grep -rn "\.Restore(\|RestoreLatest" Packages/com.suzuki-y0.jeni.kaihen-navi/Editor | grep -v "IBackup\|participant.Restore\|void Restore"
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Core/BackupService.cs:129:        public bool RestoreLatest(VRCAvatarDescriptor avatar)
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Core/KaihenNaviWindow.cs:375:            _restoreButton = Ui.IconButton("undo", L10n.Tr("footer.restore"), RestoreLatest);
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Core/KaihenNaviWindow.cs:958:            _backup.Restore(_avatar, latest);
+Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Core/KaihenNaviWindow.cs:1193:            _backup.Restore(_avatar, snapshot);
+[0m
+[0m$ [0mcd /tmp/knbench-yjvgVG/kaihennavi-ds-c && grep -n "ctx.Rebuild" Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Features/BodyFeature.cs; grep -n "GenericMenu\|ShowAsContext\|ShowAsDropDown" Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Core/KaihenNaviWindow.cs
+399:            var menu = new GenericMenu();
+446:            menu.ShowAsContext();
+966:        /// 履歴のポップオーバー。GenericMenu は日付の「/」をサブメニューと解釈して
+[0m
+[0m$ [0mcd /tmp/knbench-yjvgVG/kaihennavi-ds-c && bash tools/check.sh && git status --short
+== NoMA
+== WithMA
+== Full
+== Localization OK (540 keys)
+KonoAsset checks passed (34). JSON, image decoding and Undo require Unity.
+External source files unchanged.
+All checks passed.
+ M Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Core/BackupService.cs
+ M Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Core/KaihenNaviWindow.cs
+ M Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Features/BodyFeature.cs
+ M Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Localization/en.json
+ M Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Localization/ja.json
+ M Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Localization/ko.json
+ M Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Localization/zh-Hans.json
+ M Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/UI/KaihenNavi.uss
+ M tools/stubs/UnityStubs.cs
+?? Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Core/UndoHistory.cs
+?? Packages/com.suzuki-y0.jeni.kaihen-navi/Editor/Core/UndoHistory.cs.meta
+[0m
+## 変更点
+
+### 体型のちらつき
+- `BodyFeature` の部位選択・部位ボタン・「この部位をもとに戻す」「すべて戻す」で `ctx.Rebuild()` を呼ぶのをやめました。
+- 選択中の部位ボタンの印、操作欄（部位名・スライダー）、影絵の点だけを更新します（`SelectPart` / `RefreshControls` / `MarkDirtyRepaint`）。
+- 原因は、部位選択のたびに `Rebuild` → `BuildNavigation` + `BuildPanel` が走り、左ナビ・ページ見出しまで作り直されていたことです。作り直された太字見出しは `FontLoader` の太字差し替えが最大 0.1 秒後になるため、一瞬太さが変わってちらついて見えていました。
+- `QueueScan` のヒエラルキー変化でも、ナビ全体を作り直さず件数・完了印だけ更新する `RefreshNavigationBadges()` を追加しました（アバター自体が変わったときだけ全体再構築）。
+
+### 履歴
+- `GenericMenu` をやめ、`rootVisualElement` 内の UI Toolkit ポップオーバー（`kn-popover` / `kn-history__*`、既存トークン使用）にしました。
+- 1 段目は自動バックアップのまとまり（機能名・時刻・手順数）、2 段目は Undo の 1 手順（グループ名・時刻・「ここまで戻す」）を新しい順に表示します。
+- 謎の「10」は、`GenericMenu` が日付の `M/d` の `/` をサブメニュー区切りとして解釈し、月だけが親メニューになっていたためです。ポップオーバー化で出なくなりました。
+- 手順名は `Undo.GetCurrentGroupName()` を使用。空・英語の既知の名前は L10n で日本語化しています。
+- 「ここまで戻す」は、Undo に残っている手順なら `Undo.RevertAllDownToGroup`、残っていない手順は所有するバックアップから復元します。Undo で戻した場合は、新しいまとまりのバックアップを `BackupService.DiscardNewer` で消し、↶（従来どおり最新バックアップへ戻す）と食い違わないようにしました。
+- 細かい手順は Undo 履歴と同じくエディタを開いている間のみ保持します（ドメインリロードで消えます）。バックアップのまとまりは従来どおり残ります。
+
+### その他
+- 新規 `Editor/Core/UndoHistory.cs` と `.meta` を追加。
+- ja / en / zh-Hans / ko に履歴用キーを追加。
+- `tools/stubs` に UI Toolkit と Undo の最小スタブを追加。
+- `bash tools/check.sh` は全構成・翻訳チェックとも通っています（コミットはしていません）。
+
+## Unity で確認が必要な点
+- 部位選択・ボタン・スライダー・リセットで、左ナビやページ見出しが描き直されずちらつかないこと。
+- 履歴ポップオーバーの位置・幅・スクロール、ダーク／ライト・狭い幅での見た目、外側クリック／Esc で閉じること。
+- まとまりの展開、手順名、「ここまで戻す」の Undo 復元、Undo に残っていない場合のバックアップ復元。
+- `Undo.GetCurrentGroupName()` / `RevertAllDownToGroup` の実機挙動と、手順復元時に新しいバックアップを消す扱いが想定どおりか。
+elapsed_sec=577

@@ -41,7 +41,7 @@ tasks=("${@:-b c f}"); [ $# -eq 0 ] && tasks=(b c f)
 for t in "${tasks[@]}"; do
   # 隔離：土台コミット 1 つだけ（履歴なし）の別リポジトリで作業させる。
   # 同じリポジトリの worktree だと git log --all で sol の答えが見えてしまう（実際に b で写された）。
-  wt="$(mktemp -d)/kaihennavi-ds-$t"
+  wt="$(mktemp -d /tmp/knbench-XXXXXX)/kaihennavi-ds-$t"
   git init -q "$wt"
   git -C "$wt" -c protocol.version=2 fetch -q --depth=1 --no-tags "file://$repo" "$(git -C "$repo" rev-parse "${base[$t]}")"
   git -C "$wt" checkout -q -B "bench/ds-$t" FETCH_HEAD

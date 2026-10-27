@@ -46,7 +46,7 @@ for t in "${tasks[@]}"; do
   git -C "$wt" -c protocol.version=2 fetch -q --depth=1 --no-tags "file://$repo" "$(git -C "$repo" rev-parse "${base[$t]}")"
   git -C "$wt" checkout -q -B "bench/ds-$t" FETCH_HEAD
   start=$(date +%s)
-  (cd "$wt" && timeout "${DS_TIMEOUT:-2400}" opencode run -m "ocgo/$model" "$(cat "$repo/bench/specs/run_$t.md")") \
+  (cd "$wt" && timeout "${DS_TIMEOUT:-2400}" opencode run -m "ocgo/$model" "$(cat "$repo/bench/specs/run_$t.md")" < /dev/null) \
     > "$out/ds-$t.log" 2>&1 || true
   echo "elapsed_sec=$(( $(date +%s) - start ))" >> "$out/ds-$t.log"
   (cd "$wt" && bash tools/check.sh) > "$out/ds-$t.check.log" 2>&1 \

@@ -210,6 +210,9 @@ namespace Jeni.KaihenNavi
             }, new HashSet<string> { WorkFolders.Root + "/candidate.mat" });
             Check(roots.Length == 3 && !roots.Any(p => p.Contains("Backups")) && roots.Contains("Assets/Purchased/Hair.mat"),
                 "Reference roots must exclude history and candidates, include other materials, and deduplicate");
+            Check(InnerColorAssets.Unsaved(HideFlags.DontSave) && InnerColorAssets.Unsaved(HideFlags.HideAndDontSave) &&
+                !InnerColorAssets.Unsaved(HideFlags.None) && !InnerColorAssets.Unsaved(HideFlags.HideInHierarchy),
+                "Preview proxies that are never saved must not keep generated files");
             var go = new GameObject("TestAvatar") { scene = new UnityEngine.SceneManagement.Scene { validForTests = true, isLoaded = true } };
             var avatar = go.AddComponent<VRCAvatarDescriptor>();
             var hair = go.AddComponent<SkinnedMeshRenderer>();

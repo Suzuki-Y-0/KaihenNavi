@@ -78,6 +78,17 @@ namespace nadena.dev.modular_avatar.core
         public GameObject Get(Component container) { return _target; }
     }
 
+    public class ModularAvatarMeshSettings : AvatarTagComponent
+    {
+        public enum InheritMode { Inherit, Set, DontSet, SetOrInherit }
+
+        public InheritMode InheritProbeAnchor = InheritMode.Inherit;
+        public AvatarObjectReference ProbeAnchor;
+        public InheritMode InheritBounds = InheritMode.Inherit;
+        public AvatarObjectReference RootBone;
+        public Bounds Bounds = new UnityEngine.Bounds();
+    }
+
     public class ModularAvatarMenuInstaller : AvatarTagComponent { }
     public class ModularAvatarMenuGroup : AvatarTagComponent { public GameObject targetObject; }
 
@@ -136,6 +147,26 @@ namespace nadena.dev.modular_avatar.core
     public class ModularAvatarObjectToggle : AvatarTagComponent
     {
         public List<ToggledObject> Objects { get; set; }
+    }
+
+    public enum ParameterSyncType { NotSynced, Int, Float, Bool }
+
+    [System.Serializable]
+    public struct ParameterConfig
+    {
+        public string nameOrPrefix;
+        public string remapTo;
+        public bool internalParameter, isPrefix;
+        public ParameterSyncType syncType;
+        public bool localOnly;
+        public float defaultValue;
+        public bool saved;
+        public bool hasExplicitDefaultValue;
+    }
+
+    public class ModularAvatarParameters : AvatarTagComponent
+    {
+        public List<ParameterConfig> parameters = new List<ParameterConfig>();
     }
 }
 

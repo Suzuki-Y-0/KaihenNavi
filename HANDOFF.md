@@ -36,6 +36,15 @@
 - `Avatars/<名前>/Animations/KaihenNavi_Light.controller`：lilToon を使う全レンダラーの `material._LightMinLimit` を 0→1、パラメータ `KaihenNavi/Light` の Motion Time で動かす。作り直しはファイルを消さずクリップの中身だけ入れ替える（GUID を保つ）。
 - 処理は `Features/LightMenu.cs`。Unity で見ること：Gesture Manager でスライダーを回して明るさが変わるか、複数マテリアルのメッシュで全部の枠に効くか、初期値で見た目が変わらないか、作り直し・外す・Ctrl+Z、同期 8 bit の表示。
 
+### 0.2.3 Unity での確認（2026-11-03・test/integration-1103 を MCP Project に入れて）
+一時スクリプト（Assets/KNTest、確認後に削除）で、シーンの「Cazalis 改変」の複製だけを使って確認。元のアバターは触っていない。NDMF の `AvatarProcessor.ProcessAvatar` でビルドまで通した。
+- コンパイル：エラーなし（新しい型がすべて読み込まれた）。
+- 明るさの基準：ばらばら 9 → 0。ルートの MA Mesh Settings の参照は MA の形式（`Anchor Target`、`Armature/Hips`）。服 2 つ（MONOLITH）の SetOrInherit は Inherit になり、Ctrl+Z で両方とも元に戻る。ビルド後は 27 個のメッシュ全部が同じ Anchor・同じ Bounds。
+- 明るさスライダー：部品 4 つ、Radial・Float・初期値 0.05・保存。クリップのカーブ 27 本（対象と同数）。作り直しで GUID が変わらない。サンプリングするとレンダラー全体の MaterialPropertyBlock に入る（＝全部のマテリアル枠に効く）。ビルド後、Expression Parameters に Float（同期・保存）、FX に入る。パラメータの合計は 78 bit。外す → Ctrl+Z で戻る。
+- ローマ字検索（KonoAsset 365 商品）：「しなの」4→24 件、「まぬか」1→7 件。「かざりす」「ねこみみ」は変化なし、「すいーと」は 0 件のまま（想定どおり）。
+- インナーカラーの .mat 残り：直し自体は効く（保存しない Renderer だけが参照するマテリアルは使用中と数えない）。ただし確認時、シーンに保存しない Renderer は 0 個で、**原因が MA のプレビューの複製だという推定は確かめられていない**。実際に髪に色を当てて「元に戻す」をする確認が残っている。
+- まだ：画面の見た目（明るさのページの表示、ボタン）、Gesture Manager でスライダーを回したときの見た目、インナーカラーの実際の操作。
+
 ### 0.3 ワーカーの比較（bench/deepseek-compare ブランチ、main には入れていない）
 同じ指示書で gpt-6.1-sol（Codex）と deepseek-v4.1-flash（OpenCode Go）を比べた。結論は `bench/BENCH.md`、数字は `bench/RESULTS.md`。
 - DeepSeek は設計まで決めてある実装（インナーカラーの面判定）なら sol とほぼ同じ。Undo・履歴・保存が絡む課題は細部が粗く、直す手間は sol より多そう。

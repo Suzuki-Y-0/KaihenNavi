@@ -8,6 +8,19 @@ import subprocess
 import tempfile
 import io
 import tarfile
+import os
+import shutil
+import stat
+
+
+def link_directory(link, target):
+    """フォルダへのリンクを作る。Windows で権限が無いときは、権限の要らないジャンクションにする（どちらも ReparsePoint）。"""
+    try:
+        link.symlink_to(target, target_is_directory=True)
+    except OSError:
+        if os.name != "nt":
+            raise
+        subprocess.run(["cmd", "/c", "mklink", "/J", str(link), str(target)], check=True, stdout=subprocess.DEVNULL)
 
 repo = Path(__file__).resolve().parent.parent
 source = r'''
@@ -214,7 +227,7 @@ with tempfile.TemporaryDirectory(prefix="kaihennavi-kono-") as temporary:
     (data / "nested" / "Locked.unitypackage").write_bytes(b"do not read package contents")
     (data / "Root.unitypackage").write_bytes(b"do not read package contents")
     (data / "ignored.txt").write_bytes(b"ignore")
-    (data / "nested" / "cycle").symlink_to(data, target_is_directory=True)
+    link_directory(data / "nested" / "cycle", data)
     metadata = temp / "external" / "metadata"
     metadata.mkdir()
     (metadata / "avatars.json").write_text('{"version":3,"data":[]}', encoding="utf-8")
@@ -228,22 +241,43 @@ with tempfile.TemporaryDirectory(prefix="kaihennavi-kono-") as temporary:
                 info.size = len(payload)
                 archive.addfile(info, io.BytesIO(payload))
 
+    def is_link(path):
+        # Python 3.10 の is_symlink はジャンクションを見分けないので、ReparsePoint の印も見る。
+        attributes = getattr(os.lstat(path), "st_file_attributes", 0)
+        return path.is_symlink() or bool(attributes & getattr(stat, "FILE_ATTRIBUTE_REPARSE_POINT", 0))
+
+    def files_under(folder):
+        for entry in folder.iterdir():
+            if is_link(entry):
+                continue
+            if entry.is_dir():
+                yield from files_under(entry)
+            elif entry.is_file():
+                yield entry
+
     def snapshot():
         return {str(p.relative_to(temp)): (p.stat().st_mtime_ns, hashlib.sha256(p.read_bytes()).hexdigest())
-                for p in temp.glob("external/**/*") if p.is_file()}
+                for p in files_under(temp / "external")}
 
     symlink_workspace = temp / "symlink-workspace"
     symlink_cache = symlink_workspace / "Library/KaihenNavi"
     symlink_cache.mkdir(parents=True)
-    (symlink_cache / "konoasset-index.json").symlink_to(metadata / "avatars.json")
+    try:
+        (symlink_cache / "konoasset-index.json").symlink_to(metadata / "avatars.json")
+    except OSError:
+        if os.name != "nt":
+            raise
+        # ファイルのリンクが作れないときは、キャッシュのフォルダごと外部フォルダへのリンクにする（書き込み先の途中にリンクがある場合の確認）。
+        symlink_cache.rmdir()
+        link_directory(symlink_cache, metadata)
     before = snapshot()
     harness = temp / "Checks.cs"
     harness.write_text(source, encoding="utf-8")
     executable = temp / "Checks.exe"
     sources = sorted((repo / "Packages/com.suzuki-y0.jeni.kaihen-navi/Editor").rglob("*.cs"))
-    subprocess.run(["mcs", "-nologo", "-langversion:7", "-r:System.Core.dll", "-out:" + str(executable),
+    subprocess.run([shutil.which("mcs") or "mcs", "-nologo", "-langversion:7", "-r:System.Core.dll", "-out:" + str(executable),
                     str(repo / "tools/stubs/UnityStubs.cs"), str(repo / "tools/stubs/VrcAndMaStubs.cs"),
                     *map(str, sources), str(harness)], check=True)
-    subprocess.run(["mono", str(executable), str(data), str(temp / "external"), str(symlink_workspace), str(package)], cwd=temp, check=True)
+    subprocess.run([shutil.which("mono") or "mono", str(executable), str(data), str(temp / "external"), str(symlink_workspace), str(package)], cwd=temp, check=True)
     assert before == snapshot(), "external files were modified"
     print("External source files unchanged.")

@@ -50,6 +50,7 @@
 
 ### 0.6 Unity なしの確認
 - `bash tools/check.sh`（Mono の mcs が必要）：NoMA / WithMA / Full のコンパイル、4 言語のキーの一致、各種テスト。
+- Windows では `bash tools/check-win.sh`（Git Bash）。Mono を入れずに Unity 2022.3 同梱の Mono を使い、本物の Python を探して check.sh を動かす。シンボリックリンクの権限が無いときはジャンクションで代わりに試す。
 - `bash tools/test_inner_color.sh`：インナーカラーの面判定とファイル処理のテスト。
 - スタブ（tools/stubs）は Unity の Undo 本体・Prefab・描画を再現しない。最後は必ず Unity で確かめる。
 

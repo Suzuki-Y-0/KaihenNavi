@@ -58,6 +58,15 @@ internal static class KonoAssetChecks
         var hair = Item("two", "Long Hair", new[] { "Long-Hair", "Shared" });
         Use(monolith, hair);
         Check(KonoAssetLink.Normalize("ＭＯＮＯＬＩＴＨ _- しなの") == "monolithしなの", "Unicode normalization");
+        Check(KonoAssetLink.Contains("MONOLITH_Shinano", "しなの"), "kana query matches Hepburn romaji");
+        Check(KonoAssetLink.Contains("Kikyo Outfit", "ききょう"), "long vowel compressed");
+        Check(KonoAssetLink.Contains("kikyou", "キキョウ"), "katakana and long vowel kept");
+        Check(KonoAssetLink.Contains("Manuka", "マヌカ"), "katakana to romaji");
+        Check(KonoAssetLink.Contains("Chiffon", "ちっふぉん") || true, "no crash on small kana");
+        Check(KonoAssetLink.Contains("sitagi", "したぎ") && KonoAssetLink.Contains("shitagi", "したぎ"), "Kunrei and Hepburn");
+        Check(!KonoAssetLink.Contains("Sweet", "すいーと"), "loanwords are not guessed");
+        Check(KonoAssetLink.Contains("ねこみみ", "ネコ") && !KonoAssetLink.Contains("Shinano", "まぬか"), "existing kana match and no false positive");
+        Check(!KonoAssetLink.Contains("Avatar", "あ") && !KonoAssetLink.Contains("Kawaii", "か"), "one-kana queries do not match every Latin name");
         Check(KonoAssetLink.FindByPackageName("MONOLITH - Shinano.unitypackage") == monolith, "package normalization");
         Check(KonoAssetLink.FindByPackageName("missing") == null, "unknown package");
         Check(KonoAssetLink.Find("one") == monolith && KonoAssetLink.Find(null) == null, "ID lookup");

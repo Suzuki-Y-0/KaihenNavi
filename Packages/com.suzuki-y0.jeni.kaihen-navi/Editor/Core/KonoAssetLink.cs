@@ -302,7 +302,168 @@ namespace Jeni.KaihenNavi
         public static bool Contains(string value, string query)
         {
             var key = Normalize(query);
-            return key.Length == 0 || Normalize(value).Contains(key);
+            if (key.Length == 0) return true;
+            var normalized = Normalize(value);
+            if (normalized.Contains(key)) return true;
+            // ひらがなを含む検索語だけ、ローマ字表記の商品名やファイル名にも当てる。
+            // 英数字だけの検索語は今までどおり部分一致に留める。
+            return key.Any(IsHiragana) && CachedVariants(key).Any(v => normalized.Contains(v));
+        }
+
+        // 検索は 1 文字ごとに全部の商品・項目で呼ばれるので、直前の検索語の候補を覚えておく。
+        private static string _variantsKey;
+        private static string[] _variants = new string[0];
+
+        private static string[] CachedVariants(string key)
+        {
+            if (key != _variantsKey)
+            {
+                // 「あ」→「a」のような短い候補は、ほとんどの英語名に当たってしまうので使わない。
+                _variants = RomajiVariants(key).Where(v => v.Length >= 3).ToArray();
+                _variantsKey = key;
+            }
+
+            return _variants;
+        }
+
+        private static readonly Dictionary<string, string> HepburnRomaji = new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            { "あ", "a" }, { "い", "i" }, { "う", "u" }, { "え", "e" }, { "お", "o" },
+            { "ぁ", "a" }, { "ぃ", "i" }, { "ぅ", "u" }, { "ぇ", "e" }, { "ぉ", "o" },
+            { "か", "ka" }, { "き", "ki" }, { "く", "ku" }, { "け", "ke" }, { "こ", "ko" },
+            { "が", "ga" }, { "ぎ", "gi" }, { "ぐ", "gu" }, { "げ", "ge" }, { "ご", "go" },
+            { "さ", "sa" }, { "し", "shi" }, { "す", "su" }, { "せ", "se" }, { "そ", "so" },
+            { "ざ", "za" }, { "じ", "ji" }, { "ず", "zu" }, { "ぜ", "ze" }, { "ぞ", "zo" },
+            { "た", "ta" }, { "ち", "chi" }, { "つ", "tsu" }, { "て", "te" }, { "と", "to" },
+            { "だ", "da" }, { "ぢ", "ji" }, { "づ", "zu" }, { "で", "de" }, { "ど", "do" },
+            { "な", "na" }, { "に", "ni" }, { "ぬ", "nu" }, { "ね", "ne" }, { "の", "no" },
+            { "は", "ha" }, { "ひ", "hi" }, { "ふ", "fu" }, { "へ", "he" }, { "ほ", "ho" },
+            { "ば", "ba" }, { "び", "bi" }, { "ぶ", "bu" }, { "べ", "be" }, { "ぼ", "bo" },
+            { "ぱ", "pa" }, { "ぴ", "pi" }, { "ぷ", "pu" }, { "ぺ", "pe" }, { "ぽ", "po" },
+            { "ま", "ma" }, { "み", "mi" }, { "む", "mu" }, { "め", "me" }, { "も", "mo" },
+            { "や", "ya" }, { "ゆ", "yu" }, { "よ", "yo" },
+            { "ゃ", "ya" }, { "ゅ", "yu" }, { "ょ", "yo" },
+            { "ら", "ra" }, { "り", "ri" }, { "る", "ru" }, { "れ", "re" }, { "ろ", "ro" },
+            { "わ", "wa" }, { "ゐ", "i" }, { "ゑ", "e" }, { "を", "o" }, { "ん", "n" },
+            { "ゎ", "wa" }, { "ゔ", "vu" }
+        };
+
+        private static readonly Dictionary<string, string> KunreiRomaji = new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            { "あ", "a" }, { "い", "i" }, { "う", "u" }, { "え", "e" }, { "お", "o" },
+            { "ぁ", "a" }, { "ぃ", "i" }, { "ぅ", "u" }, { "ぇ", "e" }, { "ぉ", "o" },
+            { "か", "ka" }, { "き", "ki" }, { "く", "ku" }, { "け", "ke" }, { "こ", "ko" },
+            { "が", "ga" }, { "ぎ", "gi" }, { "ぐ", "gu" }, { "げ", "ge" }, { "ご", "go" },
+            { "さ", "sa" }, { "し", "si" }, { "す", "su" }, { "せ", "se" }, { "そ", "so" },
+            { "ざ", "za" }, { "じ", "zi" }, { "ず", "zu" }, { "ぜ", "ze" }, { "ぞ", "zo" },
+            { "た", "ta" }, { "ち", "ti" }, { "つ", "tu" }, { "て", "te" }, { "と", "to" },
+            { "だ", "da" }, { "ぢ", "di" }, { "づ", "du" }, { "で", "de" }, { "ど", "do" },
+            { "な", "na" }, { "に", "ni" }, { "ぬ", "nu" }, { "ね", "ne" }, { "の", "no" },
+            { "は", "ha" }, { "ひ", "hi" }, { "ふ", "hu" }, { "へ", "he" }, { "ほ", "ho" },
+            { "ば", "ba" }, { "び", "bi" }, { "ぶ", "bu" }, { "べ", "be" }, { "ぼ", "bo" },
+            { "ぱ", "pa" }, { "ぴ", "pi" }, { "ぷ", "pu" }, { "ぺ", "pe" }, { "ぽ", "po" },
+            { "ま", "ma" }, { "み", "mi" }, { "む", "mu" }, { "め", "me" }, { "も", "mo" },
+            { "や", "ya" }, { "ゆ", "yu" }, { "よ", "yo" },
+            { "ゃ", "ya" }, { "ゅ", "yu" }, { "ょ", "yo" },
+            { "ら", "ra" }, { "り", "ri" }, { "る", "ru" }, { "れ", "re" }, { "ろ", "ro" },
+            { "わ", "wa" }, { "ゐ", "i" }, { "ゑ", "e" }, { "を", "o" }, { "ん", "n" },
+            { "ゎ", "wa" }, { "ゔ", "vu" }
+        };
+
+        private static readonly Dictionary<string, string>[] RomajiTables = { HepburnRomaji, KunreiRomaji };
+
+        private static bool IsHiragana(char c) { return c >= '\u3041' && c <= '\u3096'; }
+
+        private static bool IsVowel(char c) { return c == 'a' || c == 'i' || c == 'u' || c == 'e' || c == 'o'; }
+
+        private static bool IsSmallYa(char c) { return c == 'ゃ' || c == 'ゅ' || c == 'ょ'; }
+
+        private static bool IsSmallVowel(char c) { return c == 'ぁ' || c == 'ぃ' || c == 'ぅ' || c == 'ぇ' || c == 'ぉ'; }
+
+        /// <summary>ひらがなをヘボン式・訓令式のローマ字にし、長音を詰めた形も候補にする。</summary>
+        internal static IEnumerable<string> RomajiVariants(string hiragana)
+        {
+            var key = Normalize(hiragana);
+            var variants = new List<string>();
+            if (key.Length == 0) return variants;
+            foreach (var table in RomajiTables)
+            {
+                var romaji = ToRomaji(key, table);
+                AddRomajiVariant(variants, romaji);
+                AddRomajiVariant(variants, CompressLongVowels(romaji));
+            }
+            return variants;
+        }
+
+        private static void AddRomajiVariant(List<string> variants, string romaji)
+        {
+            if (!string.IsNullOrEmpty(romaji) && !variants.Contains(romaji)) variants.Add(romaji);
+        }
+
+        private static string CompressLongVowels(string romaji)
+        {
+            if (string.IsNullOrEmpty(romaji)) return romaji;
+            return romaji.Replace("ou", "o").Replace("uu", "u").Replace("oo", "o");
+        }
+
+        private static string ToRomaji(string key, Dictionary<string, string> table)
+        {
+            var builder = new StringBuilder(key.Length * 2);
+            var geminate = false;
+            for (var i = 0; i < key.Length; i++)
+            {
+                if (key[i] == 'っ') { geminate = true; continue; }
+                int consumed;
+                var romaji = UnitRomaji(key, i, table, out consumed);
+                i += consumed - 1;
+                if (geminate)
+                {
+                    if (romaji.Length > 0)
+                    {
+                        // っち はヘボン式で tchi、訓令式で tti にする。
+                        if (romaji.StartsWith("ch", StringComparison.Ordinal)) builder.Append('t');
+                        else if (!IsVowel(romaji[0])) builder.Append(romaji[0]);
+                    }
+                    geminate = false;
+                }
+                builder.Append(romaji);
+            }
+            return builder.ToString();
+        }
+
+        private static string UnitRomaji(string key, int index, Dictionary<string, string> table, out int consumed)
+        {
+            consumed = 1;
+            string baseRomaji;
+            // 表にない文字（英数字や未知の文字）はそのまま通す。
+            if (!table.TryGetValue(key[index].ToString(), out baseRomaji)) return key[index].ToString();
+            if (index + 1 >= key.Length) return baseRomaji;
+            var small = key[index + 1];
+            var combined = IsSmallYa(small) ? CombineSmallYa(baseRomaji, small)
+                : IsSmallVowel(small) ? CombineSmallVowel(baseRomaji, small) : null;
+            if (combined == null) return baseRomaji;
+            consumed = 2;
+            return combined;
+        }
+
+        private static string CombineSmallYa(string baseRomaji, char small)
+        {
+            if (!baseRomaji.EndsWith("i", StringComparison.Ordinal)) return null;
+            var stem = baseRomaji.Substring(0, baseRomaji.Length - 1);
+            var vowel = small == 'ゃ' ? "a" : small == 'ゅ' ? "u" : "o";
+            // し・ち・じ だけは sh/ch/j に母音を足す（sha, cha, ja）。
+            if (baseRomaji == "shi" || baseRomaji == "chi" || baseRomaji == "ji") return stem + vowel;
+            return stem + "y" + vowel;
+        }
+
+        private static string CombineSmallVowel(string baseRomaji, char small)
+        {
+            if (baseRomaji.Length == 0 || !IsVowel(baseRomaji[baseRomaji.Length - 1])) return null;
+            var stem = baseRomaji.Substring(0, baseRomaji.Length - 1);
+            // 母音だけのときは分けたままにして、不自然な短縮を避ける。
+            if (stem.Length == 0) return null;
+            var vowel = small == 'ぁ' ? "a" : small == 'ぃ' ? "i" : small == 'ぅ' ? "u" : small == 'ぇ' ? "e" : "o";
+            return stem + vowel;
         }
 
         private static void SaveIndex(Index index)

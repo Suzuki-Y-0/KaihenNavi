@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """脱ぎ着の状態復元と保存の Undo API 選択を確認する。Unity の Undo 自体や MA のプレビューは再現しない。"""
 from pathlib import Path
+import shutil
 import subprocess
 import tempfile
 
@@ -184,7 +185,7 @@ with tempfile.TemporaryDirectory(prefix="kaihennavi-edits-") as temporary:
     harness.write_text(source, encoding="utf-8")
     executable = temp / "Checks.exe"
     sources = sorted((repo / "Packages/com.suzuki-y0.jeni.kaihen-navi/Editor").rglob("*.cs"))
-    subprocess.run(["mcs", "-nologo", "-langversion:7", "-define:KAIHENNAVI_MA", "-r:System.Core.dll",
+    subprocess.run([shutil.which("mcs") or "mcs", "-nologo", "-langversion:7", "-define:KAIHENNAVI_MA", "-r:System.Core.dll",
                     "-out:" + str(executable), str(repo / "tools/stubs/UnityStubs.cs"),
                     str(repo / "tools/stubs/VrcAndMaStubs.cs"), *map(str, sources), str(harness)], check=True)
-    subprocess.run(["mono", str(executable)], cwd=temp, check=True)
+    subprocess.run([shutil.which("mono") or "mono", str(executable)], cwd=temp, check=True)

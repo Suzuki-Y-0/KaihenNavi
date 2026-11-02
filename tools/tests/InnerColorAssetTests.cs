@@ -313,8 +313,9 @@ namespace Jeni.KaihenNavi
                 Check(undoMesh != null && undoMesh.GetTriangles(2).SequenceEqual(oldMesh.GetTriangles(2)) &&
                     undoMaterial != null && undoMaterial.GetColor("_Color").r == oldMaterial.GetColor("_Color").r,
                     "Complete mesh Undo and material Undo must capture the previous values before mutation");
-                Check(firstMesh.GetTriangles(2).SequenceEqual(new[] { 0, 1, 2 }) && firstMaterial.GetColor("_Color").r == 0.2f * adjustment &&
-                    firstMaterial.GetVector("_MainTexHSVG").w == 1f / (adjustment + 2), "Adjustment must update triangles, tint and brightness in place");
+                // (float) で丸める。丸めないと、実行環境によっては右辺が float より高い精度のまま比べられる（Windows の Mono）。
+                Check(firstMesh.GetTriangles(2).SequenceEqual(new[] { 0, 1, 2 }) && firstMaterial.GetColor("_Color").r == (float)(0.2f * adjustment) &&
+                    firstMaterial.GetVector("_MainTexHSVG").w == (float)(1f / (adjustment + 2)), "Adjustment must update triangles, tint and brightness in place");
                 var adjustedMesh = CopyMesh(firstMesh); var adjustedMaterial = new Material(firstMaterial);
                 nextJournal.Commit("test");
                 var files = (IList)typeof(InnerColorAssetUndo).GetField("oldFiles", Private).GetValue(nextJournal);

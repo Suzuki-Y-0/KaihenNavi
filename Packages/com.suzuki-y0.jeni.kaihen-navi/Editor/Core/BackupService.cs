@@ -42,6 +42,7 @@ namespace Jeni.KaihenNavi
             new InnerColorBackup(),
 #if KAIHENNAVI_MA
             new BodyScaleBackup(),
+            new MeshSettingsBackup(),
 #endif
         };
 

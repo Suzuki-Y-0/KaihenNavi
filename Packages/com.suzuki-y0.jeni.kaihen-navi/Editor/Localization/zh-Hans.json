@@ -572,5 +572,12 @@
   "innerColor.brightnessHint": "100 为原始亮度。深色头发上颜色不明显时，请提高此值（仅限 lilToon）。",
   "innerColor.materialHint": "每个头发网格会增加一个材质，影响 VRChat 的性能评级。",
   "innerColor.missingMesh": "找不到 {0} 的原始头发网格。请确认原始模型仍然存在。",
-  "innerColor.slotMismatch": "{0} 的网格分区和材质槽数量不一致，无法应用。"
+  "innerColor.slotMismatch": "{0} 的网格分区和材质槽数量不一致，无法应用。",
+  "light.anchor.title": "统一身体和服装的亮度",
+  "light.anchor.ok": "所有部件已使用相同的亮度基准。",
+  "light.anchor.mismatch": "有 {0} 个部件的亮度基准不一致。这可能导致身体和服装亮度不同，或在某些角度下消失。",
+  "light.anchor.button": "统一",
+  "light.anchor.hint": "在模型上放置一个 Modular Avatar 的「Mesh Settings」，上传时统一所有部件的基准。原始模型和服装文件不会被修改。",
+  "light.anchor.done": "已统一亮度基准。",
+  "undo.lightAnchor": "KaihenNavi: 统一亮度基准"
 }

@@ -572,5 +572,12 @@
   "innerColor.brightnessHint": "100が元の明るさです。暗い髪で色が見えにくいときは上げてください（lilToon）。",
   "innerColor.materialHint": "髪1つにつきマテリアルの数が1つ増えます。VRChat のパフォーマンス表示に影響します。",
   "innerColor.missingMesh": "{0} の元の髪の形が見つかりませんでした。元のモデルが残っているか確認してください。",
-  "innerColor.slotMismatch": "{0} は髪の面とマテリアルの数が合わないため、反映できません。"
+  "innerColor.slotMismatch": "{0} は髪の面とマテリアルの数が合わないため、反映できません。",
+  "light.anchor.title": "体と服の明るさをそろえる",
+  "light.anchor.ok": "すべての部品が同じ明るさの基準を使っています。",
+  "light.anchor.mismatch": "{0} 個の部品で明るさの基準がばらばらです。体と服で明るさが違って見えたり、角度によって消えて見えたりする原因になります。",
+  "light.anchor.button": "そろえる",
+  "light.anchor.hint": "Modular Avatar の「Mesh Settings」をアバターに 1 つ置いて、アップロード時に全部の部品の基準をそろえます。元の服やアバターのファイルは変わりません。",
+  "light.anchor.done": "明るさの基準をそろえました。",
+  "undo.lightAnchor": "かいへんナビ: 明るさの基準をそろえる"
 }

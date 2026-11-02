@@ -572,5 +572,12 @@
   "innerColor.brightnessHint": "100은 원래 밝기입니다. 어두운 머리카락에서 색이 잘 보이지 않으면 올려 주세요(lilToon).",
   "innerColor.materialHint": "머리카락 메시마다 재질이 하나 늘어납니다. VRChat 성능 등급에 영향을 줍니다.",
   "innerColor.missingMesh": "{0}의 원래 머리카락 메시를 찾을 수 없습니다. 원본 모델이 남아 있는지 확인해 주세요.",
-  "innerColor.slotMismatch": "{0}의 메시 구역과 재질 슬롯 수가 맞지 않아 적용할 수 없습니다."
+  "innerColor.slotMismatch": "{0}의 메시 구역과 재질 슬롯 수가 맞지 않아 적용할 수 없습니다.",
+  "light.anchor.title": "몸과 옷의 밝기 맞추기",
+  "light.anchor.ok": "모든 부품이 같은 밝기 기준을 사용하고 있습니다.",
+  "light.anchor.mismatch": "{0}개 부품의 밝기 기준이 서로 다릅니다. 몸과 옷의 밝기가 달라 보이거나, 각도에 따라 사라져 보이는 원인이 됩니다.",
+  "light.anchor.button": "맞추기",
+  "light.anchor.hint": "아바타에 Modular Avatar의 「Mesh Settings」를 하나 두어, 업로드할 때 모든 부품의 기준을 맞춥니다. 원래 아바타와 옷 파일은 바뀌지 않습니다.",
+  "light.anchor.done": "밝기 기준을 맞췄습니다.",
+  "undo.lightAnchor": "KaihenNavi: 밝기 기준 맞추기"
 }

@@ -89,6 +89,24 @@ namespace Jeni.KaihenNavi
             _sliders.Clear();
             root.Add(Ui.Notice(L10n.Tr("light.intro"), "info"));
 
+#if KAIHENNAVI_MA
+            // 明るさの基準（Modular Avatar の Mesh Settings）をそろえる。lilToon が無くても使える。
+            root.Add(Ui.Heading(L10n.Tr("light.anchor.title")));
+            Transform target;
+            var mismatched = MeshSettingsHelper.CountMismatched(ctx.Avatar, out target);
+            if (mismatched == 0)
+            {
+                root.Add(Ui.Notice(L10n.Tr("light.anchor.ok"), "info"));
+            }
+            else
+            {
+                root.Add(Ui.Notice(L10n.Tr("light.anchor.mismatch", mismatched), "warn"));
+                root.Add(Ui.Button(L10n.Tr("light.anchor.button"), () => UnifyAnchor(ctx)));
+            }
+
+            root.Add(Ui.Text(L10n.Tr("light.anchor.hint"), "kn-hint"));
+#endif
+
             var all = Gather(ctx.Avatar);
             var lil = all.Where(e => IsLilToon(e.Material)).ToList();
             if (lil.Count == 0)
@@ -151,6 +169,23 @@ namespace Jeni.KaihenNavi
             root.Add(Ui.Text(L10n.Tr("light.tip"), "kn-hint"));
             return root;
         }
+
+#if KAIHENNAVI_MA
+        /// <summary>明るさの基準（Anchor Override と Bounds）を、アバター全体で 1 つにそろえる。</summary>
+        private void UnifyAnchor(FeatureContext ctx)
+        {
+            var undoName = L10n.Tr("undo.lightAnchor");
+            ctx.BeginEdit();
+            UndoHelper.Separate();
+            Undo.IncrementCurrentGroup();
+            var group = Undo.GetCurrentGroup();
+            Undo.SetCurrentGroupName(undoName);
+            MeshSettingsHelper.Unify(ctx.Avatar, undoName);
+            ctx.CompleteEdit(group);
+            ctx.Tell(L10n.Tr("light.anchor.done"));
+            ctx.Rebuild();
+        }
+#endif
 
         // ---------------------------------------------------------------- 一覧
 

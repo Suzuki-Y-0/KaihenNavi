@@ -579,5 +579,16 @@
   "light.anchor.button": "Match them",
   "light.anchor.hint": "Places one Modular Avatar \"Mesh Settings\" on the avatar so every part uses the same reference at upload. Original avatar and outfit files are not changed.",
   "light.anchor.done": "Lighting reference matched.",
-  "undo.lightAnchor": "KaihenNavi: Match lighting reference"
+  "undo.lightAnchor": "KaihenNavi: Match lighting reference",
+  "light.slider.title": "Change brightness in-game",
+  "light.slider.intro": "Adds a \"Brightness\" slider to the avatar menu, so you can brighten yourself in dark worlds.",
+  "light.slider.add": "Add slider to menu",
+  "light.slider.active": "Adjust it with \"Brightness\" in the menu ({0} parts).",
+  "light.slider.rebuild": "Rebuild (after adding outfits or accessories)",
+  "light.slider.remove": "Remove slider",
+  "light.slider.hint": "The slider sets \"Darkest\" to the same value on every part. It starts at the current value and uses 8 bits of sync.",
+  "light.slider.menuLabel": "Brightness",
+  "light.slider.added": "Brightness slider added to the menu.",
+  "light.slider.removed": "Brightness slider removed.",
+  "undo.lightSlider": "KaihenNavi: Brightness slider"
 }

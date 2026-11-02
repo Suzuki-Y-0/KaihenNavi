@@ -579,5 +579,16 @@
   "light.anchor.button": "そろえる",
   "light.anchor.hint": "Modular Avatar の「Mesh Settings」をアバターに 1 つ置いて、アップロード時に全部の部品の基準をそろえます。元の服やアバターのファイルは変わりません。",
   "light.anchor.done": "明るさの基準をそろえました。",
-  "undo.lightAnchor": "かいへんナビ: 明るさの基準をそろえる"
+  "undo.lightAnchor": "かいへんナビ: 明るさの基準をそろえる",
+  "light.slider.title": "ゲームの中で明るさを変えられるようにする",
+  "light.slider.intro": "アバターのメニューに「明るさ」のスライダーを付けます。暗いワールドでも、自分で明るさを上げられます。",
+  "light.slider.add": "メニューにスライダーを付ける",
+  "light.slider.active": "メニューの「明るさ」で変えられます（{0} 個の部品が対象）。",
+  "light.slider.rebuild": "作り直す（服やアクセを足したとき）",
+  "light.slider.remove": "スライダーを外す",
+  "light.slider.hint": "スライダーは「いちばん暗いとき」の明るさを全部の部品で同じ値にします。最初の位置は今の値です。同期に 8 bit 使います。",
+  "light.slider.menuLabel": "明るさ",
+  "light.slider.added": "メニューに明るさのスライダーを付けました。",
+  "light.slider.removed": "明るさのスライダーを外しました。",
+  "undo.lightSlider": "かいへんナビ: 明るさのスライダー"
 }

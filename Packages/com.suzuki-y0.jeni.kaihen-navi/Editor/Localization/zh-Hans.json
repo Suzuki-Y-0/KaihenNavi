@@ -579,5 +579,16 @@
   "light.anchor.button": "统一",
   "light.anchor.hint": "在模型上放置一个 Modular Avatar 的「Mesh Settings」，上传时统一所有部件的基准。原始模型和服装文件不会被修改。",
   "light.anchor.done": "已统一亮度基准。",
-  "undo.lightAnchor": "KaihenNavi: 统一亮度基准"
+  "undo.lightAnchor": "KaihenNavi: 统一亮度基准",
+  "light.slider.title": "在游戏中调整亮度",
+  "light.slider.intro": "在模型菜单中添加「亮度」滑块，在较暗的世界里也能自己调亮。",
+  "light.slider.add": "添加到菜单",
+  "light.slider.active": "可在菜单的「亮度」中调整（{0} 个部件）。",
+  "light.slider.rebuild": "重新生成（添加服装或配饰后）",
+  "light.slider.remove": "移除滑块",
+  "light.slider.hint": "滑块会把所有部件的「最暗时」设为相同的值，初始位置为当前值，同步占用 8 bit。",
+  "light.slider.menuLabel": "亮度",
+  "light.slider.added": "已将亮度滑块添加到菜单。",
+  "light.slider.removed": "已移除亮度滑块。",
+  "undo.lightSlider": "KaihenNavi: 亮度滑块"
 }

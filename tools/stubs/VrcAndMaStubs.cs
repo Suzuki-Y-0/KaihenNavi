@@ -148,6 +148,26 @@ namespace nadena.dev.modular_avatar.core
     {
         public List<ToggledObject> Objects { get; set; }
     }
+
+    public enum ParameterSyncType { NotSynced, Int, Float, Bool }
+
+    [System.Serializable]
+    public struct ParameterConfig
+    {
+        public string nameOrPrefix;
+        public string remapTo;
+        public bool internalParameter, isPrefix;
+        public ParameterSyncType syncType;
+        public bool localOnly;
+        public float defaultValue;
+        public bool saved;
+        public bool hasExplicitDefaultValue;
+    }
+
+    public class ModularAvatarParameters : AvatarTagComponent
+    {
+        public List<ParameterConfig> parameters = new List<ParameterConfig>();
+    }
 }
 
 namespace VRC.Core

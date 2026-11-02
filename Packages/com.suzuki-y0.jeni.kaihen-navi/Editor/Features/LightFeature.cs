@@ -166,6 +166,26 @@ namespace Jeni.KaihenNavi
             var shadowOff = _entries.Count(e => Selected(e) && e.Material.HasProperty(UseShadowProperty) && e.Material.GetFloat(UseShadowProperty) < 0.5f);
             if (shadowOff > 0) root.Add(Ui.Notice(L10n.Tr("light.shadowOff", shadowOff), "info"));
 
+#if KAIHENNAVI_MA
+            // ゲームの中で明るさを変えるスライダー
+            root.Add(Ui.Heading(L10n.Tr("light.slider.title")));
+            if (LightMenu.Find(ctx.Avatar) == null)
+            {
+                root.Add(Ui.Notice(L10n.Tr("light.slider.intro"), "info"));
+                root.Add(Ui.Button(L10n.Tr("light.slider.add"), () => AddSlider(ctx, lil)));
+            }
+            else
+            {
+                root.Add(Ui.Notice(L10n.Tr("light.slider.active", LightMenu.CountTargets(ctx.Avatar)), "info"));
+                var sliderRow = Ui.Box("kn-row");
+                sliderRow.Add(Ui.Button(L10n.Tr("light.slider.rebuild"), () => AddSlider(ctx, lil)));
+                sliderRow.Add(Ui.Button(L10n.Tr("light.slider.remove"), () => RemoveSlider(ctx), "kn-button--ghost"));
+                root.Add(sliderRow);
+            }
+
+            root.Add(Ui.Text(L10n.Tr("light.slider.hint"), "kn-hint"));
+#endif
+
             root.Add(Ui.Text(L10n.Tr("light.tip"), "kn-hint"));
             return root;
         }
@@ -183,6 +203,41 @@ namespace Jeni.KaihenNavi
             MeshSettingsHelper.Unify(ctx.Avatar, undoName);
             ctx.CompleteEdit(group);
             ctx.Tell(L10n.Tr("light.anchor.done"));
+            ctx.Rebuild();
+        }
+
+        /// <summary>ゲームの中で明るさを変えるスライダーをメニューに付ける（作り直しにも使う）。</summary>
+        private void AddSlider(FeatureContext ctx, List<Entry> lil)
+        {
+            var undoName = L10n.Tr("undo.lightSlider");
+            // 最初の位置は、いまの「いちばん暗いとき」の値（見つからなければ既定値）
+            var value = 0.05f;
+            var first = lil.FirstOrDefault(e => e.Material != null && e.Material.HasProperty(LightMenu.Property));
+            if (first != null) value = first.Material.GetFloat(LightMenu.Property);
+
+            ctx.BeginEdit();
+            UndoHelper.Separate();
+            Undo.IncrementCurrentGroup();
+            var group = Undo.GetCurrentGroup();
+            Undo.SetCurrentGroupName(undoName);
+            LightMenu.Create(ctx, L10n.Tr("light.slider.menuLabel"), value, undoName);
+            ctx.CompleteEdit(group);
+            ctx.Tell(L10n.Tr("light.slider.added"));
+            ctx.Rebuild();
+        }
+
+        /// <summary>ゲームの中で明るさを変えるスライダーをメニューから外す。</summary>
+        private void RemoveSlider(FeatureContext ctx)
+        {
+            var undoName = L10n.Tr("undo.lightSlider");
+            ctx.BeginEdit();
+            UndoHelper.Separate();
+            Undo.IncrementCurrentGroup();
+            var group = Undo.GetCurrentGroup();
+            Undo.SetCurrentGroupName(undoName);
+            LightMenu.Remove(ctx.Avatar, undoName);
+            ctx.CompleteEdit(group);
+            ctx.Tell(L10n.Tr("light.slider.removed"));
             ctx.Rebuild();
         }
 #endif

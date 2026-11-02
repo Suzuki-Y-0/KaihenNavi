@@ -127,7 +127,7 @@ namespace UnityEngine
         public System.Collections.IEnumerator GetEnumerator() { return _children.GetEnumerator(); }
     }
 
-    public class Renderer : Component { public Material[] sharedMaterials; public Bounds bounds; public bool enabled, forceRenderingOff; }
+    public class Renderer : Component { public Material[] sharedMaterials; public Bounds bounds; public bool enabled, forceRenderingOff; public Transform probeAnchor; }
     public class MeshRenderer : Renderer { }
     public class MeshFilter : Component { public Mesh sharedMesh; }
     public class ParticleSystemRenderer : Renderer { public int meshCount; public int GetMeshes(Mesh[] meshes) { return 0; } }
@@ -239,6 +239,13 @@ namespace UnityEngine
     public class Shader : Object { public bool isSupported; public static Shader Find(string name) { return null; } }
     public static class Graphics { public static void Blit(Texture source, RenderTexture dest) { } }
     public class RuntimeAnimatorController : Object { }
+    public class Motion : Object { }
+    public class AnimationClip : Motion { public void ClearCurves() { } }
+    public class AnimationCurve
+    {
+        public static AnimationCurve Linear(float timeStart, float valueStart, float timeEnd, float valueEnd) { return new AnimationCurve(); }
+    }
+    public enum AnimatorControllerParameterType { Float = 1, Int = 3, Bool = 4, Trigger = 9 }
 
     public class Material : Object
     {
@@ -797,6 +804,17 @@ namespace UnityEditor
         public static void EraseString(string key) { }
     }
 
+    public struct EditorCurveBinding
+    {
+        public static EditorCurveBinding FloatCurve(string inPath, Type inType, string inPropertyName) { return new EditorCurveBinding(); }
+    }
+
+    public static class AnimationUtility
+    {
+        public static void SetEditorCurve(AnimationClip clip, EditorCurveBinding binding, AnimationCurve curve) { }
+        public static string CalculateTransformPath(Transform targetTransform, Transform root) { return ""; }
+    }
+
     public static class AssetDatabase
     {
         public static void ImportPackage(string path, bool interactive) { }
@@ -1035,6 +1053,36 @@ namespace UnityEditor
     public struct GlobalObjectId
     {
         public static GlobalObjectId GetGlobalObjectIdSlow(Object o) { return default(GlobalObjectId); }
+    }
+}
+
+namespace UnityEditor.Animations
+{
+    using UnityEngine;
+
+    public class AnimatorController : RuntimeAnimatorController
+    {
+        public AnimatorControllerLayer[] layers;
+        public static AnimatorController CreateAnimatorControllerAtPath(string path) { return new AnimatorController(); }
+        public void AddParameter(string name, AnimatorControllerParameterType type) { }
+    }
+
+    public class AnimatorControllerLayer
+    {
+        public AnimatorStateMachine stateMachine;
+    }
+
+    public class AnimatorStateMachine : Object
+    {
+        public AnimatorState AddState(string name) { return new AnimatorState(); }
+    }
+
+    public class AnimatorState : Object
+    {
+        public Motion motion;
+        public bool timeParameterActive;
+        public string timeParameter;
+        public bool writeDefaultValues;
     }
 }
 

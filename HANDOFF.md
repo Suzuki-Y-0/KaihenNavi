@@ -25,6 +25,16 @@
 - 「ピンク（シェーダーが無い）を直す」は lilToon が無い・マテリアルの枠が空、の検出までは確認済み。
 - 7 章の残り（紹介動画・説明書・BOOTH 公開・配布方法）は未着手。
 
+### 0.2.1 明るさの基準をそろえる（2026-11-02・feature/mesh-settings・Unity 未確認）
+- lilycalInventory（MIT）の AutoFixMeshSettings を参考に、コードは写さず MA の Mesh Settings で実装（独自スクリプトを残さないため）。
+- 明るさのページの先頭に「体と服の明るさをそろえる」。アバターのルートに MA Mesh Settings（Anchor・Bounds とも Set、Anchor は体で多く使われているもの→無ければ Hips、Bounds は Hips 基準で全メッシュ＋10%）。Setup Outfit が服に付けた設定（SetOrInherit）は Inherit にしてルートに従わせる。`MeshSettingsBackup` で「元に戻す」に参加（この機能より前のバックアップでは何もしない）。
+- 処理は `Features/MeshSettingsHelper.cs`。check.sh（Mono）と Unity では未確認。Unity で見ること：ばらばらの数、そろえた後 0 になるか、Ctrl+Z と「元に戻す」、Play／ビルド後の各メッシュの Anchor Override と Bounds、服を着せた後にもう一度そろえる。
+
+### 0.2.2 ゲームの中で明るさを変えるスライダー（2026-11-03・feature/light-slider＝mesh-settings の上・Unity 未確認）
+- 明るさのページの下に「ゲームの中で明るさを変えられるようにする」。アバター直下に `KaihenNavi_LightMenu`（MA Menu Installer・Menu Item＝Radial・MA Parameters＝Float/保存/初期値は今の値・Merge Animator＝FX/Absolute/WD 合わせ）。
+- `Avatars/<名前>/Animations/KaihenNavi_Light.controller`：lilToon を使う全レンダラーの `material._LightMinLimit` を 0→1、パラメータ `KaihenNavi/Light` の Motion Time で動かす。作り直しはファイルを消さずクリップの中身だけ入れ替える（GUID を保つ）。
+- 処理は `Features/LightMenu.cs`。Unity で見ること：Gesture Manager でスライダーを回して明るさが変わるか、複数マテリアルのメッシュで全部の枠に効くか、初期値で見た目が変わらないか、作り直し・外す・Ctrl+Z、同期 8 bit の表示。
+
 ### 0.3 ワーカーの比較（bench/deepseek-compare ブランチ、main には入れていない）
 同じ指示書で gpt-6.1-sol（Codex）と deepseek-v4.1-flash（OpenCode Go）を比べた。結論は `bench/BENCH.md`、数字は `bench/RESULTS.md`。
 - DeepSeek は設計まで決めてある実装（インナーカラーの面判定）なら sol とほぼ同じ。Undo・履歴・保存が絡む課題は細部が粗く、直す手間は sol より多そう。

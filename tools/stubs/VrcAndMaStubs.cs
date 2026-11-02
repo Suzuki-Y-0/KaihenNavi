@@ -78,6 +78,17 @@ namespace nadena.dev.modular_avatar.core
         public GameObject Get(Component container) { return _target; }
     }
 
+    public class ModularAvatarMeshSettings : AvatarTagComponent
+    {
+        public enum InheritMode { Inherit, Set, DontSet, SetOrInherit }
+
+        public InheritMode InheritProbeAnchor = InheritMode.Inherit;
+        public AvatarObjectReference ProbeAnchor;
+        public InheritMode InheritBounds = InheritMode.Inherit;
+        public AvatarObjectReference RootBone;
+        public Bounds Bounds = new UnityEngine.Bounds();
+    }
+
     public class ModularAvatarMenuInstaller : AvatarTagComponent { }
     public class ModularAvatarMenuGroup : AvatarTagComponent { public GameObject targetObject; }
 

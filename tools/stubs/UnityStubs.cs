@@ -127,7 +127,7 @@ namespace UnityEngine
         public System.Collections.IEnumerator GetEnumerator() { return _children.GetEnumerator(); }
     }
 
-    public class Renderer : Component { public Material[] sharedMaterials; public Bounds bounds; public bool enabled, forceRenderingOff; }
+    public class Renderer : Component { public Material[] sharedMaterials; public Bounds bounds; public bool enabled, forceRenderingOff; public Transform probeAnchor; }
     public class MeshRenderer : Renderer { }
     public class MeshFilter : Component { public Mesh sharedMesh; }
     public class ParticleSystemRenderer : Renderer { public int meshCount; public int GetMeshes(Mesh[] meshes) { return 0; } }

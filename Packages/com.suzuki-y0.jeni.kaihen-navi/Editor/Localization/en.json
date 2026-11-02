@@ -572,5 +572,12 @@
   "innerColor.brightnessHint": "100 keeps the original brightness. Increase it if the color is hard to see on dark hair (lilToon).",
   "innerColor.materialHint": "Adds one material per hair mesh. This affects the VRChat performance rating.",
   "innerColor.missingMesh": "The original mesh for {0} could not be found. Check that the original model is still available.",
-  "innerColor.slotMismatch": "Cannot apply to {0} because its mesh sections and material slots do not match."
+  "innerColor.slotMismatch": "Cannot apply to {0} because its mesh sections and material slots do not match.",
+  "light.anchor.title": "Match lighting between body and outfits",
+  "light.anchor.ok": "All parts already use the same lighting reference.",
+  "light.anchor.mismatch": "{0} parts use a different lighting reference. This can make the body and outfits look differently lit, or make parts vanish at some angles.",
+  "light.anchor.button": "Match them",
+  "light.anchor.hint": "Places one Modular Avatar \"Mesh Settings\" on the avatar so every part uses the same reference at upload. Original avatar and outfit files are not changed.",
+  "light.anchor.done": "Lighting reference matched.",
+  "undo.lightAnchor": "KaihenNavi: Match lighting reference"
 }

@@ -111,6 +111,9 @@ namespace Jeni.KaihenNavi
                     var renderer = renderers[i];
                     if (EditorUtility.IsPersistent(renderer) || !renderer.gameObject.scene.IsValid() ||
                         !renderer.gameObject.scene.isLoaded) continue;
+                    // MA（NDMF）のプレビュー用の複製など、保存されない Renderer は参照に数えない。
+                    // 複製のメッシュは一時的なものだがマテリアルは元のままなので、.mat だけが残っていた。
+                    if (Unsaved(renderer.hideFlags) || Unsaved(renderer.gameObject.hideFlags)) continue;
                     var skinned = renderer as SkinnedMeshRenderer;
                     var filter = renderer.GetComponent<MeshFilter>();
                     var mesh = skinned != null ? skinned.sharedMesh : filter == null ? null : filter.sharedMesh;
@@ -142,6 +145,11 @@ namespace Jeni.KaihenNavi
             {
                 EditorUtility.ClearProgressBar();
             }
+        }
+
+        internal static bool Unsaved(HideFlags flags)
+        {
+            return (flags & HideFlags.DontSaveInEditor) != 0;
         }
 
         internal static void Cleanup(HashSet<string> candidates, InnerColorAssetUndo journal)

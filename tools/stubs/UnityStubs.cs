@@ -34,7 +34,7 @@ namespace UnityEngine
         public static implicit operator bool(Object o) { return !ReferenceEquals(o, null); }
     }
 
-    [Flags] public enum HideFlags { None = 0, HideInHierarchy = 1, DontSave = 52, HideAndDontSave = 61 }
+    [Flags] public enum HideFlags { None = 0, HideInHierarchy = 1, DontSaveInEditor = 4, DontSave = 52, HideAndDontSave = 61 }
 
     public class Component : Object
     {

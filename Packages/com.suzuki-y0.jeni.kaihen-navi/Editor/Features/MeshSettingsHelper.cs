@@ -238,7 +238,8 @@ namespace Jeni.KaihenNavi
         /// <summary>
         /// SkinnedMeshRenderer の範囲の 8 隅（ワールド）。有効でアクティブなら smr.bounds を使う。
         /// 無効・非アクティブのものは smr.bounds が原点の空箱になることがあるので、
-        /// メッシュの範囲を骨（無ければ自身）の localToWorld で変換して求める。
+        /// localBounds（骨、無ければ自身のローカル空間）を、その骨（無ければ自身）の localToWorld で変換して求める。
+        /// sharedMesh.bounds はメッシュ空間なので、骨の空間と混ぜると箱がずれる（腰の高さ分など）。
         /// </summary>
         private static Vector3[] WorldCorners(SkinnedMeshRenderer smr)
         {
@@ -250,9 +251,9 @@ namespace Jeni.KaihenNavi
                 return corners;
             }
 
-            var mesh = smr.sharedMesh.bounds;
+            var local = smr.localBounds;
             var matrix = (smr.rootBone != null ? smr.rootBone : smr.transform).localToWorldMatrix;
-            for (var i = 0; i < 8; i++) corners[i] = matrix.MultiplyPoint3x4(Corner(mesh.min, mesh.max, i));
+            for (var i = 0; i < 8; i++) corners[i] = matrix.MultiplyPoint3x4(Corner(local.min, local.max, i));
             return corners;
         }
 

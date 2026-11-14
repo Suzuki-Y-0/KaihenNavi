@@ -364,13 +364,29 @@ namespace Jeni.KaihenNavi
             var original = entry.Material;
             var owned = MaterialCopier.EnsureOwned(ctx.Avatar, original, undoName);
             if (owned == null || owned == original) return owned;
-            // 複製の元の色を覚えさせる（画面を作り直しても、元の色からずらし、元に戻せる）
-            ColorLayers.RecordBaselines(owned, original);
+            // 複製の元の色を覚えさせる（画面を作り直しても、元の色からずらし、元に戻せる）。
+            // 元がこのツールの複製で既に元の色を覚えていれば、現在の色（ずれた後）ではなくその記録を引き継ぐ。
+            Color unused;
+            if (ColorLayers.TryBaseline(original, ColorProperty, out unused)) CopyBaselineRecord(owned, original);
+            else ColorLayers.RecordBaselines(owned, original);
 
             BodyPart part;
             if (Overrides.TryGetValue(original, out part)) Overrides[owned] = part;
             entry.Material = owned;
             return owned;
+        }
+
+        /// <summary>元の複製が覚えている元の色の記録（.meta の userData）を、新しい複製へそのまま写す。</summary>
+        private static void CopyBaselineRecord(Material owned, Material original)
+        {
+            if (owned == null || original == null || !WorkFolders.IsOwned(owned)) return;
+            var importer = AssetImporter.GetAtPath(AssetDatabase.GetAssetPath(owned));
+            var source = AssetImporter.GetAtPath(AssetDatabase.GetAssetPath(original));
+            if (importer == null || source == null || !string.IsNullOrEmpty(importer.userData)) return;
+            // 読み込み直しで未保存の変更を失わないよう、先に保存する
+            AssetDatabase.SaveAssetIfDirty(owned);
+            importer.userData = source.userData;
+            importer.SaveAndReimport();
         }
 
         /// <summary>Shift の逆。元の色から今の色へのずれを（色相°, 彩度%, 明度%）で返す。</summary>

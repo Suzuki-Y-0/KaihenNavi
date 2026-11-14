@@ -59,7 +59,18 @@ internal static class HistoryTests
     {
         Undo.IncrementCurrentGroup();
         Undo.SetCurrentGroupName(name);
+        // Unity では操作の記録が Undo 履歴に積まれてから、遅れて CompletePending が呼ばれる。
+        Undo.RecordsForTests.Add(name);
         backup.CompletePending();
+    }
+
+    private static VRCAvatarDescriptor MakeAvatar(string name)
+    {
+        var go = new GameObject { name = name };
+        var root = new Transform { gameObject = go, name = "Root", localScale = new Vector3(1, 1, 1) };
+        go.transform = root;
+        go.ComponentsForTests = type => type == typeof(Transform) ? new object[] { root } : new object[0];
+        return new VRCAvatarDescriptor { name = go.name, gameObject = go, transform = root };
     }
 
     public static void Main()
@@ -76,6 +87,7 @@ internal static class HistoryTests
         var deletions = 0;
         AssetDatabase.DeleteForTests = path => deletions++;
         Undo.RecordForTests = target => Recorded.Add(target);
+        GlobalObjectId.IdForTests = o => "GlobalObjectId_V1-2-0123456789abcdef0123456789abcdef-" + o.name + "-0";
         // JSON を扱う参加機能の挙動は本物の Unity で確認する。このテストでは履歴自身に絞る。
         ((IList)typeof(BackupService).GetField("Participants", Static).GetValue(null)).Clear();
         var go = new GameObject { name = "テスト用アバター" };
@@ -161,6 +173,52 @@ internal static class HistoryTests
         Undo.PerformUndoForTests = () => { nativeUndoCalls++; Call(restartedWindow, "OnUndoRedo"); };
         Call(restartedWindow, "RestoreLatest");
         Check(nativeUndoCalls == 2, "The next arrow can undo the restoration itself, including a backup restored after restart");
+
+        // 上に別の操作（カメラの移動など）が積まれたら、Unity の Undo ではなくバックアップで戻す。
+        var records = Undo.RecordsForTests;
+        var liveBackup = new BackupService();
+        var liveWindow = new KaihenNaviWindow();
+        Set(liveWindow, "_avatar", avatar);
+        Set(liveWindow, "_features", FeatureCatalog.Create());
+        Set(liveWindow, "_backup", liveBackup);
+        Undo.PerformUndoForTests = () => { nativeUndoCalls++; records.RemoveAt(records.Count - 1); Call(liveWindow, "OnUndoRedo"); };
+        liveBackup.BeginEdit(avatar, "color");
+        Finish(liveBackup, L10n.Tr("undo.body"));
+        Check(liveBackup.HasLiveUndo(avatar), "A step just recorded by this window is the top Undo step");
+        records.Add("Move Main Camera");
+        Check(!liveBackup.HasLiveUndo(avatar), "Another Undo step on top must not be undone by the arrow");
+        var colorStep = liveBackup.List(avatar)[0];
+        var callsBefore = nativeUndoCalls;
+        Call(liveWindow, "RestoreLatest");
+        Check(nativeUndoCalls == callsBefore && colorStep.hiddenFromHistory, "With a foreign step on top the arrow restores the backup instead");
+
+        // 別のアバターの復元が上にあるとき、このアバターの「元に戻す」で取り消さない。
+        var other = MakeAvatar("別のアバター");
+        Check(BackupService.AvatarId(other) != BackupService.AvatarId(avatar), "Test avatars have distinct identifiers");
+        liveBackup.EndSession();
+        liveBackup.BeginEdit(other, "body");
+        Finish(liveBackup, L10n.Tr("undo.body"));
+        liveBackup.EndSession();
+        liveBackup.BeginEdit(avatar, "body");
+        Finish(liveBackup, L10n.Tr("undo.body"));
+        liveBackup.EndSession();
+        liveBackup.Restore(avatar, liveBackup.List(avatar)[0]);
+        records.Add(L10n.Tr("undo.restore"));
+        Check(!liveBackup.HasLiveUndo(other), "A restoration of another avatar is not this avatar's Undo step");
+        var otherStep = liveBackup.List(other)[0];
+        Set(liveWindow, "_avatar", other);
+        callsBefore = nativeUndoCalls;
+        Call(liveWindow, "RestoreLatest");
+        Check(nativeUndoCalls == callsBefore && otherStep.hiddenFromHistory, "The other avatar falls back to its own latest backup");
+        Set(liveWindow, "_avatar", avatar);
+
+        // 失敗して取り消した操作は履歴に残さない。
+        var assetsBeforeCancel = Assets.Count;
+        liveBackup.EndSession();
+        liveBackup.BeginEdit(avatar, "outfit");
+        liveBackup.CancelPending();
+        liveBackup.CompletePending();
+        Check(Assets.Count == assetsBeforeCancel, "A cancelled operation leaves no history entry");
         Check(((string)Call(window, "OperationTitle", new BackupSnapshot { featureId = "body", operationName = "Add Component" })) ==
             L10n.Tr("history.operation", L10n.Tr("feature.body.nav")), "Unknown English steps use the navigation name");
 

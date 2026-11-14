@@ -96,7 +96,11 @@ namespace Jeni.KaihenNavi
             try
             {
                 var instance = PrefabUtility.InstantiatePrefab(prefab) as GameObject;
-                if (instance == null) return;
+                if (instance == null)
+                {
+                    ctx.CancelEdit();
+                    return;
+                }
                 Undo.RegisterCreatedObjectUndo(instance, undoName);
                 Undo.SetTransformParent(instance.transform, avatar.transform, undoName);
                 Undo.RecordObject(instance.transform, undoName);
@@ -113,6 +117,8 @@ namespace Jeni.KaihenNavi
             catch (System.Exception e)
             {
                 Undo.RevertAllDownToGroup(group);
+                // 取り消した操作の「変更前」を履歴に残さない
+                ctx.CancelEdit();
                 Debug.LogException(e);
                 EditorUtility.DisplayDialog(L10n.Tr("app.name"), L10n.Tr("outfit.failed"), L10n.Tr("dialog.ok"));
                 return;

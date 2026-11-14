@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Reflection;
 using UnityEditor;
 using UnityEngine;
 using VRC.SDK3.Avatars.Components;
@@ -46,15 +47,26 @@ namespace Jeni.KaihenNavi
 #endif
         };
 
+        /// <summary>
+        /// このウィンドウで Unity の Undo に載せた手順。どのアバターの手順か、載せた直後の Undo の積み方も控え、
+        /// 「元に戻す」の時点で上に別の操作（カメラの移動・別のアバターの復元など）が積まれていないか確かめる。
+        /// </summary>
+        private sealed class LiveStep
+        {
+            public string AvatarId;
+            public string UndoState;
+        }
+
         private string _sessionKey;
         private BackupSnapshot _current;
         private BackupSnapshot _pending;
         private BackupSnapshot _restoredTarget;
+        private LiveStep _restoredStep;
         private VRCAvatarDescriptor _editingAvatar;
         private long _sessionTicks;
         private int _lastGroup = -1;
         private static long _lastTicks;
-        private readonly HashSet<BackupSnapshot> _liveSteps = new HashSet<BackupSnapshot>();
+        private readonly Dictionary<BackupSnapshot, LiveStep> _liveSteps = new Dictionary<BackupSnapshot, LiveStep>();
 
         /// <summary>同じ時刻に操作が重なっても、履歴の順番とまとまりを取り違えない。</summary>
         private static long NextTicks()
@@ -109,6 +121,7 @@ namespace Jeni.KaihenNavi
                     if (!_current.createdPaths.Contains(path)) _current.createdPaths.Add(path);
                 SaveMetadata(_current);
                 ReleaseUnsaved(snapshot);
+                MarkLive(_current, _editingAvatar);
                 return;
             }
             snapshot.operationName = Undo.GetCurrentGroupName();
@@ -120,14 +133,25 @@ namespace Jeni.KaihenNavi
             Undo.RecordObject(snapshot, undoName);
             snapshot.hiddenFromHistory = false;
             _current = snapshot;
-            _liveSteps.Add(snapshot);
             _lastGroup = group;
             Prune(_editingAvatar);
             Undo.SetCurrentGroupName(undoName);
             Undo.FlushUndoRecordObjects();
             Undo.CollapseUndoOperations(group);
             SaveMetadata(snapshot);
+            MarkLive(snapshot, _editingAvatar);
             RaiseChanged();
+        }
+
+        /// <summary>
+        /// 操作が失敗して Undo.RevertAllDownToGroup などで取り消したときに呼ぶ。
+        /// 取りかけのバックアップを履歴に載せずに捨てる（何も変わっていない手順を残さない）。
+        /// </summary>
+        public void CancelPending()
+        {
+            EditorApplication.delayCall -= CompletePending;
+            if (_pending != null) ReleaseUnsaved(_pending);
+            _pending = null;
         }
 
         /// <summary>今の操作のまとまりを終える（別の機能やアバターに切り替えたとき）。</summary>
@@ -216,12 +240,77 @@ namespace Jeni.KaihenNavi
             return List(avatar).Select(s => s.SessionTicks).Distinct().Count();
         }
 
-        /// <summary>直前の手順をこのウィンドウで Undo に載せたか。再起動後はバックアップで戻す。</summary>
+        /// <summary>
+        /// Unity の Undo の 1 手目が、このアバターの直前の手順（またはこのアバターの復元）か。
+        /// 上に別の操作が積まれている・別のアバターの手順・再起動後などは false にし、バックアップで戻す。
+        /// </summary>
         public bool HasLiveUndo(VRCAvatarDescriptor avatar)
         {
+            if (avatar == null) return false;
+            var state = UndoState();
+            if (state == null) return false;
+            var id = AvatarId(avatar);
+            if (_restoredTarget != null && _restoredTarget.hiddenFromHistory && IsTop(_restoredStep, id, state)) return true;
             var latest = List(avatar).FirstOrDefault();
-            return (_restoredTarget != null && _restoredTarget.hiddenFromHistory) ||
-                   (latest != null && _liveSteps.Contains(latest));
+            LiveStep step;
+            return latest != null && _liveSteps.TryGetValue(latest, out step) && IsTop(step, id, state);
+        }
+
+        private static bool IsTop(LiveStep step, string avatarId, string state)
+        {
+            return step != null && step.AvatarId == avatarId && step.UndoState == state;
+        }
+
+        /// <summary>Undo に載せた直後の積み方を控える（取れない環境では控えず、バックアップで戻す）。</summary>
+        private LiveStep Live(VRCAvatarDescriptor avatar)
+        {
+            var state = UndoState();
+            return avatar == null || state == null ? null : new LiveStep { AvatarId = AvatarId(avatar), UndoState = state };
+        }
+
+        private void MarkLive(BackupSnapshot snapshot, VRCAvatarDescriptor avatar)
+        {
+            var step = Live(avatar);
+            if (step == null) _liveSteps.Remove(snapshot);
+            else _liveSteps[snapshot] = step;
+        }
+
+        private static bool _undoRecordsSearched;
+        private static MethodInfo _undoRecords;
+
+        /// <summary>
+        /// 今の Undo の積み方（件数と名前）の要約。Unity の公開 API には Undo の中身を調べる方法が無く、
+        /// グループ番号はクリックだけでも進むため、内部の Undo.GetRecords を使う。見つからなければ null。
+        /// </summary>
+        internal static string UndoState()
+        {
+            if (!_undoRecordsSearched)
+            {
+                _undoRecordsSearched = true;
+                _undoRecords = typeof(Undo).GetMethod("GetRecords", BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic,
+                    null, new[] { typeof(List<string>), typeof(List<string>) }, null);
+            }
+            if (_undoRecords == null) return null;
+            try
+            {
+                var undo = new List<string>();
+                _undoRecords.Invoke(null, new object[] { undo, new List<string>() });
+                if (undo.Count == 0) return null;
+                var hash = 14695981039346656037UL;
+                unchecked
+                {
+                    foreach (var name in undo)
+                    {
+                        foreach (var c in name ?? "") hash = (hash ^ c) * 1099511628211UL;
+                        hash = (hash ^ 0xFFFFUL) * 1099511628211UL;
+                    }
+                }
+                return undo.Count + ":" + hash.ToString("x16");
+            }
+            catch (Exception)
+            {
+                return null;
+            }
         }
 
         /// <summary>いちばん新しいバックアップに戻す。</summary>
@@ -259,12 +348,23 @@ namespace Jeni.KaihenNavi
                 snapshot.hiddenFromHistory = true;
                 EditorUtility.SetDirty(snapshot);
             }
+            // 戻した状態を改変アバターの Prefab にも書き込む（FeatureContext.CompleteEdit と同じ形）。
+            // 同じグループに入れるので、Ctrl+Z で Prefab も復元前に戻る。
             Undo.FlushUndoRecordObjects();
-            Undo.CollapseUndoOperations(group);
+            try
+            {
+                MyAvatar.Save(avatar);
+            }
+            finally
+            {
+                Undo.SetCurrentGroupName(L10n.Tr("undo.restore"));
+                Undo.CollapseUndoOperations(group);
+            }
             UndoHelper.Separate();
 
             EndSession();
             _restoredTarget = target;
+            _restoredStep = Live(avatar);
             AssetDatabase.SaveAssets();
             RaiseChanged();
         }
@@ -326,7 +426,8 @@ namespace Jeni.KaihenNavi
                 });
                 foreach (var m in mats)
                 {
-                    if (m != null && WorkFolders.IsOwned(m)) ownedMaterials.Add(m);
+                    // ほかのアバターのフォルダのマテリアルは保存しない（復元でそのアバターの変更を上書きしないため）。
+                    if (m != null && WorkFolders.IsOwnedBy(m, avatar.gameObject)) ownedMaterials.Add(m);
                 }
 
                 var smr = r as SkinnedMeshRenderer;
@@ -497,6 +598,8 @@ namespace Jeni.KaihenNavi
             foreach (var state in snapshot.materials)
             {
                 if (state.live == null || state.saved == null) continue;
+                // 古いバックアップには、ほかのアバターの複製マテリアルが入っていることがある。このアバターの物だけ戻す。
+                if (!WorkFolders.IsOwnedBy(state.live, avatar.gameObject)) continue;
                 Undo.RecordObject(state.live, undoName);
                 var name = state.live.name;
                 EditorUtility.CopySerialized(state.saved, state.live);

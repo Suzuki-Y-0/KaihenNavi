@@ -475,6 +475,8 @@ namespace UnityEngine.SceneManagement
     {
         public bool isLoaded;
         public bool validForTests;
+        public int handle;
+        public string path;
         public bool IsValid() { return validForTests; }
         public UnityEngine.GameObject[] GetRootGameObjects() { return null; }
     }
@@ -930,6 +932,10 @@ namespace UnityEditor
         public static string GroupNameForTests;
         public static Action PerformUndoForTests;
         public static void PerformUndo() { if (PerformUndoForTests != null) PerformUndoForTests(); }
+        public static System.Collections.Generic.List<string> RecordsForTests = new System.Collections.Generic.List<string>();
+        // 本物は internal（Undo・Redo の履歴の名前を返す）。BackupService はリフレクションで呼ぶ。
+        internal static void GetRecords(System.Collections.Generic.List<string> undoRecords, System.Collections.Generic.List<string> redoRecords)
+        { undoRecords.AddRange(RecordsForTests); }
         public static string GetCurrentGroupName() { return GroupNameForTests; }
         public static void FlushUndoRecordObjects() { }
         public static void RevertAllDownToGroup(int group) { }
@@ -1052,7 +1058,11 @@ namespace UnityEditor
 
     public struct GlobalObjectId
     {
-        public static GlobalObjectId GetGlobalObjectIdSlow(Object o) { return default(GlobalObjectId); }
+        public static Func<Object, string> IdForTests;
+        private string _id;
+        public static GlobalObjectId GetGlobalObjectIdSlow(Object o)
+        { return new GlobalObjectId { _id = IdForTests == null ? null : IdForTests(o) }; }
+        public override string ToString() { return _id ?? "UnityEditor.GlobalObjectId"; }
     }
 }
 

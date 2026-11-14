@@ -188,7 +188,9 @@ namespace Jeni.KaihenNavi
             var materialPath = AssetDatabase.GetAssetPath(material);
             if (string.IsNullOrEmpty(materialPath)) return null;
             var folder = WorkFolders.Ensure(Path.GetDirectoryName(materialPath).Replace('\\', '/') + "/Textures");
-            return folder + "/" + WorkFolders.Sanitize(material.name) + "_" + layer + ".png";
+            // 複製は元と同じ名前のままなので、名前で付けると別の「Body」（体と服）が同じ画像を上書きし合う。
+            // 複製係が重ならないように付けたファイル名で分ける。旧名の画像が付いていても、作り直すと新しい名前へ移る。
+            return folder + "/" + WorkFolders.Sanitize(Path.GetFileNameWithoutExtension(materialPath)) + "_" + layer + ".png";
         }
 
         private static void WriteShifted(Texture2D source, string path, float hue, float saturation, float brightness)

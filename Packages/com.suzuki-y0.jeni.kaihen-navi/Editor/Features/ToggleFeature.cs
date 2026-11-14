@@ -289,6 +289,8 @@ namespace Jeni.KaihenNavi
             public bool IsDefault;
             public bool OriginalActive;
             public string Parameter;
+            /// <summary>元の表示の目印が無い＝古い版で作ったメニュー（古い版は ON の服を非表示にしていた）。</summary>
+            public bool Legacy;
         }
 
         private static void BuildWithModularAvatar(FeatureContext ctx, VisualElement root, List<Candidate> candidates)
@@ -394,7 +396,7 @@ namespace Jeni.KaihenNavi
                     var target = obj.Object.Get(toggle);
                     if (target == null) continue;
                     var visibility = item.transform.Find(VisibilityName);
-                    result.Add(new ExistingToggle { Item = item.gameObject, Target = target, IsDefault = item.isDefault,
+                    result.Add(new ExistingToggle { Item = item.gameObject, Target = target, IsDefault = item.isDefault, Legacy = visibility == null,
                         Parameter = item.Control != null && item.Control.parameter != null ? item.Control.parameter.name : null,
                         // 旧版は実際の値を残していない。初期値で、旧版が強制した非表示から復旧する。
                         OriginalActive = visibility != null ? visibility.gameObject.activeSelf : item.isDefault });
@@ -404,18 +406,24 @@ namespace Jeni.KaihenNavi
             return result;
         }
 
-        /// <summary>前回作ったメニューを消し、対象の表示状態を作る前に戻す。</summary>
+        /// <summary>
+        /// 古い版が強制した非表示だけを戻す。今の版はシーンの表示を変えないので、後から「脱がす」などで
+        /// わざと変えた表示は戻さない。古い版は初期値 ON の服を非表示にしていたので、その形のままのときだけ戻す。
+        /// </summary>
+        private static void RestoreLegacyVisibility(ExistingToggle e, string undoName)
+        {
+            if (!e.Legacy || !e.IsDefault || e.Target.activeSelf) return;
+            Undo.RecordObject(e.Target, undoName);
+            e.Target.SetActive(true);
+            PrefabUtility.RecordPrefabInstancePropertyModifications(e.Target);
+        }
+
+        /// <summary>前回作ったメニューを消す。古い版が非表示にした対象は表示に戻す。</summary>
         private static void RemoveMenu(VRCAvatarDescriptor avatar, string undoName, bool restoreVisibility = true)
         {
             if (restoreVisibility)
             {
-                foreach (var e in ReadExisting(avatar))
-                {
-                    if (e.Target.activeSelf == e.OriginalActive) continue;
-                    Undo.RecordObject(e.Target, undoName);
-                    e.Target.SetActive(e.OriginalActive);
-                    PrefabUtility.RecordPrefabInstancePropertyModifications(e.Target);
-                }
+                foreach (var e in ReadExisting(avatar)) RestoreLegacyVisibility(e, undoName);
             }
 
             var menuRoot = avatar.transform.Find(MenuObjectName);
@@ -434,14 +442,8 @@ namespace Jeni.KaihenNavi
             Undo.SetCurrentGroupName(undoName);
 
             var previous = ReadExisting(avatar);
-            // チェックを外した項目は、その切り替えを削除するので元の表示に戻す。
-            foreach (var old in previous.Where(e => !targets.Any(c => c.Target == e.Target)))
-            {
-                if (old.Target.activeSelf == old.OriginalActive) continue;
-                Undo.RecordObject(old.Target, undoName);
-                old.Target.SetActive(old.OriginalActive);
-                PrefabUtility.RecordPrefabInstancePropertyModifications(old.Target);
-            }
+            // チェックを外した項目は、その切り替えを削除するので、古い版が非表示にしたものだけ表示に戻す。
+            foreach (var old in previous.Where(e => !targets.Any(c => c.Target == e.Target))) RestoreLegacyVisibility(old, undoName);
             // 作り直しでも現在の表示は変えず、最初に作る前の状態を引き継ぐ。
             RemoveMenu(avatar, undoName, false);
 
@@ -464,7 +466,8 @@ namespace Jeni.KaihenNavi
                     targetPath = HierarchyPath.Get(avatar.transform, c.Target.transform),
                     // 今見えているものは最初から ON（着ている状態）にする
                     isDefault = old != null ? old.IsDefault : c.Target.activeSelf,
-                    hasOriginalActive = true,
+                    // 古い版の項目は古い版のまま残す（後で消したときに、強制された非表示を戻せるように）
+                    hasOriginalActive = old == null || !old.Legacy,
                     originalActive = old != null ? old.OriginalActive : c.Target.activeSelf,
                 });
             }
@@ -550,11 +553,13 @@ namespace Jeni.KaihenNavi
 
                 // EditorOnly の空オブジェクトの activeSelf に元の表示を保存する。
                 // 独自スクリプトは追加せず、メニューと一緒に Undo・Prefab 保存・バックアップで復元できる。
+                // 元の表示を持たない古い版のデータからは目印を作らず、古い版のメニューとして扱う。
+                if (!spec.hasOriginalActive) continue;
                 var visibility = new GameObject(VisibilityName) { tag = "EditorOnly" };
                 Undo.RegisterCreatedObjectUndo(visibility, undoName);
                 Undo.SetTransformParent(visibility.transform, itemObject.transform, undoName);
                 Undo.RecordObject(visibility, undoName);
-                visibility.SetActive(spec.hasOriginalActive ? spec.originalActive : spec.isDefault);
+                visibility.SetActive(spec.originalActive);
             }
 
             return menuRoot;
@@ -585,7 +590,7 @@ namespace Jeni.KaihenNavi
                     parameter = item.Control != null && item.Control.parameter != null ? item.Control.parameter.name : "",
                     targetPath = HierarchyPath.Get(avatar.transform, target.transform),
                     isDefault = item.isDefault,
-                    hasOriginalActive = true,
+                    hasOriginalActive = item.transform.Find(VisibilityName) != null,
                     originalActive = item.transform.Find(VisibilityName) != null ?
                         item.transform.Find(VisibilityName).gameObject.activeSelf : item.isDefault,
                 });

@@ -158,7 +158,7 @@ internal static class FeatureEditChecks
         Check(menu.GetComponentsInChildren<Transform>(true).Where(t => t.name == "KaihenNavi_OriginalVisibility")
             .All(t => t.gameObject.tag == "EditorOnly"), "visibility markers are EditorOnly");
 
-        // 既定値やシーンの表示を後から変えても、削除では作成前へ戻す。
+        // 既定値やシーンの表示を後から変えたら、その変更を残す（このメニューは表示を変えないので戻すものが無い）。
         visible.SetActive(false);
         hidden.SetActive(true);
         Call("CreateMenu", ctx, Candidates(visible, hidden));
@@ -166,16 +166,16 @@ internal static class FeatureEditChecks
         Check(!visible.activeSelf && hidden.activeSelf, "rebuild preserves current scene visibility");
         Check(data.items[0].isDefault && !data.items[1].isDefault, "rebuild preserves menu defaults");
         Check(data.items[0].originalActive && !data.items[1].originalActive, "rebuild retains first original state");
-        // チェックを外した項目も削除として復元する。
+        // チェックを外した項目も、後から変えた表示を戻さない。
         Call("CreateMenu", ctx, Candidates(visible));
-        Check(!hidden.activeSelf && !visible.activeSelf, "removed rebuild target restored; retained target untouched");
+        Check(hidden.activeSelf && !visible.activeSelf, "unchecked target keeps deliberate visibility; retained target untouched");
         menu = root.transform.Find(ToggleFeature.MenuObjectName);
         menu.GetComponentsInChildren<ModularAvatarMenuItem>(true).Last().isDefault = false;
         var recorded = new List<UnityEngine.Object>();
         Undo.RecordForTests = o => recorded.Add(o);
         Call("RemoveMenu", avatar, "remove", true);
-        Check(visible.activeSelf && !hidden.activeSelf, "remove restores original independent of default");
-        Check(recorded.Contains(visible), "restored visibility is registered for Undo");
+        Check(!visible.activeSelf && hidden.activeSelf, "remove keeps deliberate visibility");
+        Check(!recorded.Contains(visible), "nothing to restore for current menus");
         Check(root.transform.Find(ToggleFeature.MenuObjectName) == null, "whole menu removed");
 
         // 元の表示を持たない古いバックアップとの互換性。
@@ -186,6 +186,19 @@ internal static class FeatureEditChecks
         visible.SetActive(false);
         Call("RemoveMenu", avatar, "remove", true);
         Check(visible.activeSelf, "legacy hidden object recovered");
+        // 古い版のメニューは作り直しても古い版のまま扱い、後で消したときに強制された非表示を戻す
+        ToggleFeature.BuildMenu(avatar, legacy, "restore");
+        visible.SetActive(false);
+        Call("CreateMenu", ctx, Candidates(visible));
+        Check(!visible.activeSelf && !ToggleFeature.ReadMenu(avatar).items[0].hasOriginalActive, "rebuild keeps legacy item as legacy");
+        Call("RemoveMenu", avatar, "remove", true);
+        Check(visible.activeSelf, "legacy item recovered after rebuild");
+        // 古い版でも、初期値が OFF のもの（古い版が非表示にしていない）は変えない
+        legacy.items[0].isDefault = false;
+        ToggleFeature.BuildMenu(avatar, legacy, "restore");
+        Call("RemoveMenu", avatar, "remove", true);
+        Check(visible.activeSelf, "legacy default-off item untouched");
+        legacy.items[0].isDefault = true;
         legacy.items[0].targetPath = "Missing#0";
         ToggleFeature.BuildMenu(avatar, legacy, "restore");
         Call("RemoveMenu", avatar, "remove", true);

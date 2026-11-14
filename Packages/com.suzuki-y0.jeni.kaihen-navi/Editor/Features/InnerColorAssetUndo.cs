@@ -185,6 +185,9 @@ namespace Jeni.KaihenNavi
             snapshot.Apply(avatar);
             AssetDatabase.SaveAssets();
             MyAvatar.Save(avatar, false);
+            // やり直しで自分用 Prefab に戻った範囲外のマテリアルの変更が、消すはずの内側用 .mat を参照したままにしないよう、
+            // 参照を調べる前に片付ける（Undo 側では配列が長いので何もしない）
+            MyAvatar.RemoveStaleOverridesWithoutUndo(avatar);
             var absent = new HashSet<string>(files.Where(f => !f.Exists).Select(f => f.path));
             var referenced = InnerColorAssets.Referenced(absent);
             foreach (var path in absent)

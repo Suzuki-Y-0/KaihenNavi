@@ -302,13 +302,13 @@ namespace Jeni.KaihenNavi
             {
                 if (hide)
                 {
-                    target.SetParent(Holder(menuRoot, null), false);
+                    Reparent(target, Holder(menuRoot, undo ? L10n.Tr("undo.menu") : null), undo);
                 }
                 else
                 {
                     // 元の場所（番号の上の段）に戻す。見つからなければいちばん上の段
                     var parent = ParentFor(menuRoot, target.name) ?? menuRoot;
-                    target.SetParent(parent, false);
+                    Reparent(target, parent, undo);
                     SortByKey(parent, target);
                 }
             });
@@ -344,6 +344,8 @@ namespace Jeni.KaihenNavi
                 if (others == null)
                 {
                     var go = new GameObject(OtherName);
+                    // シーンで変えるときは、作った「その他」も Ctrl+Z で消えるようにする
+                    if (undo) Undo.RegisterCreatedObjectUndo(go, L10n.Tr("undo.menu"));
                     go.transform.SetParent(menuRoot, false);
                     var item = go.AddComponent<ModularAvatarMenuItem>();
                     item.Control = new VRCExpressionsMenu.Control
@@ -356,7 +358,7 @@ namespace Jeni.KaihenNavi
                     others = go.transform;
                 }
 
-                target.SetParent(others, false);
+                Reparent(target, others, undo);
                 others.SetAsLastSibling();
                 var holder = menuRoot.Find(HiddenName);
                 if (holder != null) holder.SetAsLastSibling();
@@ -367,9 +369,19 @@ namespace Jeni.KaihenNavi
         {
             Restructure(ctx, t.name, (menuRoot, target, undo) =>
             {
-                target.SetParent(menuRoot, false);
+                Reparent(target, menuRoot, undo);
                 SortByKey(menuRoot, target);
             });
+        }
+
+        /// <summary>
+        /// 親を付け替える。シーンで変えるときは Undo にも残す（新しく作った置き場より後に記録するので、
+        /// Ctrl+Z では先に項目が元の親へ戻ってから置き場が消える）。
+        /// </summary>
+        private static void Reparent(Transform target, Transform parent, bool undo)
+        {
+            if (undo) Undo.SetTransformParent(target, parent, L10n.Tr("undo.menu"));
+            target.SetParent(parent, false);
         }
 
         // ---------------------------------------------------------------- 作る・消す

@@ -167,6 +167,31 @@ internal static class FeatureEditChecks
         AssetDatabase.CreateForTests = null;
     }
 
+    private static void WalkGimmickChecks()
+    {
+        // 歩き方の「元に戻す」で消すのは、入れ子の Prefab のいちばん外側まで。整理用の入れ物・服・アバター本体は消さない
+        var gimmick = typeof(WalkFeature).GetMethod("GimmickRoot", Static);
+        Func<GameObject, GameObject, GameObject> root = (g, b) => (GameObject)gimmick.Invoke(null, new object[] { g, b });
+        var avatar = new GameObject("Avatar");
+        var gimmicks = Child(avatar, "Gimmicks", true);
+        var loco = Child(gimmicks, "Loco", true);
+        var inner = Child(loco, "Inner", true);
+        var holder = Child(inner, "Holder", true);
+        var outfit = Child(avatar, "Outfit", true);
+        Child(outfit, "Body", true).AddComponent<SkinnedMeshRenderer>();
+        var outfitWalk = Child(outfit, "Walk", true);
+        var plain = Child(gimmicks, "Plain", true);
+        PrefabUtility.InstanceRootsForTests.Clear();
+        PrefabUtility.InstanceRootsForTests.Add(avatar);
+        PrefabUtility.InstanceRootsForTests.Add(loco);
+        PrefabUtility.InstanceRootsForTests.Add(inner);
+        PrefabUtility.InstanceRootsForTests.Add(outfit);
+        Check(root(holder, avatar) == loco, "walk reset removes outermost nested gimmick Prefab, not its container");
+        Check(root(outfitWalk, avatar) == outfitWalk, "walk reset inside outfit removes only its own object");
+        Check(root(plain, avatar) == plain, "walk reset outside nested Prefab removes only its own object");
+        Check(root(avatar, avatar) == avatar, "boundary itself is never climbed past");
+        PrefabUtility.InstanceRootsForTests.Clear();
+    }
     public static void Main()
     {
         ScriptableObject.CreateForTests = t => (ScriptableObject)System.Activator.CreateInstance(t);
@@ -319,6 +344,7 @@ internal static class FeatureEditChecks
 
         BitChecks();
         MenuTidyChecks();
+        WalkGimmickChecks();
         Console.WriteLine("Feature edit checks passed (" + count + "). Unity Undo, Prefab imports and MA preview require Unity.");
     }
 }

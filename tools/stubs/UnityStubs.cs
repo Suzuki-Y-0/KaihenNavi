@@ -894,6 +894,15 @@ namespace UnityEditor
         public static Action<GameObject, InteractionMode> ApplyForTests;
         public static bool IsPartOfPrefabInstance(Object o) { return RootForTests != null; }
         public static bool IsOutermostPrefabInstanceRoot(GameObject g) { return false; }
+        public static System.Collections.Generic.HashSet<GameObject> InstanceRootsForTests = new System.Collections.Generic.HashSet<GameObject>();
+        public static bool IsAnyPrefabInstanceRoot(GameObject g) { return InstanceRootsForTests.Contains(g); }
+        public static GameObject GetNearestPrefabInstanceRoot(Object o)
+        {
+            var go = o as GameObject ?? (o is Component ? ((Component)o).gameObject : null);
+            for (var t = go == null ? null : go.transform; t != null; t = t.parent)
+                if (InstanceRootsForTests.Contains(t.gameObject)) return t.gameObject;
+            return null;
+        }
         public static GameObject GetOutermostPrefabInstanceRoot(Object o) { return RootForTests; }
         public static string GetPrefabAssetPathOfNearestInstanceRoot(Object o) { return PathForTests; }
         public static GameObject SaveAsPrefabAssetAndConnect(GameObject g, string path, InteractionMode m, out bool ok) { ok = true; return g; }

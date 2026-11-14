@@ -142,6 +142,8 @@ namespace Jeni.KaihenNavi
             {
                 // 色を変えられないマテリアル（色の項目がない）は出さない
                 if (!IsLilToon(pair.Key) && !pair.Key.HasProperty(ColorProperty)) continue;
+                // インナーカラーの内側用マテリアルは、インナーカラーのページで色を決める（ここで変えると色味の補正が上書きされる）
+                if (InnerColorAssets.IsGenerated(pair.Key)) continue;
 
                 BodyPart part;
                 if (!Overrides.TryGetValue(pair.Key, out part))

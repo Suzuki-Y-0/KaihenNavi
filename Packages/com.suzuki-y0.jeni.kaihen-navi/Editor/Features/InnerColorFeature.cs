@@ -183,13 +183,38 @@ namespace Jeni.KaihenNavi
         private static Material[] OriginalMaterials(VRCAvatarDescriptor avatar, InnerColorState state, SkinnedMeshRenderer r)
         {
             var saved = MeshEntry(avatar, state, r);
-            var materials = saved == null ? r.sharedMaterials.ToArray() : saved.originalMaterials.Select(m => m.Load<Material>()).ToArray();
+            var materials = saved == null ? r.sharedMaterials.ToArray() : SavedOriginals(avatar, saved, r);
             if (state != null)
                 foreach (var entry in state.data.entries)
                     foreach (var a in entry.assignments.Where(a => InnerColorState.RendererFor(avatar, a) == r))
                         if (a.slot < materials.Length && AssetDatabase.GetAssetPath(materials[a.slot]) == entry.materialPath)
                             materials[a.slot] = a.original.Load<Material>();
             return materials;
+        }
+
+        /// <summary>
+        /// 台帳に残した元の枠を返す。ただし、色変え・明るさなどでこのアバター用の複製（元と同じ名前）に
+        /// 差し替わった枠は、その複製を「元」とみなす。購入品へ戻すと色変えが消えてしまうため。
+        /// 作り直すのは内側用の枠とメッシュだけにする。
+        /// </summary>
+        private static Material[] SavedOriginals(VRCAvatarDescriptor avatar, InnerColorState.MeshEntry entry, Renderer r)
+        {
+            var recorded = entry.originalMaterials.Select(m => m.Load<Material>()).ToArray();
+            var current = r.sharedMaterials;
+            // 今の枠は「元の面の枠 → 内側用の枠 → 重ねて描く枠」の順。内側用の枠を目印に対応させる。
+            var inner = Array.FindIndex(current, m => m != null && AssetDatabase.GetAssetPath(m) == entry.materialPath);
+            if (inner < 0 || current.Length != recorded.Length + 1) return recorded;
+            for (var i = 0; i < recorded.Length; i++)
+            {
+                var now = current[i < inner ? i : i + 1];
+                if (Adopts(avatar, recorded[i], now)) recorded[i] = now;
+            }
+            return recorded;
+        }
+        private static bool Adopts(VRCAvatarDescriptor avatar, Material recorded, Material now)
+        {
+            return recorded != null && now != null && now != recorded && now.name == recorded.name &&
+                WorkFolders.IsOwnedBy(now, avatar.gameObject) && !InnerColorAssets.IsGenerated(now);
         }
         private static List<int> HairSlots(VRCAvatarDescriptor avatar, SkinnedMeshRenderer r, Material[] materials)
         {
@@ -228,6 +253,8 @@ namespace Jeni.KaihenNavi
             public Material[] materials;
             public int slot;
             public InnerColorTriangles.Split split;
+            // 前回の台帳での、選んだ枠の元マテリアル（色変えで複製に替わったときに内側用のファイルを引き継ぐ）。
+            public Material previous;
         }
 
         private List<Surface> Bake(VRCAvatarDescriptor avatar, InnerColorState state)
@@ -256,7 +283,8 @@ namespace Jeni.KaihenNavi
                     var vertices = baked.vertices.Select(v => r.transform.position + r.transform.rotation * v).ToArray();
                     var triangles = Enumerable.Range(0, original.subMeshCount).Select(original.GetTriangles).ToArray();
                     var selected = Enumerable.Range(0, original.subMeshCount).Select(i => i < materials.Length && materials[i] == materials[slot]).ToArray();
-                    surfaces.Add(new Surface { renderer = r, original = original, materials = materials, slot = slot,
+                    var previous = entry == null || slot >= entry.originalMaterials.Length ? null : entry.originalMaterials[slot].Load<Material>();
+                    surfaces.Add(new Surface { renderer = r, original = original, materials = materials, slot = slot, previous = previous,
                         split = InnerColorTriangles.Classify(vertices, triangles, selected, center, up,
                             InnerColorTriangles.Threshold(_range), _height) });
                 }
@@ -325,6 +353,19 @@ namespace Jeni.KaihenNavi
             var meshPath = InnerColorAssets.StablePath(meshFolder, r.name, "_InnerColor.asset", meshKey);
             var source = surface.materials[surface.slot];
             var materialKey = "material:" + InnerColorState.AssetRef.Of(source).Key;
+            if (surface.previous != null && surface.previous != source &&
+                InnerColorAssets.Find(materialFolder, "_InnerColor.mat", materialKey) == null)
+            {
+                // 色変えなどで元の枠が複製に替わった。前の元に付けていた内側用のファイルを引き継ぎ、名前を増やさない。
+                // 印（.meta）の書き換えは Unity の Undo に載らないので、ファイルの記録で戻す。
+                var previousPath = InnerColorAssets.Find(materialFolder, "_InnerColor.mat",
+                    "material:" + InnerColorState.AssetRef.Of(surface.previous).Key);
+                if (previousPath != null)
+                {
+                    journal.Track(previousPath);
+                    InnerColorAssets.Mark(previousPath, materialKey);
+                }
+            }
             var materialPath = InnerColorAssets.StablePath(materialFolder, source.name, "_InnerColor.mat", materialKey);
             var mesh = AssetDatabase.LoadAssetAtPath<Mesh>(meshPath);
             var createMesh = mesh == null;
@@ -469,9 +510,11 @@ namespace Jeni.KaihenNavi
                 if (renderer == null || AssetDatabase.GetAssetPath(renderer.sharedMesh) != entry.meshPath) continue;
                 var original = entry.originalMesh.Load<Mesh>();
                 if (original == null) throw new InvalidOperationException(L10n.Tr("innerColor.missingMesh", renderer.name));
+                // 色変え・明るさの複製に替わった枠は、その複製のまま戻す（色変えを消さない）。
+                var materials = SavedOriginals(avatar, entry, renderer);
                 Undo.RecordObject(renderer, undoName);
                 renderer.sharedMesh = original;
-                renderer.sharedMaterials = entry.originalMaterials.Select(m => m.Load<Material>()).ToArray();
+                renderer.sharedMaterials = materials;
                 PrefabUtility.RecordPrefabInstancePropertyModifications(renderer);
                 EditorUtility.SetDirty(renderer);
             }

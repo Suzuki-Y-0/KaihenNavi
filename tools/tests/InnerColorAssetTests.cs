@@ -450,6 +450,28 @@ namespace Jeni.KaihenNavi
                 Directory.GetFiles(folder + "/Meshes", "*_InnerColor.asset").Length == 0 &&
                 Directory.GetFiles(folder + "/Materials", "*_InnerColor.mat").Length == 0,
                 "Actual Preview, three adjustments and Reset must restore both hair renderers and leave zero files");
+            // 色変え（このアバター用の同名の複製へ差し替え）の後に調整・元に戻すをしても、色変えを消さない。
+            typeof(InnerColorFeature).GetMethod("Preview", Private).Invoke(feature, new object[] { context });
+            var innerBeforeRecolor = hair.sharedMaterials[2];
+            var innerPathBeforeRecolor = AssetDatabase.GetAssetPath(innerBeforeRecolor);
+            var recolored = new Material(source) { name = "Hair" };
+            recolored.SetVector("_MainTexHSVG", new Vector4(0.5f, 1, 1, 1));
+            Add(recolored, folder + "/Materials/Hair.mat");
+            foreach (var r in new[] { hair, other })
+                r.sharedMaterials = new[] { recolored, recolored, r.sharedMaterials[2] };
+            typeof(InnerColorFeature).GetMethod("Preview", Private).Invoke(feature, new object[] { context });
+            Check(hair.sharedMaterials.Length == 3 && hair.sharedMaterials[0] == recolored && hair.sharedMaterials[1] == recolored &&
+                other.sharedMaterials[0] == recolored && hair.sharedMaterials[2] == innerBeforeRecolor &&
+                AssetDatabase.GetAssetPath(hair.sharedMaterials[2]) == innerPathBeforeRecolor &&
+                Directory.GetFiles(folder + "/Materials", "*_InnerColor.mat").Length == 1 &&
+                state.data.meshes.All(m => m.originalMaterials[0].Load<Material>() == recolored),
+                "Adjusting after a recolor must keep the recolored copy and reuse the inner-color material file");
+            Check(innerBeforeRecolor.GetVector("_MainTexHSVG").y == 0, "The inner-color material must stay desaturated");
+            typeof(InnerColorFeature).GetMethod("Reset", Private).Invoke(feature, new object[] { context });
+            Check(hair.sharedMesh == originalMesh && hair.sharedMaterials.SequenceEqual(new[] { recolored, recolored }) &&
+                other.sharedMaterials.SequenceEqual(new[] { recolored, recolored }) && File.Exists(folder + "/Materials/Hair.mat") &&
+                Directory.GetFiles(folder + "/Materials", "*_InnerColor.mat").Length == 0,
+                "Reset after a recolor must keep the recolored copy and remove only inner-color files");
             SkinnedMeshRenderer.BakeForTests = null;
             // 色の明るさは暗い髪を補正し、非 lilToon では色だけにとどめる。
             var bright = new Material(source);

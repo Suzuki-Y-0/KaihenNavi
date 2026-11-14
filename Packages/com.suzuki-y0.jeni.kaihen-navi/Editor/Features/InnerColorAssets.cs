@@ -17,19 +17,37 @@ namespace Jeni.KaihenNavi
         internal static string StablePath(string folder, string name, string suffix, string key)
         {
             // 先に所有者が一致するファイルを探す。別の髪の削除で若い番号が空いても作り直さない。
-            if (Directory.Exists(folder))
-                foreach (var existing in Directory.GetFiles(folder, "*" + suffix).OrderBy(p => p, StringComparer.Ordinal))
-                {
-                    var path = existing.Replace('\\', '/');
-                    var importer = AssetImporter.GetAtPath(path);
-                    if (importer != null && importer.userData == Tag + key) return path;
-                }
+            var found = Find(folder, suffix, key);
+            if (found != null) return found;
             var stem = folder + "/" + WorkFolders.Sanitize(name);
             for (var index = 0; ; index++)
             {
                 var path = stem + (index == 0 ? "" : " " + (index + 1)) + suffix;
                 if (Available(path, key)) return path;
             }
+        }
+
+        /// <summary>この印（所有者）のファイルがあれば、そのパスを返す。</summary>
+        internal static string Find(string folder, string suffix, string key)
+        {
+            if (!Directory.Exists(folder)) return null;
+            foreach (var existing in Directory.GetFiles(folder, "*" + suffix).OrderBy(p => p, StringComparer.Ordinal))
+            {
+                var path = existing.Replace('\\', '/');
+                var importer = AssetImporter.GetAtPath(path);
+                if (importer != null && importer.userData == Tag + key) return path;
+            }
+            return null;
+        }
+
+        /// <summary>インナーカラーが作ったファイル（印の付いたメッシュ・マテリアル）か。色変えなどの対象から外すのに使う。</summary>
+        internal static bool IsGenerated(UnityEngine.Object asset)
+        {
+            if (asset == null) return false;
+            var path = AssetDatabase.GetAssetPath(asset);
+            if (string.IsNullOrEmpty(path)) return false;
+            var importer = AssetImporter.GetAtPath(path);
+            return importer != null && (importer.userData ?? "").StartsWith(Tag, StringComparison.Ordinal);
         }
 
         private static bool Available(string path, string key)

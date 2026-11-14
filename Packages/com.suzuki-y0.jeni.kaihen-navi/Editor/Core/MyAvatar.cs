@@ -475,6 +475,26 @@ namespace Jeni.KaihenNavi
         }
 
         /// <summary>
+        /// Undo・やり直しの後に呼ぶ（Undo には記録しない）。やり直しでは保存（Apply）の記録が自分用 Prefab を
+        /// 古い変更ごと戻し、ファイル側の片付け（SaveAsPrefabAsset）は Undo に載らないので、ここで片付け直す。
+        /// 古い変更が無ければ Prefab は開かない。
+        /// </summary>
+        internal static void RemoveStaleOverridesWithoutUndo(VRCAvatarDescriptor avatar)
+        {
+            if (EditorApplication.isPlayingOrWillChangePlaymode) return;
+            var root = InstanceRoot(avatar);
+            if (root == null) return;
+            RemoveStaleOverrides(root, null);
+            var path = PrefabUtility.GetPrefabAssetPathOfNearestInstanceRoot(root);
+            if (!IsMinePath(path)) return;
+            var asset = AssetDatabase.LoadAssetAtPath<GameObject>(path);
+            if (!HasStaleOverrides(asset)) return;
+            // やり直しで戻った内容がまだファイルに書かれていなければ、先に書いてから開く
+            AssetDatabase.SaveAssetIfDirty(asset);
+            RemoveStaleOverridesInAsset(path);
+        }
+
+        /// <summary>
         /// root 以下の Prefab のインスタンスから、使われていないオーバーライドを取り除く。取り除いたら true。
         /// ・マテリアルの配列が縮んだ後に残る、範囲外の要素の変更（m_Materials.Array.data[i]）。
         ///   Unity は配列が短くなっても範囲外の要素の変更を消さないため、インナーカラーを戻した後も

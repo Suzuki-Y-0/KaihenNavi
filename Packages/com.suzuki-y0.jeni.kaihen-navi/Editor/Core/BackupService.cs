@@ -57,6 +57,8 @@ namespace Jeni.KaihenNavi
         {
             public string AvatarId;
             public string UndoState;
+            /// <summary>この手順の Undo グループ番号（自動保存を同じグループにまとめたかの確認用）。</summary>
+            public int Group;
         }
 
         private string _sessionKey;
@@ -123,7 +125,7 @@ namespace Jeni.KaihenNavi
                     if (!_current.createdPaths.Contains(path)) _current.createdPaths.Add(path);
                 SaveMetadata(_current);
                 ReleaseUnsaved(snapshot);
-                MarkLive(_current, _editingAvatar);
+                MarkLive(_current, _editingAvatar, group);
                 return;
             }
             snapshot.operationName = Undo.GetCurrentGroupName();
@@ -141,7 +143,7 @@ namespace Jeni.KaihenNavi
             Undo.FlushUndoRecordObjects();
             Undo.CollapseUndoOperations(group);
             SaveMetadata(snapshot);
-            MarkLive(snapshot, _editingAvatar);
+            MarkLive(snapshot, _editingAvatar, group);
             RaiseChanged();
         }
 
@@ -427,14 +429,7 @@ namespace Jeni.KaihenNavi
         /// </summary>
         public bool HasLiveUndo(VRCAvatarDescriptor avatar)
         {
-            if (avatar == null) return false;
-            var state = UndoState();
-            if (state == null) return false;
-            var id = AvatarId(avatar);
-            if (_restoredTarget != null && _restoredTarget.hiddenFromHistory && IsTop(_restoredStep, id, state)) return true;
-            var latest = List(avatar).FirstOrDefault();
-            LiveStep step;
-            return latest != null && _liveSteps.TryGetValue(latest, out step) && IsTop(step, id, state);
+            return TopStep(avatar) != null;
         }
 
         private static bool IsTop(LiveStep step, string avatarId, string state)
@@ -442,16 +437,54 @@ namespace Jeni.KaihenNavi
             return step != null && step.AvatarId == avatarId && step.UndoState == state;
         }
 
-        /// <summary>Undo に載せた直後の積み方を控える（取れない環境では控えず、バックアップで戻す）。</summary>
-        private LiveStep Live(VRCAvatarDescriptor avatar)
+        /// <summary>HasLiveUndo が true のとき、その手順（Unity の Undo の 1 手目）。違えば null。</summary>
+        private LiveStep TopStep(VRCAvatarDescriptor avatar)
         {
+            if (avatar == null) return null;
             var state = UndoState();
-            return avatar == null || state == null ? null : new LiveStep { AvatarId = AvatarId(avatar), UndoState = state };
+            if (state == null) return null;
+            var id = AvatarId(avatar);
+            if (_restoredTarget != null && _restoredTarget.hiddenFromHistory && IsTop(_restoredStep, id, state)) return _restoredStep;
+            var latest = List(avatar).FirstOrDefault();
+            LiveStep step;
+            return latest != null && _liveSteps.TryGetValue(latest, out step) && IsTop(step, id, state) ? step : null;
         }
 
-        private void MarkLive(BackupSnapshot snapshot, VRCAvatarDescriptor avatar)
+        /// <summary>
+        /// 自動保存の直前に呼ぶ。このアバターの直前の手順が Unity の Undo の 1 手目なら、その Undo グループ番号を返す（違えば -1）。
+        /// </summary>
+        public int LiveGroup(VRCAvatarDescriptor avatar)
         {
-            var step = Live(avatar);
+            var step = TopStep(avatar);
+            return step == null ? -1 : step.Group;
+        }
+
+        /// <summary>
+        /// 自動保存（Prefab への書き込み）を LiveGroup のグループにまとめた後に呼ぶ。保存で Undo の積み方は変わるが、
+        /// Ctrl+Z 1 回で編集と保存が一緒に戻るので、フッターの「元に戻す」も引き続き Unity の Undo を使えるよう控え直す。
+        /// stateBefore（保存前の積み方）が控えと同じ手順だけを更新する。
+        /// </summary>
+        public void KeepLive(VRCAvatarDescriptor avatar, int group, string stateBefore)
+        {
+            var state = UndoState();
+            if (avatar == null || group < 0 || state == null || stateBefore == null) return;
+            var id = AvatarId(avatar);
+            var steps = new List<LiveStep>(_liveSteps.Values);
+            if (_restoredStep != null) steps.Add(_restoredStep);
+            foreach (var step in steps)
+                if (step.Group == group && IsTop(step, id, stateBefore)) step.UndoState = state;
+        }
+
+        /// <summary>Undo に載せた直後の積み方を控える（取れない環境では控えず、バックアップで戻す）。</summary>
+        private LiveStep Live(VRCAvatarDescriptor avatar, int group)
+        {
+            var state = UndoState();
+            return avatar == null || state == null ? null : new LiveStep { AvatarId = AvatarId(avatar), UndoState = state, Group = group };
+        }
+
+        private void MarkLive(BackupSnapshot snapshot, VRCAvatarDescriptor avatar, int group)
+        {
+            var step = Live(avatar, group);
             if (step == null) _liveSteps.Remove(snapshot);
             else _liveSteps[snapshot] = step;
         }
@@ -545,7 +578,7 @@ namespace Jeni.KaihenNavi
 
             EndSession();
             _restoredTarget = target;
-            _restoredStep = Live(avatar);
+            _restoredStep = Live(avatar, group);
             AssetDatabase.SaveAssets();
             RaiseChanged();
         }

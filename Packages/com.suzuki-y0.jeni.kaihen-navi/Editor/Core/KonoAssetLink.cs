@@ -48,6 +48,10 @@ namespace Jeni.KaihenNavi
         private static long[] _stamps;
         private static double _nextCheck;
         private static bool _checked;
+        // 最後に作った索引の指紋と、不完全な索引を読み直す時刻
+        private static string _signature;
+        private static bool _incomplete;
+        private static double _retryAt;
         private static int _revision;
         public static int Revision { get { EnsureLoaded(); return _revision; } }
         public static event Action Changed;
@@ -151,51 +155,88 @@ namespace Jeni.KaihenNavi
             if (!force && _checked && EditorApplication.timeSinceStartup < _nextCheck) return;
             _checked = true;
             _nextCheck = EditorApplication.timeSinceStartup + 5;
+            var previous = _signature;
             try
             {
                 var root = LocateRoot();
                 var stamps = root == null ? null : ReadStamps(root);
-                if (!force && root == _root && ((_stamps == null && stamps == null) ||
-                    (_stamps != null && stamps != null && _stamps.SequenceEqual(stamps)))) return;
-                _revision++;
-                if (!force) QueueChanged();
+                var same = root == _root && ((_stamps == null && stamps == null) ||
+                    (_stamps != null && stamps != null && _stamps.SequenceEqual(stamps)));
+                // 不完全な索引は 60 秒おきにだけ読み直す。毎回読むと表示の作り直しが続き、検索欄のフォーカスが外れる。
+                if (!force && same && (!_incomplete || EditorApplication.timeSinceStartup < _retryAt)) return;
                 _root = root;
+                // 不完全でも stamps は保持する（次の確認で変更なしと判断できるように）。
                 _stamps = stamps;
+                _incomplete = false;
                 ById.Clear();
                 ByPackage.Clear();
                 ClearImages();
-                if (root == null) return;
-                Index index = null;
-                if (!force && File.Exists(CachePath))
+                if (root == null)
                 {
-                    try
+                    _signature = null;
+                }
+                else
+                {
+                    Index index = null;
+                    if (!force && File.Exists(CachePath))
                     {
-                        var cached = JsonUtility.FromJson<Index>(File.ReadAllText(CachePath, Encoding.UTF8));
-                        if (cached != null && cached.version == 2 && cached.root == root && cached.stamps != null &&
-                            cached.stamps.SequenceEqual(stamps) && cached.items != null) index = cached;
+                        try
+                        {
+                            var cached = JsonUtility.FromJson<Index>(File.ReadAllText(CachePath, Encoding.UTF8));
+                            if (cached != null && cached.version == 2 && cached.root == root && cached.stamps != null &&
+                                cached.stamps.SequenceEqual(stamps) && cached.items != null) index = cached;
+                        }
+                        catch { /* 壊れたキャッシュは元のメタデータから再作成する。 */ }
                     }
-                    catch { /* 壊れたキャッシュは元のメタデータから再作成する。 */ }
+                    if (index == null)
+                    {
+                        bool complete;
+                        index = BuildIndex(root, stamps, out complete);
+                        // 読み取り中のメタデータやアクセス失敗を永続キャッシュしない。
+                        if (complete && stamps.SequenceEqual(ReadStamps(root))) SaveIndex(index);
+                        else
+                        {
+                            _incomplete = true;
+                            _retryAt = EditorApplication.timeSinceStartup + 60;
+                        }
+                    }
+                    UseIndex(index.items);
+                    _signature = Signature(root, index.items);
                 }
-                if (index == null)
-                {
-                    bool complete;
-                    index = BuildIndex(root, stamps, out complete);
-                    // 読み取り中のメタデータやアクセス失敗を永続キャッシュしない。
-                    if (complete && stamps.SequenceEqual(ReadStamps(root))) SaveIndex(index);
-                    else _stamps = null;
-                }
-                UseIndex(index.items);
             }
             catch
             {
-                _revision++;
-                if (!force) QueueChanged();
                 _root = null;
                 _stamps = null;
+                _incomplete = false;
+                _signature = null;
                 ById.Clear();
                 ByPackage.Clear();
                 ClearImages();
             }
+            // 商品の中身が変わったときだけ表示を作り直す。ファイルの時刻だけが変わった場合は何もしない。
+            if (force) _revision++;
+            if (previous != _signature)
+            {
+                _revision++;
+                if (!force) QueueChanged();
+            }
+        }
+
+        /// <summary>商品の中身の指紋。表示に使う項目だけを並べて比べる。</summary>
+        private static string Signature(string root, KonoAssetItem[] items)
+        {
+            var builder = new StringBuilder(root);
+            foreach (var item in items.Where(i => i != null && i.description != null).OrderBy(i => i.id, StringComparer.Ordinal))
+            {
+                builder.Append('\n').Append(item.id).Append('|').Append(item.sourceFile).Append('|')
+                    .Append(item.category).Append('|').Append(item.description.name).Append('|')
+                    .Append(item.description.creator).Append('|').Append(item.description.imageFilename).Append('|')
+                    .Append(string.Join(",", item.description.tags ?? new string[0])).Append('|')
+                    .Append(string.Join(",", item.supportedAvatars ?? new string[0])).Append('|')
+                    .Append(string.Join(",", item.packageNames ?? new string[0]));
+            }
+            return builder.ToString();
         }
 
         private static void UseIndex(KonoAssetItem[] items)
@@ -305,9 +346,10 @@ namespace Jeni.KaihenNavi
             if (key.Length == 0) return true;
             var normalized = Normalize(value);
             if (normalized.Contains(key)) return true;
-            // ひらがなを含む検索語だけ、ローマ字表記の商品名やファイル名にも当てる。
+            // ひらがなを 2 文字以上含む検索語だけ、ローマ字表記の商品名やファイル名にも当てる。
+            // 「し」1 字だけで shi に当たると、ほとんどの名前に一致してしまうため。
             // 英数字だけの検索語は今までどおり部分一致に留める。
-            return key.Any(IsHiragana) && CachedVariants(key).Any(v => normalized.Contains(v));
+            return key.Count(IsHiragana) >= 2 && CachedVariants(key).Any(v => normalized.Contains(v));
         }
 
         // 検索は 1 文字ごとに全部の商品・項目で呼ばれるので、直前の検索語の候補を覚えておく。
@@ -380,7 +422,22 @@ namespace Jeni.KaihenNavi
 
         private static bool IsSmallVowel(char c) { return c == 'ぁ' || c == 'ぃ' || c == 'ぅ' || c == 'ぇ' || c == 'ぉ'; }
 
-        /// <summary>ひらがなをヘボン式・訓令式のローマ字にし、長音を詰めた形も候補にする。</summary>
+        /// <summary>ローマ字の揺れ。0 が基本の形（長音は直前の母音を繰り返す）。</summary>
+        [Flags]
+        private enum RomajiOption
+        {
+            None = 0,
+            /// <summary>長音「ー」を落とす（ミーシェ→mishe）。</summary>
+            DropLong = 1,
+            /// <summary>ん の後に b・m・p が来るとき m にする（さんぽ→sampo）。</summary>
+            LabialN = 2,
+            /// <summary>を を wo とも読む。</summary>
+            WoForWo = 4,
+            /// <summary>うぃ・うぇ を wi・we とも読む。</summary>
+            WiWe = 8,
+        }
+
+        /// <summary>ひらがなをヘボン式・訓令式のローマ字にし、表記の揺れと長音を詰めた形も候補にする。</summary>
         internal static IEnumerable<string> RomajiVariants(string hiragana)
         {
             var key = Normalize(hiragana);
@@ -388,9 +445,12 @@ namespace Jeni.KaihenNavi
             if (key.Length == 0) return variants;
             foreach (var table in RomajiTables)
             {
-                var romaji = ToRomaji(key, table);
-                AddRomajiVariant(variants, romaji);
-                AddRomajiVariant(variants, CompressLongVowels(romaji));
+                for (var mask = 0; mask < 16; mask++)
+                {
+                    var romaji = ToRomaji(key, table, (RomajiOption)mask);
+                    AddRomajiVariant(variants, romaji);
+                    AddRomajiVariant(variants, CompressLongVowels(romaji));
+                }
             }
             return variants;
         }
@@ -406,16 +466,30 @@ namespace Jeni.KaihenNavi
             return romaji.Replace("ou", "o").Replace("uu", "u").Replace("oo", "o");
         }
 
-        private static string ToRomaji(string key, Dictionary<string, string> table)
+        private static string ToRomaji(string key, Dictionary<string, string> table, RomajiOption options)
         {
             var builder = new StringBuilder(key.Length * 2);
             var geminate = false;
             for (var i = 0; i < key.Length; i++)
             {
                 if (key[i] == 'っ') { geminate = true; continue; }
+                if (key[i] == 'ー')
+                {
+                    // 長音は直前の母音をもう一度書く（らーめん→raamen）。前が母音でなければ落とす。
+                    if ((options & RomajiOption.DropLong) == 0 && builder.Length > 0 && IsVowel(builder[builder.Length - 1]))
+                        builder.Append(builder[builder.Length - 1]);
+                    continue;
+                }
+                var start = i;
                 int consumed;
-                var romaji = UnitRomaji(key, i, table, out consumed);
+                var romaji = UnitRomaji(key, i, table, options, out consumed);
                 i += consumed - 1;
+                if (key[start] == 'ん' && (options & RomajiOption.LabialN) != 0 && start + 1 < key.Length)
+                {
+                    int nextConsumed;
+                    var next = UnitRomaji(key, start + 1, table, options, out nextConsumed);
+                    if (next.Length > 0 && "bmp".IndexOf(next[0]) >= 0) romaji = "m";
+                }
                 if (geminate)
                 {
                     if (romaji.Length > 0)
@@ -431,14 +505,20 @@ namespace Jeni.KaihenNavi
             return builder.ToString();
         }
 
-        private static string UnitRomaji(string key, int index, Dictionary<string, string> table, out int consumed)
+        private static string UnitRomaji(string key, int index, Dictionary<string, string> table, RomajiOption options, out int consumed)
         {
             consumed = 1;
             string baseRomaji;
             // 表にない文字（英数字や未知の文字）はそのまま通す。
             if (!table.TryGetValue(key[index].ToString(), out baseRomaji)) return key[index].ToString();
+            if (key[index] == 'を' && (options & RomajiOption.WoForWo) != 0) baseRomaji = "wo";
             if (index + 1 >= key.Length) return baseRomaji;
             var small = key[index + 1];
+            if (key[index] == 'う' && (small == 'ぃ' || small == 'ぇ') && (options & RomajiOption.WiWe) != 0)
+            {
+                consumed = 2;
+                return small == 'ぃ' ? "wi" : "we";
+            }
             var combined = IsSmallYa(small) ? CombineSmallYa(baseRomaji, small)
                 : IsSmallVowel(small) ? CombineSmallVowel(baseRomaji, small) : null;
             if (combined == null) return baseRomaji;

@@ -20,6 +20,65 @@ namespace Jeni.KaihenNavi
     {
         private static readonly string[] Layers = { "2nd", "3rd" };
         private const string SourceTag = "kaihen-navi-color-source:";
+        private const string BaselineTag = "kaihen-navi-color-baseline:";
+        private static readonly string[] BaselineProperties = { "_Color", "_Color2nd", "_Color3rd" };
+
+        /// <summary>複製を作った元のマテリアルの色。画面を作り直しても、ここからずらす（ずれが重ならない）。</summary>
+        [System.Serializable]
+        private sealed class Baselines
+        {
+            public List<string> names = new List<string>();
+            public List<Color> colors = new List<Color>();
+        }
+
+        /// <summary>
+        /// 複製（このツールのマテリアル）に、元の色を覚えさせる（.meta の userData）。既に覚えていれば何もしない。
+        /// from には複製の元を渡す。元が分からない複製（明るさで作ったものなど）は、初めて色を変える前の自分を渡す。
+        /// </summary>
+        public static void RecordBaselines(Material target, Material from)
+        {
+            if (target == null || from == null || !WorkFolders.IsOwned(target)) return;
+            var path = AssetDatabase.GetAssetPath(target);
+            var importer = AssetImporter.GetAtPath(path);
+            if (importer == null || !string.IsNullOrEmpty(importer.userData)) return;
+            var record = new Baselines();
+            foreach (var property in BaselineProperties)
+            {
+                if (!from.HasProperty(property)) continue;
+                record.names.Add(property);
+                record.colors.Add(from.GetColor(property));
+            }
+
+            // 読み込み直しで未保存の変更を失わないよう、先に保存する
+            AssetDatabase.SaveAssetIfDirty(target);
+            importer.userData = BaselineTag + JsonUtility.ToJson(record);
+            importer.SaveAndReimport();
+        }
+
+        /// <summary>複製に覚えさせた元の色。</summary>
+        public static bool TryBaseline(Material material, string property, out Color color)
+        {
+            color = default(Color);
+            if (material == null) return false;
+            var importer = AssetImporter.GetAtPath(AssetDatabase.GetAssetPath(material));
+            var data = importer == null ? null : importer.userData;
+            if (string.IsNullOrEmpty(data) || !data.StartsWith(BaselineTag)) return false;
+            Baselines record;
+            try
+            {
+                record = JsonUtility.FromJson<Baselines>(data.Substring(BaselineTag.Length));
+            }
+            catch (System.ArgumentException)
+            {
+                return false;
+            }
+
+            if (record == null || record.names == null || record.colors == null) return false;
+            var index = record.names.IndexOf(property);
+            if (index < 0 || index >= record.colors.Count) return false;
+            color = record.colors[index];
+            return true;
+        }
 
         /// <summary>層の色（_Color2nd など）を元の色から変える。元の色はマテリアルごとに覚える。</summary>
         public static void ApplyTint(Material material, float hue, float saturation, float brightness, Dictionary<string, Color> baselines)
@@ -37,7 +96,8 @@ namespace Jeni.KaihenNavi
                 Color baseline;
                 if (!baselines.TryGetValue(key, out baseline))
                 {
-                    baseline = material.GetColor(property);
+                    // 作り直し・再読み込みの後も、今のずれた色ではなく元の色からずらす
+                    if (!TryBaseline(material, property, out baseline)) baseline = material.GetColor(property);
                     baselines[key] = baseline;
                 }
 
@@ -151,7 +211,8 @@ namespace Jeni.KaihenNavi
             {
                 var colorProperty = "_Color" + layer;
                 Color baseline;
-                if (material.HasProperty(colorProperty) && baselines.TryGetValue(material.GetInstanceID() + colorProperty, out baseline))
+                if (material.HasProperty(colorProperty) && (baselines.TryGetValue(material.GetInstanceID() + colorProperty, out baseline) ||
+                    TryBaseline(material, colorProperty, out baseline)))
                 {
                     Undo.RecordObject(material, undoName);
                     material.SetColor(colorProperty, baseline);

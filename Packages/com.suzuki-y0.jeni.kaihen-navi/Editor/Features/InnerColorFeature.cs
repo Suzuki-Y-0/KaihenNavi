@@ -460,6 +460,9 @@ namespace Jeni.KaihenNavi
             ctx.Backup.CompletePending(group);
             AssetDatabase.SaveAssets();
             Undo.FlushUndoRecordObjects();
+            // 内側用の枠を外すと材料の配列が縮むが、範囲外の要素の変更は Unity が残す（内側用の .mat を参照し続ける）。
+            // 自分用でないアバター（シーンだけの改変）でも、シーン側の古い変更を片付ける。自分用 Prefab 側は Save が片付ける
+            MyAvatar.RemoveStaleOverrides(ctx.Avatar, undoName);
             MyAvatar.Save(ctx.Avatar);
             var kept = InnerColorAssets.Cleanup(candidates, journal);
             journal.Commit(undoName);

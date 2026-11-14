@@ -234,6 +234,16 @@ internal static class HistoryTests
         liveBackup.BeginEdit(avatar, "color");
         Finish(liveBackup, L10n.Tr("undo.body"));
         Check(liveBackup.HasLiveUndo(avatar), "A step just recorded by this window is the top Undo step");
+        // 自動保存（Prefab への Apply）が同じグループにまとまれば、積み方が変わっても Unity の Undo を使う。
+        var liveGroup = liveBackup.LiveGroup(avatar);
+        Check(liveGroup == Undo.GetCurrentGroup(), "The live step remembers its Undo group");
+        var beforeSave = BackupService.UndoState();
+        records.Add("Apply Prefab");
+        Check(!liveBackup.HasLiveUndo(avatar), "A save changes the Undo fingerprint");
+        liveBackup.KeepLive(avatar, liveGroup + 1, beforeSave);
+        Check(!liveBackup.HasLiveUndo(avatar), "A save merged into another group does not keep the step live");
+        liveBackup.KeepLive(avatar, liveGroup, beforeSave);
+        Check(liveBackup.HasLiveUndo(avatar), "A save merged into the same group keeps the step live");
         records.Add("Move Main Camera");
         Check(!liveBackup.HasLiveUndo(avatar), "Another Undo step on top must not be undone by the arrow");
         var colorStep = liveBackup.List(avatar)[0];

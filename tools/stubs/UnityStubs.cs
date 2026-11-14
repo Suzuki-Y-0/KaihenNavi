@@ -920,6 +920,9 @@ namespace UnityEditor
         public static T GetCorrespondingObjectFromOriginalSource<T>(T o) where T : Object { return null; }
         public static void ReplacePrefabAssetOfPrefabInstance(GameObject root, GameObject asset, PrefabReplacingSettings s, InteractionMode m) { }
         public static void UnpackPrefabInstance(GameObject root, PrefabUnpackMode mode, InteractionMode m) { }
+        public static Object GetPrefabInstanceHandle(Object instanceComponentOrGameObject) { return null; }
+        public static PropertyModification[] GetPropertyModifications(Object targetPrefab) { return null; }
+        public static void SetPropertyModifications(Object targetPrefab, PropertyModification[] modifications) { }
     }
 
     public enum PrefabUnpackMode { OutermostRoot, Completely }
@@ -940,7 +943,7 @@ namespace UnityEditor
 
     public enum PlayModeStateChange { EnteredEditMode, ExitingEditMode, EnteredPlayMode, ExitingPlayMode }
 
-    public class PropertyModification { public Object target; }
+    public class PropertyModification { public Object target; public string propertyPath; public string value; public Object objectReference; }
     public struct UndoPropertyModification { public PropertyModification currentValue; }
 
     public static class Undo

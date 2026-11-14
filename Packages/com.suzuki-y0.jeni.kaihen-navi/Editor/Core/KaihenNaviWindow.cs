@@ -618,6 +618,10 @@ namespace Jeni.KaihenNavi
             _backup.SaveHistory(_avatar);
             var materialsChanged = HasUnsavedMaterials();
             MyAvatar.SaveMaterials(_avatar);
+            // 保存前にフッターの「元に戻す」が Unity の Undo を使える状態だったか（保存先のグループと同じときだけ引き継ぐ）
+            var liveGroup = _backup.LiveGroup(_avatar);
+            var liveState = liveGroup >= 0 ? BackupService.UndoState() : null;
+            var saveGroup = editGroup >= 0 ? editGroup : Undo.GetCurrentGroup();
             var saved = MyAvatar.Save(_avatar);
             // Scene の移動ツールからの編集も、記録されたグループに保存をまとめる。
             if (saved && editGroup >= 0)
@@ -625,6 +629,8 @@ namespace Jeni.KaihenNavi
                 Undo.SetCurrentGroupName(editName);
                 Undo.CollapseUndoOperations(editGroup);
             }
+            // 保存は直前の手順と同じ Ctrl+Z 1 回で戻るので、保存で Undo の積み方が変わっても「元に戻す」は Undo を使う
+            if (saved && liveGroup >= 0 && liveGroup == saveGroup) _backup.KeepLive(_avatar, liveGroup, liveState);
             _saveEditGroup = -1;
             _savedGroup = Undo.GetCurrentGroup();
             if (saved || materialsChanged || manual) _lastSavedAt = System.DateTime.Now;

@@ -352,20 +352,20 @@ namespace Jeni.KaihenNavi
             return key.Count(IsHiragana) >= 2 && CachedVariants(key).Any(v => normalized.Contains(v));
         }
 
-        // 検索は 1 文字ごとに全部の商品・項目で呼ばれるので、直前の検索語の候補を覚えておく。
-        private static string _variantsKey;
-        private static string[] _variants = new string[0];
+        // 検索は 1 文字ごとに全部の商品・項目で呼ばれ、アバター名の絞り込みでは複数の語が交互に来るので、
+        // 語ごとの候補を覚えておく（増えすぎたら捨てる）。
+        private static readonly Dictionary<string, string[]> VariantsCache = new Dictionary<string, string[]>();
 
         private static string[] CachedVariants(string key)
         {
-            if (key != _variantsKey)
-            {
-                // 「あ」→「a」のような短い候補は、ほとんどの英語名に当たってしまうので使わない。
-                _variants = RomajiVariants(key).Where(v => v.Length >= 3).ToArray();
-                _variantsKey = key;
-            }
+            string[] variants;
+            if (VariantsCache.TryGetValue(key, out variants)) return variants;
+            if (VariantsCache.Count > 256) VariantsCache.Clear();
 
-            return _variants;
+            // 「あ」→「a」のような短い候補は、ほとんどの英語名に当たってしまうので使わない。
+            variants = RomajiVariants(key).Where(v => v.Length >= 3).ToArray();
+            VariantsCache[key] = variants;
+            return variants;
         }
 
         private static readonly Dictionary<string, string> HepburnRomaji = new Dictionary<string, string>(StringComparer.Ordinal)

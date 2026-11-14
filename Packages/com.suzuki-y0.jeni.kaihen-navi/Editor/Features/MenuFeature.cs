@@ -417,20 +417,24 @@ namespace Jeni.KaihenNavi
                 marker.transform.SetParent(root.transform, false);
             }
 
-            // 「その他」と「使わない」を当てる
-            if (byKey.Values.Any(e => e.other))
+            // 「その他」と「使わない」を当てる（「その他」自体の状態は古いバックアップには無い）
+            MenuEdit othersEdit;
+            byKey.TryGetValue(OtherName, out othersEdit);
+            if (othersEdit != null || byKey.Values.Any(e => e.other))
             {
                 var others = new GameObject(OtherName);
                 others.transform.SetParent(root.transform, false);
                 var item = others.AddComponent<ModularAvatarMenuItem>();
                 item.Control = new VRCExpressionsMenu.Control { name = L10n.Tr("menu.othersName"), type = VRCExpressionsMenu.Control.ControlType.SubMenu };
                 item.MenuSource = SubmenuSource.Children;
-                item.label = L10n.Tr("menu.othersName");
+                item.label = othersEdit != null && !string.IsNullOrEmpty(othersEdit.label) ? othersEdit.label : L10n.Tr("menu.othersName");
                 foreach (var e in byKey.Values.Where(e => e.other && !e.hidden).OrderBy(e => e.order))
                 {
                     Transform t;
                     if (created.TryGetValue(e.key, out t)) t.SetParent(others.transform, false);
                 }
+
+                if (othersEdit != null && othersEdit.hidden) others.transform.SetParent(Holder(root.transform, null), false);
             }
 
             foreach (var e in byKey.Values.Where(e => e.hidden))
@@ -647,8 +651,15 @@ namespace Jeni.KaihenNavi
             foreach (var t in root.GetComponentsInChildren<Transform>(true))
             {
                 var item = t.GetComponent<ModularAvatarMenuItem>();
-                if (item == null || t == root || t.name == OtherName) continue;
+                if (item == null || t == root) continue;
                 var hidden = t.parent != null && t.parent.name == HiddenName;
+                if (t.name == OtherName)
+                {
+                    // 「その他」自体も、使わない（隠した）状態と名前を覚える
+                    edits.items.Add(new MenuEdit { key = OtherName, label = item.label, hidden = hidden, order = -1 });
+                    continue;
+                }
+
                 var other = t.parent != null && t.parent.name == OtherName;
                 edits.items.Add(new MenuEdit
                 {

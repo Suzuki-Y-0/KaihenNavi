@@ -111,6 +111,21 @@ internal static class FeatureEditChecks
         Check(MenuFeature.RemoveMenu(avatar, "menu", paths[variantMenu]) && ReferenceEquals(avatar.expressionsMenu, variantMenu),
             "backup path used as last resort");
 
+        // 「その他」を使わない（隠した）状態も、バックアップから戻せる
+        var tidy = new MenuEdits { extracted = true, originalMenu = paths[variantMenu] };
+        tidy.items.Add(new MenuEdit { key = "0", other = true, order = 0 });
+        tidy.items.Add(new MenuEdit { key = MenuFeature.OtherName, label = "Misc", hidden = true, order = -1 });
+        root = MenuFeature.BuildMenu(avatar, tidy, "menu");
+        var holder = root.transform.Find(MenuFeature.HiddenName);
+        Check(root.transform.Find(MenuFeature.OtherName) == null && holder != null && holder.Find(MenuFeature.OtherName) != null &&
+            holder.Find(MenuFeature.OtherName).GetComponent<ModularAvatarMenuItem>().label == "Misc", "hidden others restored hidden");
+        var others = MenuFeature.ReadEdits(avatar).items.FirstOrDefault(e => e.key == MenuFeature.OtherName);
+        Check(others != null && others.hidden && others.label == "Misc", "others hidden state captured");
+        var oldTidy = new MenuEdits { extracted = true, originalMenu = paths[variantMenu] };
+        oldTidy.items.Add(new MenuEdit { key = "0", other = true, order = 0 });
+        root = MenuFeature.BuildMenu(avatar, oldTidy, "menu");
+        Check(root.transform.Find(MenuFeature.OtherName) != null, "old backups without others entry keep others visible");
+
         AssetDatabase.PathForTests = null;
         AssetDatabase.LoadForTests = null;
         AssetDatabase.GuidForTests = null;

@@ -1,5 +1,7 @@
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
+using System.Text.RegularExpressions;
 using UnityEditor;
 using UnityEngine;
 
@@ -11,6 +13,8 @@ namespace Jeni.KaihenNavi
     /// 層に色が乗っているマテリアル（例：Cazalis のドレスの外側）では色が変わらなかった。
     /// 層の色（_Color2nd など）はその場で変え、層のテクスチャは色を変えた複製（PNG）を作って差し替える。
     /// 元のテクスチャは書き換えない。複製の画像には元テクスチャの GUID を覚えさせ、何度変えても元から作り直す。
+    /// 焼くたびに空いている名前の新しい画像を作り、差し替えを Undo に載せる（同じ画像を書き換えると Ctrl+Z・履歴で色が戻らない）。
+    /// 前の画像は、どのマテリアル・履歴からも参照されなくなったものだけ消す。
     /// </summary>
     internal static class ColorLayers
     {
@@ -44,6 +48,7 @@ namespace Jeni.KaihenNavi
         /// <summary>層のテクスチャを、色を変えた複製に差し替える（重いので、スライダーを離してから呼ぶ）。</summary>
         public static void BakeTextures(Material material, float hue, float saturation, float brightness, string undoName)
         {
+            var stale = new HashSet<string>();
             foreach (var layer in Layers)
             {
                 if (!IsUsed(material, layer)) continue;
@@ -60,10 +65,11 @@ namespace Jeni.KaihenNavi
                     Undo.RecordObject(material, undoName);
                     material.SetTexture(property, source);
                     EditorUtility.SetDirty(material);
+                    CollectStale(material, layer, current, stale);
                     continue;
                 }
 
-                var path = BakedPath(material, layer);
+                var path = NewBakedPath(material, layer);
                 if (path == null) continue;
                 WriteShifted(source, path, hue, saturation, brightness);
                 var baked = AssetDatabase.LoadAssetAtPath<Texture2D>(path);
@@ -71,7 +77,10 @@ namespace Jeni.KaihenNavi
                 Undo.RecordObject(material, undoName);
                 material.SetTexture(property, baked);
                 EditorUtility.SetDirty(material);
+                CollectStale(material, layer, current, stale);
             }
+
+            DeleteUnused(material, stale);
         }
 
         /// <summary>
@@ -85,7 +94,7 @@ namespace Jeni.KaihenNavi
             var current = material.GetTexture(property) as Texture2D;
             if (current == null) return;
             var source = SourceOf(current) ?? current;
-            var path = BakedPath(material, "main");
+            var path = NewBakedPath(material, "main");
             if (path == null) return;
             var hue = Mathf.Repeat(hueDegrees / 360f, 1f);
             var sat = Mathf.Clamp01(saturation / 100f * 0.6f);
@@ -101,6 +110,9 @@ namespace Jeni.KaihenNavi
             Undo.RecordObject(material, undoName);
             material.SetTexture(property, baked);
             EditorUtility.SetDirty(material);
+            var stale = new HashSet<string>();
+            CollectStale(material, "main", current, stale);
+            DeleteUnused(material, stale);
         }
 
         /// <summary>色をのせるのをやめて、元のメインの画像に戻す。</summary>
@@ -191,6 +203,62 @@ namespace Jeni.KaihenNavi
             // 複製は元と同じ名前のままなので、名前で付けると別の「Body」（体と服）が同じ画像を上書きし合う。
             // 複製係が重ならないように付けたファイル名で分ける。旧名の画像が付いていても、作り直すと新しい名前へ移る。
             return folder + "/" + WorkFolders.Sanitize(Path.GetFileNameWithoutExtension(materialPath)) + "_" + layer + ".png";
+        }
+
+        /// <summary>前の画像は Ctrl+Z・履歴が指しているかもしれないので書き換えず、空いている名前に焼く。</summary>
+        private static string NewBakedPath(Material material, string layer)
+        {
+            var path = BakedPath(material, layer);
+            return path == null ? null : AssetDatabase.GenerateUniqueAssetPath(path);
+        }
+
+        /// <summary>差し替えで外れた画像と、同じマテリアル・層の焼いた画像を、片付けの候補にする。</summary>
+        private static void CollectStale(Material material, string layer, Texture2D replaced, HashSet<string> stale)
+        {
+            // 旧名（マテリアルの名前で付けた画像）も、外れたものは候補にする。参照が残っていれば消さない。
+            if (replaced != null && SourceOf(replaced) != null) stale.Add(AssetDatabase.GetAssetPath(replaced));
+            var path = BakedPath(material, layer);
+            if (path == null) return;
+            var folder = Path.GetDirectoryName(path).Replace('\\', '/');
+            var pattern = "^" + Regex.Escape(Path.GetFileNameWithoutExtension(path)) + @"(?: \d+)?\.png$";
+            if (!Directory.Exists(folder)) return;
+            foreach (var file in Directory.GetFiles(folder, "*.png"))
+            {
+                var candidate = file.Replace('\\', '/');
+                var importer = AssetImporter.GetAtPath(candidate);
+                if (Regex.IsMatch(Path.GetFileName(candidate), pattern) && importer != null &&
+                    (importer.userData ?? "").StartsWith(SourceTag)) stale.Add(candidate);
+            }
+        }
+
+        /// <summary>
+        /// どこからも参照されない焼いた画像を消す。開いているマテリアル（未保存の履歴を含む）、プロジェクトのマテリアル、
+        /// 履歴（バックアップ）を参照元に数える。Ctrl+Z で戻れる前の状態は、その操作の前の履歴が指しているので残る。
+        /// </summary>
+        private static void DeleteUnused(Material material, HashSet<string> stale)
+        {
+            stale.RemoveWhere(p => string.IsNullOrEmpty(p) || !WorkFolders.IsToolPath(p) || !File.Exists(p));
+            if (stale.Count == 0) return;
+            // ディスク上の参照を数える前に、差し替えたマテリアルを保存する
+            AssetDatabase.SaveAssetIfDirty(material);
+            var used = new HashSet<string>();
+            foreach (var loaded in Resources.FindObjectsOfTypeAll<Material>())
+            {
+                if (loaded == null) continue;
+                foreach (var name in loaded.GetTexturePropertyNames())
+                {
+                    var texture = loaded.GetTexture(name);
+                    if (texture != null) used.Add(AssetDatabase.GetAssetPath(texture));
+                }
+            }
+
+            var roots = AssetDatabase.FindAssets("t:Material", new[] { "Assets" })
+                .Concat(AssetDatabase.FindAssets("t:BackupSnapshot t:Prefab", new[] { WorkFolders.Root }))
+                .Select(AssetDatabase.GUIDToAssetPath)
+                .Where(p => !string.IsNullOrEmpty(p) && !stale.Contains(p)).Distinct().ToArray();
+            foreach (var path in AssetDatabase.GetDependencies(roots, false)) used.Add(path);
+            foreach (var path in stale.OrderBy(p => p, System.StringComparer.Ordinal))
+                if (!used.Contains(path)) AssetDatabase.DeleteAsset(path);
         }
 
         private static void WriteShifted(Texture2D source, string path, float hue, float saturation, float brightness)

@@ -58,6 +58,40 @@ internal static class FeatureEditChecks
         }
         return list;
     }
+    // 通信量の目安：ほかの MA の部品が足す同期パラメータも数える
+    private static void BitChecks()
+    {
+        var go = new GameObject("BitAvatar");
+        var avatar = go.AddComponent<VRCAvatarDescriptor>();
+        var holder = Child(go, "Params", true);
+        var parameters = holder.AddComponent<ModularAvatarParameters>();
+        parameters.parameters.Add(new ParameterConfig { nameOrPrefix = "A", syncType = ParameterSyncType.Bool });
+        parameters.parameters.Add(new ParameterConfig { nameOrPrefix = "B", syncType = ParameterSyncType.Int });
+        parameters.parameters.Add(new ParameterConfig { nameOrPrefix = "C", syncType = ParameterSyncType.Float, localOnly = true });
+        parameters.parameters.Add(new ParameterConfig { nameOrPrefix = "D", syncType = ParameterSyncType.NotSynced });
+        parameters.parameters.Add(new ParameterConfig { nameOrPrefix = "E", syncType = ParameterSyncType.Bool, isPrefix = true });
+        parameters.parameters.Add(new ParameterConfig { nameOrPrefix = "A", syncType = ParameterSyncType.Bool });
+        Func<GameObject, string, ModularAvatarMenuItem> item = (parent, name) =>
+        {
+            var mi = Child(parent, name, true).AddComponent<ModularAvatarMenuItem>();
+            mi.Control = new VRCExpressionsMenu.Control
+            {
+                type = VRCExpressionsMenu.Control.ControlType.Toggle,
+                parameter = new VRCExpressionsMenu.Control.Parameter { name = name },
+                value = 1f,
+            };
+            return mi;
+        };
+        item(go, "F");
+        item(go, "A");
+        var editorOnly = Child(go, "Hidden", true);
+        editorOnly.tag = "EditorOnly";
+        item(editorOnly, "G");
+        item(Child(go, ToggleFeature.MenuObjectName, true), "KaihenNavi/Item");
+        var cost = (int)Call("ModularAvatarParameterCost", avatar);
+        Check(cost == 1 + 8 + 1, "MA synced parameters counted once, local/unsynced/prefix/EditorOnly/own menu skipped (" + cost + ")");
+    }
+
     // メニュー整理：実際に差し替えたメニューを覚えて戻す。分からないときは取り出したメニューを消さない。
     private static void MenuTidyChecks()
     {
@@ -283,6 +317,7 @@ internal static class FeatureEditChecks
         Check(param(shoes) == shoesParam && param(shirt) != shoesParam, "re-added item never takes a kept name");
         Call("RemoveMenu", avatar, "remove", true);
 
+        BitChecks();
         MenuTidyChecks();
         Console.WriteLine("Feature edit checks passed (" + count + "). Unity Undo, Prefab imports and MA preview require Unity.");
     }

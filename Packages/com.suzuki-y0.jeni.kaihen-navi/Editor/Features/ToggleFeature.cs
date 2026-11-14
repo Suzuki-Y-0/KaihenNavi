@@ -317,8 +317,9 @@ namespace Jeni.KaihenNavi
                 root.Add(Ui.Notice(L10n.Tr("toggle.none"), "warn"));
             }
 
-            // 同期パラメータの消費量（1 項目 1 bit）。チェックを変えるたびに数え直す
-            var baseCost = AvatarParameterCost(ctx.Avatar);
+            // 同期パラメータの消費量（1 項目 1 bit）。チェックを変えるたびに数え直す。
+            // アバター本体の分には、ほかの MA の部品が足す同期パラメータ（目安）も含める
+            var baseCost = AvatarParameterCost(ctx.Avatar) + ModularAvatarParameterCost(ctx.Avatar);
             var max = VRCExpressionParameters.MAX_PARAMETER_COST;
             var bits = Ui.Text("", "kn-bits");
             var over = Ui.Notice(L10n.Tr("toggle.bitsOver"), "warn");
@@ -372,6 +373,64 @@ namespace Jeni.KaihenNavi
 
             root.Add(buttons);
             root.Add(Ui.Notice(L10n.Tr("toggle.howToUse"), "ok"));
+        }
+
+        /// <summary>
+        /// ほかの MA の部品（MA Parameters・MA Menu Item）が足す同期パラメータの bit 数（目安）。
+        /// Expression Parameters にある名前と、この脱ぎ着メニュー自身の項目、EditorOnly の中のものは数えない。
+        /// Bool は 1 bit、Int・Float は 8 bit。MA が実際に作る型とはずれることがある。
+        /// </summary>
+        private static int ModularAvatarParameterCost(VRCAvatarDescriptor avatar)
+        {
+            var counted = new HashSet<string>();
+            var expression = avatar.expressionParameters;
+            if (expression != null && expression.parameters != null)
+            {
+                foreach (var p in expression.parameters)
+                {
+                    if (p != null && !string.IsNullOrEmpty(p.name)) counted.Add(p.name);
+                }
+            }
+
+            var cost = 0;
+            foreach (var component in avatar.GetComponentsInChildren<ModularAvatarParameters>(true))
+            {
+                if (component.parameters == null || IsEditorOnly(component.transform, avatar.transform)) continue;
+                foreach (var p in component.parameters)
+                {
+                    if (p.isPrefix || p.localOnly || p.syncType == ParameterSyncType.NotSynced) continue;
+                    var name = string.IsNullOrEmpty(p.remapTo) ? p.nameOrPrefix : p.remapTo;
+                    if (string.IsNullOrEmpty(name) || !counted.Add(name)) continue;
+                    cost += p.syncType == ParameterSyncType.Bool ? 1 : 8;
+                }
+            }
+
+            // パラメータを書いていない MA Menu Item は、MA が同期パラメータを作る（0 か 1 なら Bool、ほかの値なら Int）
+            var menuRoot = avatar.transform.Find(MenuObjectName);
+            foreach (var item in avatar.GetComponentsInChildren<ModularAvatarMenuItem>(true))
+            {
+                if (menuRoot != null && item.transform.IsChildOf(menuRoot)) continue;
+                if (!item.isSynced || item.Control == null || item.Control.parameter == null) continue;
+                if (item.Control.type != VRCExpressionsMenu.Control.ControlType.Toggle &&
+                    item.Control.type != VRCExpressionsMenu.Control.ControlType.Button) continue;
+                if (IsEditorOnly(item.transform, avatar.transform)) continue;
+                var name = item.Control.parameter.name;
+                if (string.IsNullOrEmpty(name) || !counted.Add(name)) continue;
+                var value = item.Control.value;
+                cost += Mathf.Approximately(value, 0f) || Mathf.Approximately(value, 1f) ? 1 : 8;
+            }
+
+            return cost;
+        }
+
+        private static bool IsEditorOnly(Transform t, Transform avatarRoot)
+        {
+            for (; t != null && t != avatarRoot; t = t.parent)
+            {
+                if (t.gameObject.tag == "EditorOnly") return true;
+            }
+
+            return false;
         }
 
         /// <summary>

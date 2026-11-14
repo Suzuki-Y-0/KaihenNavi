@@ -45,6 +45,9 @@
 - MCP Project のパッケージは work/1114（57a1582 以降の修正も入れた状態）に入れ替え済み。前の版は `_kn_swap/orig_1114` に退避。
 - Unity MCP はこのチャットのツールにつながっていなかった（デスクトップアプリのローカル MCP は Blender と CoDesign だけ）。次は Unity MCP を Claude デスクトップアプリに登録しておくと、画面操作なしで確認できる。
 
+- **見つけて直した（2026-11-15・Unity 未確認）：拘束で動く骨で自動保存が止まらない。** Cazalis の `LowerArmSupport_R` は Scene の再描画のたびに拘束で少し回り、Prefab の上書きとして数えられていた → 「未保存の変更あり」・数十秒ごとの Apply instance to prefab・フッターの 元に戻す がバックアップ復元になる。Unity / VRChat の拘束で動く Transform の位置・回転・大きさの上書きは「未保存」に数えず、それだけなら保存しない（MyAvatar.DrivenTransforms / HasUserOverrides）。自動保存は、ほかのツールの Undo（例：EditorEye の ExecuteDynamicScript）だけでは保存しない。VRChat の拘束の `TargetTransform` という名前は実機で未確認（無ければ拘束が付いた Transform を対象にする）。
+- 画面操作での確認は途中で止めた（ユーザーの緊急停止）。KNTest の一時ファイルは削除済み。MCP Project のパッケージは 3ed788b の修正まで入れてある（コンパイルは Unity を前面にしたときに走る）。
+
 **わかっている残り（今回の分）**
 - 歩き方：メッシュを含む歩き方の Prefab は、部品の一部だけ消える可能性がある（服を丸ごと消すよりは安全側）。
 - 色の焼き込みは、履歴に残っている手順の数だけ PNG が残る（起動時に使われない物は消える）。

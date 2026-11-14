@@ -288,6 +288,7 @@ namespace Jeni.KaihenNavi
             public GameObject Target;
             public bool IsDefault;
             public bool OriginalActive;
+            public string Parameter;
         }
 
         private static void BuildWithModularAvatar(FeatureContext ctx, VisualElement root, List<Candidate> candidates)
@@ -394,6 +395,7 @@ namespace Jeni.KaihenNavi
                     if (target == null) continue;
                     var visibility = item.transform.Find(VisibilityName);
                     result.Add(new ExistingToggle { Item = item.gameObject, Target = target, IsDefault = item.isDefault,
+                        Parameter = item.Control != null && item.Control.parameter != null ? item.Control.parameter.name : null,
                         // 旧版は実際の値を残していない。初期値で、旧版が強制した非表示から復旧する。
                         OriginalActive = visibility != null ? visibility.gameObject.activeSelf : item.isDefault });
                 }
@@ -443,16 +445,22 @@ namespace Jeni.KaihenNavi
             // 作り直しでも現在の表示は変えず、最初に作る前の状態を引き継ぐ。
             RemoveMenu(avatar, undoName, false);
 
-            var used = new HashSet<string>();
+            // 残す項目は前のパラメータ名をそのまま使う（名前を作り直すと、保存された状態や OSC が別の服に付いてしまう）。
+            // 新しい項目には、前のメニューで使っていた名前（外した項目の分も）と重ならない名前を作る
+            var used = new HashSet<string>(previous.Select(e => e.Parameter).Where(n => !string.IsNullOrEmpty(n)));
+            var reused = new HashSet<string>();
             var data = new MenuData { menuName = L10n.Tr("toggle.menuName") };
             foreach (var c in targets)
             {
                 var label = string.IsNullOrEmpty(c.Label) ? c.Target.name : c.Label;
                 var old = previous.FirstOrDefault(e => e.Target == c.Target);
+                var parameter = old != null && !string.IsNullOrEmpty(old.Parameter) && reused.Add(old.Parameter)
+                    ? old.Parameter
+                    : ParameterName(label, used);
                 data.items.Add(new MenuItemData
                 {
                     label = label,
-                    parameter = ParameterName(label, used),
+                    parameter = parameter,
                     targetPath = HierarchyPath.Get(avatar.transform, c.Target.transform),
                     // 今見えているものは最初から ON（着ている状態）にする
                     isDefault = old != null ? old.IsDefault : c.Target.activeSelf,

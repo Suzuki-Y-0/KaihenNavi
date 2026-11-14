@@ -251,6 +251,23 @@ internal static class FeatureEditChecks
         Check(applied.Count == 0 && !TransformFeature.IsAdjusting, "Undo cancels pending slider save");
         MyAvatar.Save(avatar, false);
         Check(applied.Last() == InteractionMode.AutomatedAction, "Undo replay does not register new history");
+        // 作り直しでもパラメータ名は項目（対象）ごとに変わらない。新しい項目は前の名前と重ならない
+        var shirt = Child(root, "シャツ", true);
+        var shoes = Child(root, "くつ", true);
+        ctx.FeatureId = "toggle";
+        Set(backup, "_sessionKey", BackupService.AvatarId(avatar) + "|toggle");
+        Func<GameObject, string> param = target => ToggleFeature.ReadMenu(avatar).items
+            .First(i => i.targetPath == HierarchyPath.Get(root.transform, target.transform)).parameter;
+        Call("CreateMenu", ctx, Candidates(shirt, shoes));
+        var shirtParam = param(shirt);
+        var shoesParam = param(shoes);
+        Check(shirtParam != shoesParam, "generated parameter names are unique");
+        Call("CreateMenu", ctx, Candidates(shoes));
+        Check(param(shoes) == shoesParam, "unchecking another item keeps parameter name");
+        Call("CreateMenu", ctx, Candidates(shirt, shoes));
+        Check(param(shoes) == shoesParam && param(shirt) != shoesParam, "re-added item never takes a kept name");
+        Call("RemoveMenu", avatar, "remove", true);
+
         MenuTidyChecks();
         Console.WriteLine("Feature edit checks passed (" + count + "). Unity Undo, Prefab imports and MA preview require Unity.");
     }

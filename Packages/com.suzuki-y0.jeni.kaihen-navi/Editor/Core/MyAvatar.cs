@@ -448,13 +448,144 @@ namespace Jeni.KaihenNavi
             var group = Undo.GetCurrentGroup();
             var undoName = Undo.GetCurrentGroupName();
             if (recordUndo) Undo.FlushUndoRecordObjects();
+            // 配列が縮んだ後の範囲外の要素の変更は、Apply しても自分用 Prefab に残る（Unity の仕様）。
+            // シーン側を先に片付け、縮む枠があるときだけ保存後にファイル側も片付ける
+            RemoveStaleOverrides(root, recordUndo ? undoName : null);
+            var shrinks = ShrinksMaterials(root);
             PrefabUtility.ApplyPrefabInstance(root, recordUndo ? InteractionMode.UserAction : InteractionMode.AutomatedAction);
+            if (shrinks || HasStaleOverrides(AssetDatabase.LoadAssetAtPath<GameObject>(path))) RemoveStaleOverridesInAsset(path);
             if (recordUndo)
             {
                 Undo.SetCurrentGroupName(undoName);
                 Undo.CollapseUndoOperations(group);
             }
             return true;
+        }
+
+        // ---------------------------------------------------------------- 残った古いオーバーライド
+
+        /// <summary>
+        /// シーンのアバター（Prefab のインスタンス）に残った、もう使われていないオーバーライドを取り除く。
+        /// 自分用アバターでなくても使える（シーンだけの改変でも、消したファイルへの参照を残さない）。
+        /// </summary>
+        internal static bool RemoveStaleOverrides(VRCAvatarDescriptor avatar, string undoName)
+        {
+            var root = InstanceRoot(avatar);
+            return root != null && RemoveStaleOverrides(root, undoName);
+        }
+
+        /// <summary>
+        /// root 以下の Prefab のインスタンスから、使われていないオーバーライドを取り除く。取り除いたら true。
+        /// ・マテリアルの配列が縮んだ後に残る、範囲外の要素の変更（m_Materials.Array.data[i]）。
+        ///   Unity は配列が短くなっても範囲外の要素の変更を消さないため、インナーカラーを戻した後も
+        ///   内側用のマテリアルへの参照が残り、ファイルを片付けられなかった。範囲外なので見た目は変わらない。
+        /// ・変更先の部品が無くなった変更のうち、インナーカラーが作ったファイルを参照しているもの。
+        /// undoName を渡すと Undo に記録する（null なら記録しない）。
+        /// </summary>
+        private static bool RemoveStaleOverrides(GameObject root, string undoName)
+        {
+            if (root == null) return false;
+            var changed = false;
+            var seen = new HashSet<Object>();
+            foreach (var t in root.GetComponentsInChildren<Transform>(true))
+            {
+                var go = t.gameObject;
+                var handle = PrefabUtility.GetPrefabInstanceHandle(go);
+                if (handle == null || !seen.Add(handle)) continue;
+                var cleaned = WithoutStale(PrefabUtility.GetPropertyModifications(go));
+                if (cleaned == null) continue;
+                if (undoName != null) Undo.RegisterCompleteObjectUndo(handle, undoName);
+                PrefabUtility.SetPropertyModifications(go, cleaned);
+                changed = true;
+            }
+            return changed;
+        }
+
+        /// <summary>取り除くものがあるか（読むだけ）。保存のたびに呼ぶので、Prefab は開かない。</summary>
+        private static bool HasStaleOverrides(GameObject root)
+        {
+            if (root == null) return false;
+            var seen = new HashSet<Object>();
+            foreach (var t in root.GetComponentsInChildren<Transform>(true))
+            {
+                var handle = PrefabUtility.GetPrefabInstanceHandle(t.gameObject);
+                if (handle == null || !seen.Add(handle)) continue;
+                if (WithoutStale(PrefabUtility.GetPropertyModifications(t.gameObject)) != null) return true;
+            }
+            return false;
+        }
+
+        /// <summary>シーンの方が自分用 Prefab よりマテリアルの枠が少ない Renderer があるか（保存で配列が縮む）。</summary>
+        private static bool ShrinksMaterials(GameObject root)
+        {
+            foreach (var r in root.GetComponentsInChildren<Renderer>(true))
+            {
+                var source = PrefabUtility.GetCorrespondingObjectFromSource(r);
+                if (source != null && r.sharedMaterials.Length < source.sharedMaterials.Length) return true;
+            }
+            return false;
+        }
+
+        /// <summary>
+        /// 自分用 Prefab（ファイル。ベースのプレハブバリアント）に残った、使われていないオーバーライドを取り除いて保存する。
+        /// Prefab 編集と同じ方法（LoadPrefabContents → SaveAsPrefabAsset）で開くので、ほかのオーバーライドはそのまま。
+        /// Ctrl+Z では、同じグループの Apply の記録が保存前の Prefab に戻す（範囲外の変更は見た目に影響しない）。
+        /// </summary>
+        private static void RemoveStaleOverridesInAsset(string path)
+        {
+            if (!IsMinePath(path)) return;
+            var contents = PrefabUtility.LoadPrefabContents(path);
+            if (contents == null) return;
+            try
+            {
+                if (RemoveStaleOverrides(contents, null)) PrefabUtility.SaveAsPrefabAsset(contents, path);
+            }
+            finally
+            {
+                PrefabUtility.UnloadPrefabContents(contents);
+            }
+        }
+
+        private const string MaterialElement = "m_Materials.Array.data[";
+        private const string MaterialSize = "m_Materials.Array.size";
+
+        /// <summary>使われていない変更を除いた一覧。除くものが無ければ null。</summary>
+        private static PropertyModification[] WithoutStale(PropertyModification[] modifications)
+        {
+            if (modifications == null || modifications.Length == 0) return null;
+            // 配列の長さは、この段の変更にあればその値、無ければ元（target）の長さ
+            var sizes = new Dictionary<Object, int>();
+            foreach (var m in modifications)
+            {
+                int size;
+                if (m != null && m.target is Renderer && m.propertyPath == MaterialSize && int.TryParse(m.value, out size))
+                    sizes[m.target] = size;
+            }
+            var result = new List<PropertyModification>(modifications.Length);
+            foreach (var m in modifications)
+            {
+                if (m != null && IsStale(m, sizes)) continue;
+                result.Add(m);
+            }
+            return result.Count == modifications.Length ? null : result.ToArray();
+        }
+
+        private static bool IsStale(PropertyModification m, Dictionary<Object, int> sizes)
+        {
+            if (m.target == null)
+            {
+                // 部品が無くなった変更は、インナーカラーの生成物を参照しているものだけ外す
+                return m.objectReference != null && InnerColorAssets.IsGenerated(m.objectReference);
+            }
+            var renderer = m.target as Renderer;
+            var path = m.propertyPath;
+            if (renderer == null || path == null || !path.StartsWith(MaterialElement, System.StringComparison.Ordinal) ||
+                !path.EndsWith("]", System.StringComparison.Ordinal)) return false;
+            int index;
+            if (!int.TryParse(path.Substring(MaterialElement.Length, path.Length - MaterialElement.Length - 1), out index)) return false;
+            int size;
+            if (!sizes.TryGetValue(m.target, out size)) size = renderer.sharedMaterials.Length;
+            return index >= size;
         }
 
         /// <summary>このアバター用に複製したマテリアルの変更をファイルに書き出す（Ctrl+S を押し忘れても残るように）。</summary>

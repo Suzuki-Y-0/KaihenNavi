@@ -461,8 +461,10 @@ namespace Jeni.KaihenNavi
             AssetDatabase.SaveAssets();
             Undo.FlushUndoRecordObjects();
             MyAvatar.Save(ctx.Avatar);
-            InnerColorAssets.Cleanup(candidates, journal);
+            var kept = InnerColorAssets.Cleanup(candidates, journal);
             journal.Commit(undoName);
+            // 残った生成物は、プレビュー用の複製が作り直された後にもう一度片付ける（参照は調べ直す）
+            InnerColorAssets.RetryCleanup(ctx.Avatar, kept, group, undoName);
         }
 
         private void Reset(FeatureContext ctx)

@@ -110,7 +110,8 @@ namespace Jeni.KaihenNavi
                 .Distinct().OrderBy(p => p, StringComparer.Ordinal).ToArray();
         }
 
-        internal static HashSet<string> Referenced(HashSet<string> candidates)
+        /// <param name="owners">渡すと、候補を参照している Renderer・アセットを記録する（残った原因を調べるため）。</param>
+        internal static HashSet<string> Referenced(HashSet<string> candidates, Dictionary<string, string> owners = null)
         {
             var references = new HashSet<string>();
             if (candidates.Count == 0) return references;
@@ -135,13 +136,14 @@ namespace Jeni.KaihenNavi
                     var skinned = renderer as SkinnedMeshRenderer;
                     var filter = renderer.GetComponent<MeshFilter>();
                     var mesh = skinned != null ? skinned.sharedMesh : filter == null ? null : filter.sharedMesh;
-                    if (mesh != null) references.Add(AssetDatabase.GetAssetPath(mesh));
+                    var owner = owners == null ? null : Describe(renderer);
+                    if (mesh != null) Note(references, owners, candidates, AssetDatabase.GetAssetPath(mesh), owner);
                     foreach (var material in renderer.sharedMaterials)
                     {
                         if (material == null) continue;
-                        references.Add(AssetDatabase.GetAssetPath(material));
+                        Note(references, owners, candidates, AssetDatabase.GetAssetPath(material), owner);
                         foreach (var property in material.GetTexturePropertyNames())
-                            references.Add(AssetDatabase.GetAssetPath(material.GetTexture(property)));
+                            Note(references, owners, candidates, AssetDatabase.GetAssetPath(material.GetTexture(property)), owner);
                     }
                 }
                 // 自分用 Prefab と、手作業で参照を追加されたマテリアルも保護する。
@@ -154,7 +156,14 @@ namespace Jeni.KaihenNavi
                 {
                     EditorUtility.DisplayProgressBar(title, message, 0.2f + 0.8f * i / roots.Length);
                     var batch = roots.Skip(i).Take(batchSize).ToArray();
-                    foreach (var path in AssetDatabase.GetDependencies(batch, true)) references.Add(path);
+                    foreach (var path in AssetDatabase.GetDependencies(batch, true))
+                    {
+                        references.Add(path);
+                        // 候補が見つかったまとまりだけ、どのアセットが参照しているかを 1 つずつ調べる
+                        if (owners == null || !candidates.Contains(path) || owners.ContainsKey(path)) continue;
+                        var root = batch.FirstOrDefault(b => AssetDatabase.GetDependencies(new[] { b }, true).Contains(path));
+                        owners[path] = "asset " + (root ?? "?");
+                    }
                 }
                 EditorUtility.DisplayProgressBar(title, message, 1);
                 return references;
@@ -165,19 +174,105 @@ namespace Jeni.KaihenNavi
             }
         }
 
+        private static void Note(HashSet<string> references, Dictionary<string, string> owners, HashSet<string> candidates,
+            string path, string owner)
+        {
+            if (string.IsNullOrEmpty(path)) return;
+            references.Add(path);
+            if (owners != null && candidates.Contains(path) && !owners.ContainsKey(path)) owners[path] = owner;
+        }
+
+        private static string Describe(Renderer renderer)
+        {
+            var names = new List<string>();
+            for (var t = renderer.transform; t != null; t = t.parent) names.Insert(0, t.name);
+            return "renderer " + string.Join("/", names.ToArray()) + " (scene: " + renderer.gameObject.scene.name +
+                ", hideFlags: " + renderer.hideFlags + " / " + renderer.gameObject.hideFlags + ")";
+        }
+
+        private static bool Tagged(string path)
+        {
+            var importer = AssetImporter.GetAtPath(path);
+            return importer != null && (importer.userData ?? "").StartsWith(Tag, StringComparison.Ordinal);
+        }
+
         internal static bool Unsaved(HideFlags flags)
         {
             return (flags & HideFlags.DontSaveInEditor) != 0;
         }
 
-        internal static void Cleanup(HashSet<string> candidates, InnerColorAssetUndo journal)
+        /// <summary>参照されていない候補を消す。使用中で残した生成物（印の付いたファイル）を返す。</summary>
+        internal static HashSet<string> Cleanup(HashSet<string> candidates, InnerColorAssetUndo journal)
         {
-            var referenced = Referenced(candidates);
+            var owners = new Dictionary<string, string>();
+            var referenced = Referenced(candidates, owners);
+            var kept = new HashSet<string>();
             foreach (var path in candidates.OrderBy(p => p, StringComparer.Ordinal))
             {
-                if (!WorkFolders.IsToolPath(path) || referenced.Contains(path) || !File.Exists(path)) continue;
+                if (!WorkFolders.IsToolPath(path) || !File.Exists(path)) continue;
+                if (referenced.Contains(path))
+                {
+                    if (!Tagged(path)) continue;
+                    // 「元に戻す」の後に .mat が 1 つ残る原因を、1 回の操作で確かめられるようにする
+                    string owner;
+                    owners.TryGetValue(path, out owner);
+                    Debug.Log("[KaihenNavi] インナーカラー：使用中のため残したファイル " + path + " ← " + (owner ?? "不明"));
+                    kept.Add(path);
+                    continue;
+                }
                 journal.Track(path);
                 AssetDatabase.DeleteAsset(path);
+            }
+            return kept;
+        }
+
+        /// <summary>
+        /// 使用中で残した生成物を、少し後にもう一度片付ける（次の更新で作り直される MA・NDMF のプレビュー用の複製が
+        /// 古い参照を一時的に持っている場合のため）。次の更新で 1 回、さらに約 1 秒後に 1 回だけ試す。
+        /// 参照は毎回調べ直す。消すときは同じ Undo のまとまりにファイルの記録を足すので、Ctrl+Z 1 回で全部戻る。
+        /// 別の操作が入った（Undo のまとまりが変わった）ら何もしない。
+        /// </summary>
+        internal static void RetryCleanup(VRCAvatarDescriptor avatar, HashSet<string> kept, int group, string undoName)
+        {
+            if (avatar == null || kept == null || kept.Count == 0) return;
+            var remaining = new HashSet<string>(kept);
+            EditorApplication.delayCall += () =>
+            {
+                if (RetryOnce(avatar, remaining, group, undoName)) return;
+                var at = EditorApplication.timeSinceStartup + 1.0;
+                EditorApplication.CallbackFunction later = null;
+                later = () =>
+                {
+                    if (EditorApplication.timeSinceStartup < at) return;
+                    EditorApplication.update -= later;
+                    RetryOnce(avatar, remaining, group, undoName);
+                };
+                EditorApplication.update += later;
+            };
+        }
+
+        /// <summary>1 回だけ片付け直す。もう試さなくてよければ true。</summary>
+        private static bool RetryOnce(VRCAvatarDescriptor avatar, HashSet<string> remaining, int group, string undoName)
+        {
+            if (avatar == null || EditorApplication.isPlayingOrWillChangePlaymode || Undo.GetCurrentGroup() != group) return true;
+            remaining.RemoveWhere(p => !File.Exists(p));
+            if (remaining.Count == 0) return true;
+            var journal = InnerColorAssetUndo.Begin(avatar);
+            try
+            {
+                var kept = Cleanup(remaining, journal);
+                // 消した分だけファイルの記録を Undo に載せる（何も消さなければ記録しない）。元の操作と同じまとまりにする。
+                journal.Commit(undoName);
+                journal = null;
+                Undo.CollapseUndoOperations(group);
+                remaining.IntersectWith(kept);
+                return remaining.Count == 0;
+            }
+            catch (Exception e)
+            {
+                if (journal != null) journal.Rollback();
+                Debug.LogException(e);
+                return true;
             }
         }
     }

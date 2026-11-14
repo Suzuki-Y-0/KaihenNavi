@@ -472,6 +472,38 @@ namespace Jeni.KaihenNavi
                 other.sharedMaterials.SequenceEqual(new[] { recolored, recolored }) && File.Exists(folder + "/Materials/Hair.mat") &&
                 Directory.GetFiles(folder + "/Materials", "*_InnerColor.mat").Length == 0,
                 "Reset after a recolor must keep the recolored copy and remove only inner-color files");
+            // プレビュー用の複製が古い参照を一時的に持っていても、少し後の片付け直しで消え、Ctrl+Z では戻る。
+            typeof(InnerColorFeature).GetMethod("Preview", Private).Invoke(feature, new object[] { context });
+            var proxyInner = hair.sharedMaterials[2];
+            var proxyInnerPath = AssetDatabase.GetAssetPath(proxyInner);
+            var proxyObject = new GameObject("Proxy") { scene = new UnityEngine.SceneManagement.Scene { validForTests = true, isLoaded = true } };
+            var proxy = proxyObject.AddComponent<SkinnedMeshRenderer>();
+            proxy.sharedMaterials = new[] { proxyInner };
+            renderers.Add(proxy);
+            EditorApplication.delayCall = null;
+            typeof(InnerColorFeature).GetMethod("Reset", Private).Invoke(feature, new object[] { context });
+            Check(File.Exists(proxyInnerPath) && EditorApplication.delayCall != null && hair.sharedMaterials.Length == 2,
+                "A generated material still referenced by a renderer must be kept and retried later");
+            proxy.sharedMaterials = new Material[0];
+            var delayed = EditorApplication.delayCall; EditorApplication.delayCall = null; delayed();
+            Check(!File.Exists(proxyInnerPath), "The deferred retry must delete the file once the stale reference is gone");
+            var retryJournal = transient.OfType<InnerColorAssetUndo>().Last();
+            Replay(retryJournal, false);
+            Check(File.Exists(proxyInnerPath), "Undo must restore the file deleted by the deferred retry");
+            Replay(retryJournal, true);
+            Check(!File.Exists(proxyInnerPath), "Redo must delete the file again");
+            // 参照が戻っていれば、片付け直しでも消さない。
+            typeof(InnerColorFeature).GetMethod("Preview", Private).Invoke(feature, new object[] { context });
+            proxyInner = hair.sharedMaterials[2]; proxyInnerPath = AssetDatabase.GetAssetPath(proxyInner);
+            proxy.sharedMaterials = new[] { proxyInner };
+            EditorApplication.delayCall = null;
+            typeof(InnerColorFeature).GetMethod("Reset", Private).Invoke(feature, new object[] { context });
+            delayed = EditorApplication.delayCall; EditorApplication.delayCall = null; delayed();
+            Check(File.Exists(proxyInnerPath) && EditorApplication.update != null, "The retry must re-check references and keep used files");
+            EditorApplication.update = null;
+            proxy.sharedMaterials = new Material[0];
+            renderers.Remove(proxy);
+            InnerColorAssets.Cleanup(new HashSet<string> { proxyInnerPath }, InnerColorAssetUndo.Begin(avatar));
             SkinnedMeshRenderer.BakeForTests = null;
             // 色の明るさは暗い髪を補正し、非 lilToon では色だけにとどめる。
             var bright = new Material(source);

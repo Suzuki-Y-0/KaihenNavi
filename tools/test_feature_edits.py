@@ -129,6 +129,19 @@ internal static class FeatureEditChecks
         };
         Check(MyAvatar.KindOf(avatar) == AvatarKind.Mine && !MyAvatar.HasUnsaved(avatar), "constraint jitter is not an unsaved change");
         Check(!MyAvatar.Save(avatar) && applied.Count == 0, "constraint jitter alone never applies the Prefab");
+        // 外部ツールの Undo グループが進んでも、本当の変更が無ければ保存の手順（SaveNow）を通さない
+        var window = new KaihenNaviWindow();
+        Set(window, "_avatar", avatar);
+        Set(window, "_saveEditGroup", 99);
+        var records = Undo.RecordsForTests.Count;
+        var tick = typeof(KaihenNaviWindow).GetMethod("AutoSaveTick", Private);
+        Undo.IncrementCurrentGroup();
+        tick.Invoke(window, null);
+        EditorApplication.timeSinceStartup += 2;
+        tick.Invoke(window, null);
+        Check(applied.Count == 0 && Undo.RecordsForTests.Count == records, "auto save tick with only constraint jitter records nothing");
+        Check((int)typeof(KaihenNaviWindow).GetField("_savedGroup", Private).GetValue(window) == Undo.GetCurrentGroup() &&
+            (int)typeof(KaihenNaviWindow).GetField("_saveEditGroup", Private).GetValue(window) == 99, "auto save tick skips SaveNow");
         PrefabUtility.ModificationsForTests = new[] { mod(support.transform, "m_LocalRotation.z"), mod(support.transform, "m_RootOrder") };
         Check(MyAvatar.HasUnsaved(avatar), "other changes on a driven Transform still count");
         PrefabUtility.ModificationsForTests = new[] { mod(support.transform, "m_LocalRotation.z") };

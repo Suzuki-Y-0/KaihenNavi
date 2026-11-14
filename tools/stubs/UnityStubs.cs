@@ -135,6 +135,7 @@ namespace UnityEngine
     {
         public Mesh sharedMesh;
         public Transform rootBone;
+        public Bounds localBounds { get; set; }
         public Transform[] bones;
         public float GetBlendShapeWeight(int i) { return 0; }
         public void SetBlendShapeWeight(int i, float v) { }

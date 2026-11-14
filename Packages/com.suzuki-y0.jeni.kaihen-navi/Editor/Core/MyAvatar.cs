@@ -420,12 +420,136 @@ namespace Jeni.KaihenNavi
 
         // ---------------------------------------------------------------- 自動保存
 
-        /// <summary>シーン上の改変のうち、まだ自分用アバターに保存していないものがあるか。</summary>
+        /// <summary>
+        /// シーン上の改変のうち、まだ自分用アバターに保存していないものがあるか。
+        /// コンストレイントが動かしている骨の位置・回転・大きさのずれは、改変に数えない（毎秒呼ばれる）。
+        /// </summary>
         public static bool HasUnsaved(VRCAvatarDescriptor avatar)
         {
             if (KindOf(avatar) != AvatarKind.Mine) return false;
             var root = InstanceRoot(avatar);
-            return root != null && PrefabUtility.HasPrefabInstanceAnyOverrides(root, false);
+            return root != null && HasUserOverrides(root);
+        }
+
+        /// <summary>
+        /// Prefab のインスタンスに、利用者の改変といえる変更があるか。
+        /// コンストレイント（Unity・VRChat）は編集中もシーンの描画のたびに骨を動かし、ごくわずかな回転のずれが
+        /// 「Prefab からの変更」になる。これを改変と見なすと、何もしていないのに 未保存 になり、自動保存が
+        /// Prefab を何度も書き換えて Undo に「Apply instance to prefab」が積み上がる。
+        /// まず安い HasPrefabInstanceAnyOverrides で確かめ、変更があるときだけ中身を調べる。
+        /// </summary>
+        internal static bool HasUserOverrides(GameObject root)
+        {
+            if (root == null || !PrefabUtility.HasPrefabInstanceAnyOverrides(root, false)) return false;
+            if (PrefabUtility.GetAddedComponents(root).Count > 0 || PrefabUtility.GetRemovedComponents(root).Count > 0 ||
+                PrefabUtility.GetAddedGameObjects(root).Count > 0 || PrefabUtility.GetRemovedGameObjects(root).Count > 0) return true;
+            var driven = DrivenTransforms(root);
+            Dictionary<Object, bool> drivenOnly = null;
+            foreach (var o in PrefabUtility.GetObjectOverrides(root, false))
+            {
+                var t = o.instanceObject as Transform;
+                if (t == null || !driven.Contains(t)) return true;
+                if (drivenOnly == null) drivenOnly = DrivenOnlyTargets(root, driven);
+                var source = PrefabUtility.GetCorrespondingObjectFromSource(t);
+                bool only;
+                // 対応が分からなければ、安全側（改変あり）に倒す
+                if (source == null || !drivenOnly.TryGetValue(source, out only) || !only) return true;
+            }
+            return false;
+        }
+
+        /// <summary>
+        /// コンストレイントが動かす Transform（の Prefab 側）ごとに、変更が位置・回転・大きさだけか。
+        /// 変更の対象（PropertyModification.target）は 1 つ上の Prefab の部品なので、そちらで引く。
+        /// </summary>
+        private static Dictionary<Object, bool> DrivenOnlyTargets(GameObject root, HashSet<Transform> driven)
+        {
+            var sources = new HashSet<Object>();
+            foreach (var t in driven)
+            {
+                var source = PrefabUtility.GetCorrespondingObjectFromSource(t);
+                if (source != null) sources.Add(source);
+            }
+            var result = new Dictionary<Object, bool>();
+            var modifications = PrefabUtility.GetPropertyModifications(root);
+            if (modifications == null) return result;
+            foreach (var m in modifications)
+            {
+                if (m == null || m.target == null || !sources.Contains(m.target) || PrefabUtility.IsDefaultOverride(m)) continue;
+                bool only;
+                if (!result.TryGetValue(m.target, out only)) only = true;
+                result[m.target] = only && IsLocalTransformPath(m.propertyPath);
+            }
+            return result;
+        }
+
+        private static bool IsLocalTransformPath(string path)
+        {
+            return path != null && (path.StartsWith("m_LocalPosition") || path.StartsWith("m_LocalRotation") ||
+                path.StartsWith("m_LocalEulerAnglesHint") || path.StartsWith("m_LocalScale"));
+        }
+
+        // ---------------------------------------------------------------- コンストレイントが動かす骨
+
+        /// <summary>ヒエラルキーが変わるまで使い回す（部品の追加・削除・Undo でも hierarchyChanged が来る）。</summary>
+        private static class DrivenCache
+        {
+            public static readonly Dictionary<GameObject, HashSet<Transform>> Sets = new Dictionary<GameObject, HashSet<Transform>>();
+            public static readonly Dictionary<System.Type, bool> VrcTypes = new Dictionary<System.Type, bool>();
+
+            static DrivenCache()
+            {
+                EditorApplication.hierarchyChanged += Sets.Clear;
+            }
+        }
+
+        /// <summary>
+        /// root 以下で、編集中もコンストレイントが位置・回転を動かしている Transform。
+        /// Unity のコンストレイント（IConstraint）は付いている Transform を動かす。
+        /// VRChat のコンストレイントは SDK が無くてもコンパイルできるよう型名（VRCConstraintBase の派生）で見分け、
+        /// TargetTransform が指定されていればそれを、無ければ付いている Transform を動かす。
+        /// </summary>
+        internal static HashSet<Transform> DrivenTransforms(GameObject root)
+        {
+            HashSet<Transform> set;
+            if (root == null) return new HashSet<Transform>();
+            if (DrivenCache.Sets.TryGetValue(root, out set)) return set;
+            set = new HashSet<Transform>();
+            foreach (var c in root.GetComponentsInChildren<Component>(true))
+            {
+                if (c == null) continue;
+                if (c is UnityEngine.Animations.IConstraint)
+                {
+                    set.Add(c.transform);
+                    continue;
+                }
+                if (!IsVrcConstraint(c.GetType())) continue;
+                var target = VrcConstraintTarget(c);
+                set.Add(target != null ? target : c.transform);
+            }
+            DrivenCache.Sets[root] = set;
+            return set;
+        }
+
+        private static bool IsVrcConstraint(System.Type type)
+        {
+            bool result;
+            if (DrivenCache.VrcTypes.TryGetValue(type, out result)) return result;
+            for (var t = type; t != null && !result; t = t.BaseType)
+                result = t.Name == "VRCConstraintBase" && t.Namespace != null && t.Namespace.StartsWith("VRC");
+            DrivenCache.VrcTypes[type] = result;
+            return result;
+        }
+
+        /// <summary>VRChat のコンストレイントの TargetTransform（フィールドかプロパティ）。無ければ null。</summary>
+        private static Transform VrcConstraintTarget(Component constraint)
+        {
+            const System.Reflection.BindingFlags flags = System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Public;
+            var type = constraint.GetType();
+            var field = type.GetField("TargetTransform", flags);
+            if (field != null) return field.GetValue(constraint) as Transform;
+            var property = type.GetProperty("TargetTransform", flags);
+            return property != null && property.CanRead ? property.GetValue(constraint, null) as Transform : null;
         }
 
         /// <summary>
@@ -440,7 +564,8 @@ namespace Jeni.KaihenNavi
 
             var path = PrefabUtility.GetPrefabAssetPathOfNearestInstanceRoot(root);
             if (!IsMinePath(path)) return false;
-            if (!PrefabUtility.HasPrefabInstanceAnyOverrides(root, false)) return false;
+            // コンストレイントが動かした骨のずれだけなら書き込まない（Undo も積まない）
+            if (!HasUserOverrides(root)) return false;
 
             // AutomatedAction はシーンの追加物を Undo 対象外の Prefab 部品にしてしまう。
             // 保存も編集と同じグループへ入れ、Ctrl+Z でアセットとシーンを一緒に戻す。

@@ -603,6 +603,13 @@ namespace Jeni.KaihenNavi
             }
 
             if (group == _savedGroup || now - _seenAt < AutoSaveDelay) return;
+            // 外部ツールの Undo グループ（ExecuteDynamicScript など）やコンストレイントが動かした骨のずれだけなら、
+            // 保存の手順を通さない（Prefab への書き込みも Undo の記録もしない。フッターの「元に戻す」の控えも崩さない）
+            if (MyAvatar.KindOf(_avatar) == AvatarKind.Mine && !MyAvatar.HasUnsaved(_avatar) && !HasUnsavedMaterials())
+            {
+                _savedGroup = group;
+                return;
+            }
             SaveNow();
         }
 

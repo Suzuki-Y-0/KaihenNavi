@@ -841,6 +841,16 @@ namespace Jeni.KaihenNavi
             {
                 Debug.LogException(e);
             }
+
+            // 消した履歴だけが指していた、色を変えた画像も片付ける（起動直後なので Undo から参照されていない）
+            try
+            {
+                ColorLayers.SweepUnusedBakes(BackupService.SessionStart, path => System.IO.File.GetLastWriteTime(path));
+            }
+            catch (Exception e)
+            {
+                Debug.LogException(e);
+            }
         }
     }
 }

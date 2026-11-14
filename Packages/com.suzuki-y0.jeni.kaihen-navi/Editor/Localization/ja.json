@@ -73,7 +73,7 @@
   "toggle.stateVisible": "いまは見えています",
   "toggle.stateHidden": "いまは隠れています",
   "toggle.bits": "通信量：アバター本体 {0} bit ＋ このメニュー {1} bit（上限 {2} bit）",
-  "toggle.bitsOver": "通信量が上限をこえそうです。メニューに入れる数を減らしてください（ほかのツールで追加した分は含まれていません）。",
+  "toggle.bitsOver": "通信量が上限をこえそうです。メニューに入れる数を減らしてください（アバターと Modular Avatar の設定は数えていますが、ほかのツールの分が入っていない場合があります）。",
   "toggle.create": "脱ぎ着の切り替えを作る",
   "toggle.rebuild": "脱ぎ着の切り替えを作り直す",
   "toggle.remove": "脱ぎ着の切り替えを消す（元に戻す）",

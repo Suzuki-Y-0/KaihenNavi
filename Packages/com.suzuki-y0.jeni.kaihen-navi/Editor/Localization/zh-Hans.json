@@ -73,7 +73,7 @@
   "toggle.stateVisible": "当前显示",
   "toggle.stateHidden": "当前隐藏",
   "toggle.bits": "同步用量：模型本体 {0} bit ＋ 此菜单 {1} bit（上限 {2} bit）",
-  "toggle.bitsOver": "同步用量可能超过上限。请减少加入菜单的数量（不包括其他工具添加的部分）。",
+  "toggle.bitsOver": "同步用量可能超过上限。请减少加入菜单的数量（已计入模型和 Modular Avatar 的设置，但可能未包含其他工具的部分）。",
   "toggle.create": "创建穿脱开关",
   "toggle.rebuild": "重新创建穿脱开关",
   "toggle.remove": "删除穿脱开关（还原）",

@@ -73,7 +73,7 @@
   "toggle.stateVisible": "현재 표시됨",
   "toggle.stateHidden": "현재 숨겨짐",
   "toggle.bits": "동기화 사용량: 아바타 본체 {0} bit ＋ 이 메뉴 {1} bit (한도 {2} bit)",
-  "toggle.bitsOver": "동기화 사용량이 한도를 넘을 수 있습니다. 메뉴에 넣는 항목 수를 줄여 주세요(다른 도구로 추가한 양은 포함되지 않습니다).",
+  "toggle.bitsOver": "동기화 사용량이 한도를 넘을 수 있습니다. 메뉴에 넣는 항목 수를 줄여 주세요(아바타와 Modular Avatar 설정은 포함하지만, 다른 도구의 양은 빠져 있을 수 있습니다).",
   "toggle.create": "옷 입고 벗기 만들기",
   "toggle.rebuild": "옷 입고 벗기 다시 만들기",
   "toggle.remove": "옷 입고 벗기 삭제 (되돌리기)",

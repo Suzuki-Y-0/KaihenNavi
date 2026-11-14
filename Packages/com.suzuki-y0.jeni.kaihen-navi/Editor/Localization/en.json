@@ -73,7 +73,7 @@
   "toggle.stateVisible": "Currently visible",
   "toggle.stateHidden": "Currently hidden",
   "toggle.bits": "Sync usage: avatar {0} bit + this menu {1} bit (limit {2} bit)",
-  "toggle.bitsOver": "Sync usage may exceed the limit. Please add fewer items (items added by other tools are not counted here).",
+  "toggle.bitsOver": "Sync usage may exceed the limit. Please add fewer items (avatar and Modular Avatar settings are counted, but some other tools may not be included).",
   "toggle.create": "Create clothing toggles",
   "toggle.rebuild": "Rebuild clothing toggles",
   "toggle.remove": "Remove clothing toggles (restore)",

@@ -4,6 +4,9 @@ using UnityEditor;
 using UnityEngine;
 using UnityEngine.UIElements;
 using VRC.SDK3.Avatars.Components;
+#if KAIHENNAVI_MA
+using nadena.dev.modular_avatar.core;
+#endif
 
 namespace Jeni.KaihenNavi
 {
@@ -414,6 +417,8 @@ namespace Jeni.KaihenNavi
                 while (t.parent != null && t.parent != root && !bones.Contains(t.parent)) t = t.parent;
                 if (t.parent == null) continue;
                 if (t.parent == root && smr != null) continue; // アバター直下の衣装（別アーマチュア）は対象外
+                // 着せた服の中の小物（ブローチなど）が服の根まで上がった場合、服ごと動かさないよう除く
+                if (IsWornOutfit(t)) continue;
 
                 if (!result.Contains(t)) result.Add(t);
             }
@@ -426,6 +431,16 @@ namespace Jeni.KaihenNavi
                 if (!result.Contains(t.parent)) result.Add(t.parent);
             }
             return result;
+        }
+
+        /// <summary>自身か子の中に MA Merge Armature があれば、着せた服（アウトフィット）の根とみなす。</summary>
+        private static bool IsWornOutfit(Transform t)
+        {
+#if KAIHENNAVI_MA
+            return t.GetComponentInChildren<ModularAvatarMergeArmature>(true) != null;
+#else
+            return false;
+#endif
         }
 
         private static string Label(VRCAvatarDescriptor avatar, Transform t)

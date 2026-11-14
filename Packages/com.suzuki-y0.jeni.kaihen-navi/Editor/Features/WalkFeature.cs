@@ -396,8 +396,7 @@ namespace Jeni.KaihenNavi
                     foreach (var g in found)
                     {
                         // ベースの中に入れた Prefab ごと外す（入れ子の中の部品だけを消すことはできないため、いちばん外側を消す）
-                        var outer = PrefabUtility.GetOutermostPrefabInstanceRoot(g);
-                        Object.DestroyImmediate(outer != null && outer != contents ? outer : g);
+                        Object.DestroyImmediate(GimmickRoot(g, contents));
                     }
 
                     return true;
@@ -421,8 +420,7 @@ namespace Jeni.KaihenNavi
                     continue;
                 }
 
-                var outer = PrefabUtility.GetOutermostPrefabInstanceRoot(r.gameObject);
-                var target = outer != null && outer != avatar.gameObject && outer.transform.IsChildOf(avatar.transform) ? outer : r.gameObject;
+                var target = GimmickRoot(r.gameObject, avatar.gameObject);
                 if (target == avatar.gameObject) continue;
                 Undo.DestroyObjectImmediate(target);
             }
@@ -458,6 +456,19 @@ namespace Jeni.KaihenNavi
             }
         }
 
+        /// <summary>
+        /// 歩き方の入れ物（boundary の直下の子）を探す。自分用アバターは自身が最も外側の Prefab なので、
+        /// GetOutermostPrefabInstanceRoot だとアバター本体を返してしまう。boundary より上には行かない。
+        /// </summary>
+        private static GameObject GimmickRoot(GameObject g, GameObject boundary)
+        {
+            if (g == null || boundary == null || g == boundary) return g;
+            var t = g.transform;
+            if (!t.IsChildOf(boundary.transform)) return g;
+            while (t.parent != null && t.parent != boundary.transform) t = t.parent;
+            return t.parent == boundary.transform ? t.gameObject : g;
+        }
+
         /// <summary>このアバターで足した歩き方を外し、ベースの歩き方をこのアバター用に書き換えて使う（重ならないように）。</summary>
         private static void FixConflict(FeatureContext ctx, GameObject basePrefab)
         {
@@ -475,8 +486,8 @@ namespace Jeni.KaihenNavi
             if (inherited == null) own.RemoveAt(0);
             foreach (var r in own)
             {
-                var outer = PrefabUtility.GetOutermostPrefabInstanceRoot(r.gameObject);
-                var target = outer != null && outer != avatar.gameObject && outer.transform.IsChildOf(avatar.transform) ? outer : r.gameObject;
+                var target = GimmickRoot(r.gameObject, avatar.gameObject);
+                if (target == avatar.gameObject) continue;
                 Undo.DestroyObjectImmediate(target);
             }
 

@@ -51,10 +51,36 @@ namespace Jeni.KaihenNavi
             {
                 // パーティクルは Anchor Override を使わない
                 if (r is ParticleSystemRenderer) continue;
+                // DontSet は意図的に触らないので（Unify と同じく）数えない。数えると警告が 0 にならない
+                if (IsDontSetGoverned(avatar.transform, r)) continue;
                 if (EffectiveAnchor(avatar.transform, r) != target) count++;
             }
 
             return count;
+        }
+
+        /// <summary>
+        /// レンダラーの Anchor が DontSet の MeshSettings で決まっているか（EffectiveAnchor と同じ順に上へたどる）。
+        /// Unify はこれらに触れない。
+        /// </summary>
+        private static bool IsDontSetGoverned(Transform avatarRoot, Renderer renderer)
+        {
+            if (renderer == null) return false;
+            for (var t = renderer.transform; t != null; t = t.parent)
+            {
+                var settings = t.GetComponent<ModularAvatarMeshSettings>();
+                if (settings != null)
+                {
+                    var mode = settings.InheritProbeAnchor;
+                    if (mode == ModularAvatarMeshSettings.InheritMode.DontSet) return true;
+                    if (mode == ModularAvatarMeshSettings.InheritMode.Set) return false;
+                    if (mode == ModularAvatarMeshSettings.InheritMode.SetOrInherit && Resolve(settings, settings.ProbeAnchor) != null) return false;
+                }
+
+                if (t == avatarRoot) break;
+            }
+
+            return false;
         }
 
         /// <summary>
@@ -200,7 +226,37 @@ namespace Jeni.KaihenNavi
             return false;
         }
 
-        /// <summary>全 SkinnedMeshRenderer のワールド Bounds を、ルートボーンのローカルで包む。</summary>
+        /// <summary>箱の i 番目の隅（ビットで x・y・z の低い側と高い側を選ぶ）。</summary>
+        private static Vector3 Corner(Vector3 lo, Vector3 hi, int i)
+        {
+            return new Vector3(
+                (i & 1) == 0 ? lo.x : hi.x,
+                (i & 2) == 0 ? lo.y : hi.y,
+                (i & 4) == 0 ? lo.z : hi.z);
+        }
+
+        /// <summary>
+        /// SkinnedMeshRenderer の範囲の 8 隅（ワールド）。有効でアクティブなら smr.bounds を使う。
+        /// 無効・非アクティブのものは smr.bounds が原点の空箱になることがあるので、
+        /// メッシュの範囲を骨（無ければ自身）の localToWorld で変換して求める。
+        /// </summary>
+        private static Vector3[] WorldCorners(SkinnedMeshRenderer smr)
+        {
+            var corners = new Vector3[8];
+            if (smr.enabled && smr.gameObject.activeInHierarchy)
+            {
+                var b = smr.bounds;
+                for (var i = 0; i < 8; i++) corners[i] = Corner(b.min, b.max, i);
+                return corners;
+            }
+
+            var mesh = smr.sharedMesh.bounds;
+            var matrix = (smr.rootBone != null ? smr.rootBone : smr.transform).localToWorldMatrix;
+            for (var i = 0; i < 8; i++) corners[i] = matrix.MultiplyPoint3x4(Corner(mesh.min, mesh.max, i));
+            return corners;
+        }
+
+        /// <summary>全 SkinnedMeshRenderer のワールド Bounds を、ルートボーンのローカルで包む。メッシュの無いものは数えない。</summary>
         private static Bounds ComputeBounds(VRCAvatarDescriptor avatar, Transform rootBone)
         {
             var has = false;
@@ -208,16 +264,9 @@ namespace Jeni.KaihenNavi
             var max = Vector3.zero;
             foreach (var smr in avatar.GetComponentsInChildren<SkinnedMeshRenderer>(true))
             {
-                var b = smr.bounds;
-                var half = b.max - b.center;
-                var lo = b.center - half;
-                var hi = b.max;
-                for (var i = 0; i < 8; i++)
+                if (smr.sharedMesh == null) continue;
+                foreach (var corner in WorldCorners(smr))
                 {
-                    var corner = new Vector3(
-                        (i & 1) == 0 ? lo.x : hi.x,
-                        (i & 2) == 0 ? lo.y : hi.y,
-                        (i & 4) == 0 ? lo.z : hi.z);
                     var local = rootBone.InverseTransformPoint(corner);
                     if (!has)
                     {

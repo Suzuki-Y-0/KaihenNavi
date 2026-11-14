@@ -158,6 +158,7 @@ namespace UnityEngine
         public void SetTriangles(int[] value, int submesh) { submeshes[submesh] = value; }
         public void RecalculateNormals() { }
         public void RecalculateBounds() { }
+        public Bounds bounds;
         public string GetBlendShapeName(int i) { return ""; }
         public int GetBlendShapeIndex(string name) { return -1; }
     }
@@ -178,6 +179,7 @@ namespace UnityEngine
         public static Matrix4x4 identity;
         public static Matrix4x4 TRS(Vector3 p, Quaternion q, Vector3 s) { return default(Matrix4x4); }
         public static Matrix4x4 Scale(Vector3 s) { return default(Matrix4x4); }
+        public Vector3 MultiplyPoint3x4(Vector3 point) { return point; }
         public static Matrix4x4 Ortho(float l, float r, float b, float t, float n, float f) { return default(Matrix4x4); }
         public static Matrix4x4 operator *(Matrix4x4 a, Matrix4x4 b) { return a; }
         public Matrix4x4 inverse { get { return this; } }
@@ -334,6 +336,7 @@ namespace UnityEngine
     {
         public Bounds(Vector3 center, Vector3 size) { this.center = center; max = center + size * 0.5f; }
         public Vector3 center, max;
+        public Vector3 min { get { return center * 2f - max; } }
         public void Encapsulate(Bounds b) { }
     }
 

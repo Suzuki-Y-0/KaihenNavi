@@ -317,6 +317,21 @@ internal static class HistoryTests
             "Only the oldest tasks beyond the limit are deleted");
         Check(deletedPaths.All(p => ((BackupSnapshot)Assets[p]).hiddenFromHistory || p.Contains("/Old/")),
             "Visible backups within the limit are kept");
+        // 前の起動で保存前のシーンで取ったものは、もう照合できないので消す。この起動中のものは残す
+        var unsavedMarkerId = "GlobalObjectId_V1-2-00000000000000000000000000000000-99-0";
+        Assets.Add(WorkFolders.AvatarsRoot + "/Unsaved/Backups/earlier.asset", new BackupSnapshot
+            { avatarId = unsavedMarkerId, avatarName = "unsaved", createdTicks = BackupService.SessionStart.Ticks - 1 });
+        Assets.Add(WorkFolders.AvatarsRoot + "/Unsaved/Backups/current.asset", new BackupSnapshot
+            { avatarId = unsavedMarkerId, avatarName = "unsaved", sceneHandle = 3, createdTicks = DateTime.Now.Ticks });
+        BackupService.InvalidateCache();
+        deletedPaths.Clear();
+        BackupService.DeleteStale(BackupService.SessionStart, path => DateTime.MinValue);
+        Check(deletedPaths.Contains(WorkFolders.AvatarsRoot + "/Unsaved/Backups/earlier.asset") &&
+              !deletedPaths.Contains(WorkFolders.AvatarsRoot + "/Unsaved/Backups/current.asset"),
+            "Unsaved-scene backups from an earlier editor session are deleted, this session's are kept");
+        Assets.Remove(WorkFolders.AvatarsRoot + "/Unsaved/Backups/earlier.asset");
+        Assets.Remove(WorkFolders.AvatarsRoot + "/Unsaved/Backups/current.asset");
+        BackupService.InvalidateCache();
         SweepBakesChecks();
 
         // 保存前のシーンでは、この起動中に同じシーンで取った同名のバックアップだけを同じアバターとみなす。

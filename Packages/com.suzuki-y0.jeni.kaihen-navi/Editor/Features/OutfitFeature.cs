@@ -170,11 +170,14 @@ namespace Jeni.KaihenNavi
             var row = Ui.Box("kn-list__row");
             var texts = Ui.Box("kn-list__texts");
             texts.Add(Ui.Text(outfit.name, "kn-list__title"));
-            texts.Add(Ui.Text(outfit.activeSelf ? L10n.Tr("toggle.stateVisible") : L10n.Tr("toggle.stateHidden"), "kn-list__sub"));
+            // 脱ぎ着メニューに入っている服は、メニューの初期値でゲームでの最初の状態が決まる（シーンの表示では決まらない）
+            var menuItem = ToggleFeature.MenuItemFor(ctx.Avatar, outfit);
+            var visible = menuItem != null ? menuItem.isDefault : outfit.activeSelf;
+            texts.Add(Ui.Text(visible ? L10n.Tr("toggle.stateVisible") : L10n.Tr("toggle.stateHidden"), "kn-list__sub"));
             row.Add(texts);
 
             // 脱がす＝隠す（アップロードにも含まれなくなる）。完全に取り除くときは「取り除く」。
-            var visible = outfit.activeSelf;
+            // メニューに入っている服は、メニューの初期値も同じ 1 手で変える。
             row.Add(Ui.Button(visible ? L10n.Tr("outfit.takeOff") : L10n.Tr("outfit.putOn"), () =>
             {
                 ctx.BeginEdit();
@@ -184,9 +187,20 @@ namespace Jeni.KaihenNavi
                 Undo.SetCurrentGroupName(L10n.Tr("undo.outfit"));
                 try
                 {
-                    Undo.RecordObject(outfit, L10n.Tr("undo.outfit"));
-                    outfit.SetActive(!visible);
-                    PrefabUtility.RecordPrefabInstancePropertyModifications(outfit);
+                    if (menuItem != null)
+                    {
+                        Undo.RecordObject(menuItem, L10n.Tr("undo.outfit"));
+                        menuItem.isDefault = !visible;
+                        PrefabUtility.RecordPrefabInstancePropertyModifications(menuItem);
+                    }
+
+                    if (outfit.activeSelf != !visible)
+                    {
+                        Undo.RecordObject(outfit, L10n.Tr("undo.outfit"));
+                        outfit.SetActive(!visible);
+                        PrefabUtility.RecordPrefabInstancePropertyModifications(outfit);
+                    }
+
                     MyAvatar.Save(ctx.Avatar);
                 }
                 finally { Undo.CollapseUndoOperations(group); }

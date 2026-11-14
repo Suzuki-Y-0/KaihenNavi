@@ -277,6 +277,8 @@ internal static class FeatureEditChecks
         Check(shirtParam != shoesParam, "generated parameter names are unique");
         Call("CreateMenu", ctx, Candidates(shoes));
         Check(param(shoes) == shoesParam, "unchecking another item keeps parameter name");
+        Check(ToggleFeature.MenuItemFor(avatar, shoes) != null && ToggleFeature.MenuItemFor(avatar, shirt) == null,
+            "outfit rows find the menu item that decides the in-game default");
         Call("CreateMenu", ctx, Candidates(shirt, shoes));
         Check(param(shoes) == shoesParam && param(shirt) != shoesParam, "re-added item never takes a kept name");
         Call("RemoveMenu", avatar, "remove", true);

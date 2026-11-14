@@ -32,6 +32,8 @@ namespace Jeni.KaihenNavi
             public bool Picked;
             public bool IsOther;
             public bool InMenu = false;
+            /// <summary>メニューの初期値（InMenu のときだけ使う）。</summary>
+            public bool DefaultOn = false;
         }
 
         private static bool _othersExpanded;
@@ -241,7 +243,9 @@ namespace Jeni.KaihenNavi
                     texts.Add(Ui.Text(c.Target.name, "kn-list__title"));
                 }
 
-                var state = c.Target.activeSelf ? L10n.Tr("toggle.stateVisible") : L10n.Tr("toggle.stateHidden");
+                // メニューに入っているものは、シーンの表示ではなくメニューの初期値（ゲームでの最初の状態）を出す
+                var shown = c.InMenu ? c.DefaultOn : c.Target.activeSelf;
+                var state = shown ? L10n.Tr("toggle.stateVisible") : L10n.Tr("toggle.stateHidden");
                 if (c.InMenu) state += "  ・  " + L10n.Tr("toggle.inMenu");
                 // 表示名を変えたものは、元のオブジェクト名も添えて見分けられるようにする
                 if (editableLabel && c.Label != c.Target.name) state += "  ・  " + c.Target.name;
@@ -301,6 +305,7 @@ namespace Jeni.KaihenNavi
                 var candidate = candidates.FirstOrDefault(c => c.Target == e.Target);
                 if (candidate == null) continue;
                 candidate.InMenu = true;
+                candidate.DefaultOn = e.IsDefault;
                 if (!Picks.ContainsKey(e.Target)) candidate.Picked = true;
                 if (!Labels.ContainsKey(e.Target)) candidate.Label = e.Item.name;
             }
@@ -367,6 +372,16 @@ namespace Jeni.KaihenNavi
 
             root.Add(buttons);
             root.Add(Ui.Notice(L10n.Tr("toggle.howToUse"), "ok"));
+        }
+
+        /// <summary>
+        /// 脱ぎ着メニューで対象を切り替える項目（無ければ null）。メニューに入っている服は、
+        /// シーンの表示ではなく、この項目の初期値（isDefault）でゲームでの最初の状態が決まる。
+        /// </summary>
+        internal static ModularAvatarMenuItem MenuItemFor(VRCAvatarDescriptor avatar, GameObject target)
+        {
+            var existing = ReadExisting(avatar).FirstOrDefault(e => e.Target == target);
+            return existing == null ? null : existing.Item.GetComponent<ModularAvatarMenuItem>();
         }
 
         private static void SyncPicksWithMenu(VRCAvatarDescriptor avatar)

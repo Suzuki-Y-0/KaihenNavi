@@ -92,6 +92,59 @@ internal static class FeatureEditChecks
         Check(cost == 1 + 8 + 1, "MA synced parameters counted once, local/unsynced/prefix/EditorOnly/own menu skipped (" + cost + ")");
     }
 
+    // コンストレイントが動かす骨の位置・回転のずれは改変に数えず、保存（Apply）もしない
+    private static void ConstraintChecks()
+    {
+        var go = new GameObject("ConstraintAvatar");
+        var avatar = go.AddComponent<VRCAvatarDescriptor>();
+        var support = Child(go, "LowerArmSupport_R", true);
+        var helper = Child(go, "Helper", true);
+        var driven = Child(go, "Driven", true);
+        var plain = Child(go, "Plain", true);
+        var sources = new Dictionary<UnityEngine.Object, UnityEngine.Object>();
+        foreach (var t in new[] { support.transform, driven.transform, plain.transform }) sources[t] = new Transform { name = t.name + "(asset)" };
+        PrefabUtility.SourceForTests = o => o != null && sources.ContainsKey(o) ? sources[o] : null;
+        PrefabUtility.RootForTests = go;
+        PrefabUtility.PathForTests = WorkFolders.AvatarsRoot + "/Constraint/Avatar.prefab";
+        PrefabUtility.OverridesForTests = true;
+        var applied = new List<InteractionMode>();
+        PrefabUtility.ApplyForTests = (g, mode) => applied.Add(mode);
+        support.AddComponent<UnityEngine.Animations.ParentConstraint>();
+        // VRChat のコンストレイントは別の Transform（TargetTransform）を動かせる
+        helper.AddComponent<VRC.SDK3.Dynamics.Constraint.Components.VRCParentConstraint>().TargetTransform = driven.transform;
+        if (EditorApplication.hierarchyChanged != null) EditorApplication.hierarchyChanged();
+        var set = MyAvatar.DrivenTransforms(go);
+        Check(set.Contains(support.transform) && set.Contains(driven.transform) && !set.Contains(helper.transform) && !set.Contains(plain.transform),
+            "Unity constraint drives its own Transform, VRC constraint drives TargetTransform");
+        Func<Transform, string, PropertyModification> mod = (t, path) => new PropertyModification { target = sources[t], propertyPath = path, value = "0.0023" };
+        PrefabUtility.ObjectOverridesForTests = new List<UnityEditor.SceneManagement.ObjectOverride>
+        {
+            new UnityEditor.SceneManagement.ObjectOverride { instanceObject = support.transform },
+            new UnityEditor.SceneManagement.ObjectOverride { instanceObject = driven.transform },
+        };
+        PrefabUtility.ModificationsForTests = new[]
+        {
+            mod(support.transform, "m_LocalRotation.z"), mod(support.transform, "m_LocalRotation.w"),
+            mod(driven.transform, "m_LocalPosition.x"), mod(driven.transform, "m_LocalEulerAnglesHint.y"),
+        };
+        Check(MyAvatar.KindOf(avatar) == AvatarKind.Mine && !MyAvatar.HasUnsaved(avatar), "constraint jitter is not an unsaved change");
+        Check(!MyAvatar.Save(avatar) && applied.Count == 0, "constraint jitter alone never applies the Prefab");
+        PrefabUtility.ModificationsForTests = new[] { mod(support.transform, "m_LocalRotation.z"), mod(support.transform, "m_RootOrder") };
+        Check(MyAvatar.HasUnsaved(avatar), "other changes on a driven Transform still count");
+        PrefabUtility.ModificationsForTests = new[] { mod(support.transform, "m_LocalRotation.z") };
+        PrefabUtility.ObjectOverridesForTests.Add(new UnityEditor.SceneManagement.ObjectOverride { instanceObject = plain.transform });
+        Check(MyAvatar.HasUnsaved(avatar) && MyAvatar.Save(avatar) && applied.Count == 1, "a real change is saved together");
+        PrefabUtility.ObjectOverridesForTests.RemoveAt(2);
+        PrefabUtility.AddedComponentsForTests.Add(new UnityEditor.SceneManagement.AddedComponent());
+        Check(MyAvatar.HasUnsaved(avatar), "added components count");
+        PrefabUtility.AddedComponentsForTests.Clear();
+        PrefabUtility.OverridesForTests = false;
+        PrefabUtility.ObjectOverridesForTests = null;
+        PrefabUtility.ModificationsForTests = null;
+        PrefabUtility.SourceForTests = null;
+        PrefabUtility.RootForTests = null;
+    }
+
     // メニュー整理：実際に差し替えたメニューを覚えて戻す。分からないときは取り出したメニューを消さない。
     private static void MenuTidyChecks()
     {
@@ -345,6 +398,7 @@ internal static class FeatureEditChecks
         BitChecks();
         MenuTidyChecks();
         WalkGimmickChecks();
+        ConstraintChecks();
         Console.WriteLine("Feature edit checks passed (" + count + "). Unity Undo, Prefab imports and MA preview require Unity.");
     }
 }

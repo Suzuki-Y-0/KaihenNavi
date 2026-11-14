@@ -473,6 +473,13 @@ namespace UnityEngine
     [AttributeUsage(AttributeTargets.Class)] public class AddComponentMenu : Attribute { public AddComponentMenu(string s) { } }
 }
 
+namespace UnityEngine.Animations
+{
+    // 本物は Unity のコンストレイント（Parent・Position・Rotation・Aim など）が実装するインターフェース
+    public interface IConstraint { bool constraintActive { get; set; } float weight { get; set; } }
+    public class ParentConstraint : Behaviour, IConstraint { public bool constraintActive { get; set; } public float weight { get; set; } }
+}
+
 namespace UnityEngine.SceneManagement
 {
     public struct Scene
@@ -921,7 +928,27 @@ namespace UnityEditor
         public static void ReplacePrefabAssetOfPrefabInstance(GameObject root, GameObject asset, PrefabReplacingSettings s, InteractionMode m) { }
         public static void UnpackPrefabInstance(GameObject root, PrefabUnpackMode mode, InteractionMode m) { }
         public static Object GetPrefabInstanceHandle(Object instanceComponentOrGameObject) { return null; }
-        public static PropertyModification[] GetPropertyModifications(Object targetPrefab) { return null; }
+        public static PropertyModification[] ModificationsForTests;
+        public static PropertyModification[] GetPropertyModifications(Object targetPrefab) { return ModificationsForTests; }
+        public static bool IsDefaultOverride(PropertyModification modification) { return false; }
+        // null なら、OverridesForTests のとき「ルートの何かが変わった」1 件を返す
+        public static List<UnityEditor.SceneManagement.ObjectOverride> ObjectOverridesForTests;
+        public static List<UnityEditor.SceneManagement.ObjectOverride> GetObjectOverrides(GameObject prefabInstance, bool includeDefaultOverrides = false)
+        {
+            if (ObjectOverridesForTests != null) return new List<UnityEditor.SceneManagement.ObjectOverride>(ObjectOverridesForTests);
+            var result = new List<UnityEditor.SceneManagement.ObjectOverride>();
+            if (OverridesForTests) result.Add(new UnityEditor.SceneManagement.ObjectOverride { instanceObject = prefabInstance });
+            return result;
+        }
+        public static List<UnityEditor.SceneManagement.AddedComponent> AddedComponentsForTests = new List<UnityEditor.SceneManagement.AddedComponent>();
+        public static List<UnityEditor.SceneManagement.AddedComponent> GetAddedComponents(GameObject prefabInstance)
+        { return new List<UnityEditor.SceneManagement.AddedComponent>(AddedComponentsForTests); }
+        public static List<UnityEditor.SceneManagement.RemovedComponent> GetRemovedComponents(GameObject prefabInstance)
+        { return new List<UnityEditor.SceneManagement.RemovedComponent>(); }
+        public static List<UnityEditor.SceneManagement.AddedGameObject> GetAddedGameObjects(GameObject prefabInstance)
+        { return new List<UnityEditor.SceneManagement.AddedGameObject>(); }
+        public static List<UnityEditor.SceneManagement.RemovedGameObject> GetRemovedGameObjects(GameObject prefabInstance)
+        { return new List<UnityEditor.SceneManagement.RemovedGameObject>(); }
         public static void SetPropertyModifications(Object targetPrefab, PropertyModification[] modifications) { }
     }
 
@@ -1118,6 +1145,13 @@ namespace UnityEditor.Animations
 
 namespace UnityEditor.SceneManagement
 {
+    public abstract class PrefabOverride { }
+    public class ObjectOverride : PrefabOverride { public UnityEngine.Object instanceObject { get; set; } }
+    public class AddedComponent : PrefabOverride { public UnityEngine.Component instanceComponent { get; set; } }
+    public class RemovedComponent : PrefabOverride { public UnityEngine.Component assetComponent { get; set; } }
+    public class AddedGameObject : PrefabOverride { public UnityEngine.GameObject instanceGameObject { get; set; } }
+    public class RemovedGameObject : PrefabOverride { public UnityEngine.GameObject assetGameObject { get; set; } }
+
     public static class EditorSceneManager
     {
         public delegate void SceneClosingCallback(UnityEngine.SceneManagement.Scene scene, bool removingScene);

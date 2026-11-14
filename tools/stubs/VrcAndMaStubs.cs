@@ -177,3 +177,14 @@ namespace VRC.Core
         public string blueprintId;
     }
 }
+
+// VRChat のコンストレイント。かいへんナビは型名で見分ける（SDK が無くてもコンパイルできるように）ので、テスト用の形だけ
+namespace VRC.Dynamics
+{
+    public abstract class VRCConstraintBase : MonoBehaviour { public Transform TargetTransform; public bool IsActive; }
+}
+
+namespace VRC.SDK3.Dynamics.Constraint.Components
+{
+    public class VRCParentConstraint : VRC.Dynamics.VRCConstraintBase { }
+}

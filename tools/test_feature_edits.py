@@ -16,6 +16,7 @@ using UnityEditor;
 using UnityEngine;
 using UnityEngine.UIElements;
 using VRC.SDK3.Avatars.Components;
+using VRC.SDK3.Avatars.ScriptableObjects;
 using nadena.dev.modular_avatar.core;
 using Jeni.KaihenNavi;
 
@@ -57,6 +58,66 @@ internal static class FeatureEditChecks
         }
         return list;
     }
+    // メニュー整理：実際に差し替えたメニューを覚えて戻す。分からないときは取り出したメニューを消さない。
+    private static void MenuTidyChecks()
+    {
+        PrefabUtility.RootForTests = null;
+        var paths = new Dictionary<UnityEngine.Object, string>();
+        var assets = new Dictionary<string, UnityEngine.Object>();
+        AssetDatabase.PathForTests = o => o != null && paths.ContainsKey(o) ? paths[o] : "";
+        AssetDatabase.LoadForTests = p => p != null && assets.ContainsKey(p) ? assets[p] : null;
+        AssetDatabase.GuidForTests = p => "guid-" + p;
+        AssetDatabase.PathFromGuidForTests = g => g.StartsWith("guid-") ? g.Substring(5) : "";
+        AssetDatabase.CreateForTests = (o, p) => { paths[o] = p; assets[p] = o; };
+        Func<string, VRCExpressionsMenu> menu = p =>
+        {
+            var m = (VRCExpressionsMenu)Activator.CreateInstance(typeof(VRCExpressionsMenu));
+            m.controls.Add(new VRCExpressionsMenu.Control { name = "A", type = VRCExpressionsMenu.Control.ControlType.Toggle });
+            paths[m] = p; assets[p] = m;
+            return m;
+        };
+        var deep = menu("Assets/Base/Deep.asset");
+        var variantMenu = menu("Assets/Booth/Variant.asset");
+        var go = new GameObject("MenuAvatar");
+        var avatar = go.AddComponent<VRCAvatarDescriptor>();
+        avatar.expressionsMenu = variantMenu;
+
+        var root = MenuFeature.BuildMenu(avatar, new MenuEdits { extracted = true, originalMenu = paths[variantMenu] }, "menu");
+        Check(root != null && !ReferenceEquals(avatar.expressionsMenu, variantMenu), "menu extracted into MA items");
+        Check(root.transform.Cast<Transform>().Any(t => t.name.StartsWith(MenuFeature.OriginalMarkerPrefix) && t.gameObject.tag == "EditorOnly"),
+            "replaced menu remembered in EditorOnly marker");
+        Check(ReferenceEquals(MenuFeature.OriginalMenu(avatar), variantMenu), "remembered menu wins over prefab source");
+        Check(MenuFeature.ReadEdits(avatar).items.All(e => !e.key.StartsWith(MenuFeature.OriginalMarkerPrefix)), "marker is not a menu item");
+        Check(MenuFeature.RemoveMenu(avatar, "menu") && ReferenceEquals(avatar.expressionsMenu, variantMenu) &&
+            go.transform.Find(MenuFeature.RootName) == null, "remove restores the replaced menu");
+
+        // 古い版で取り出したもの（目印なし）：元を 1 段ずつたどり、作業フォルダの外の最初のメニューを使う
+        root = MenuFeature.BuildMenu(avatar, new MenuEdits { extracted = true, originalMenu = paths[variantMenu] }, "menu");
+        foreach (var t in root.transform.Cast<Transform>().Where(t => t.name.StartsWith(MenuFeature.OriginalMarkerPrefix)).ToList()) t.SetParent(null, false);
+        var mine = new GameObject("Mine").AddComponent<VRCAvatarDescriptor>();
+        mine.expressionsMenu = avatar.expressionsMenu;
+        var variant = new GameObject("Variant").AddComponent<VRCAvatarDescriptor>();
+        variant.expressionsMenu = variantMenu;
+        var baseAvatar = new GameObject("Base").AddComponent<VRCAvatarDescriptor>();
+        baseAvatar.expressionsMenu = deep;
+        // スタブの Object は bool への変換を持つので、参照で比べる
+        PrefabUtility.SourceForTests = o => ReferenceEquals(o, avatar) ? mine : ReferenceEquals(o, mine) ? variant : ReferenceEquals(o, variant) ? (UnityEngine.Object)baseAvatar : null;
+        Check(ReferenceEquals(MenuFeature.OriginalMenu(avatar), variantMenu), "legacy fallback stops at first menu outside work folders");
+        PrefabUtility.SourceForTests = null;
+
+        // 元のメニューが分からないときは消さない
+        Check(!MenuFeature.RemoveMenu(avatar, "menu") && go.transform.Find(MenuFeature.RootName) != null &&
+            avatar.expressionsMenu != null && !ReferenceEquals(avatar.expressionsMenu, variantMenu), "unresolved original keeps extracted menu");
+        Check(MenuFeature.RemoveMenu(avatar, "menu", paths[variantMenu]) && ReferenceEquals(avatar.expressionsMenu, variantMenu),
+            "backup path used as last resort");
+
+        AssetDatabase.PathForTests = null;
+        AssetDatabase.LoadForTests = null;
+        AssetDatabase.GuidForTests = null;
+        AssetDatabase.PathFromGuidForTests = null;
+        AssetDatabase.CreateForTests = null;
+    }
+
     public static void Main()
     {
         ScriptableObject.CreateForTests = t => (ScriptableObject)System.Activator.CreateInstance(t);
@@ -175,6 +236,7 @@ internal static class FeatureEditChecks
         Check(applied.Count == 0 && !TransformFeature.IsAdjusting, "Undo cancels pending slider save");
         MyAvatar.Save(avatar, false);
         Check(applied.Last() == InteractionMode.AutomatedAction, "Undo replay does not register new history");
+        MenuTidyChecks();
         Console.WriteLine("Feature edit checks passed (" + count + "). Unity Undo, Prefab imports and MA preview require Unity.");
     }
 }

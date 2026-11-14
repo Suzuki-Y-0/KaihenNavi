@@ -386,6 +386,7 @@
   "menu.othersEmpty": "\"Other\" is empty.",
   "menu.restore": "Restore original menu",
   "menu.restoreConfirm": "Remove the tidied menu and go back to the avatar's original menu?\n\nYou can also use \"Restore\".",
+  "menu.originalMissing": "The original menu file could not be found, so the tidied menu was kept (removing it would leave the avatar with an empty menu). Put the original menu file back and try again.",
   "menu.tip": "Use \"Move to Other\" to group items you rarely use and keep the menu tidy. Click a name field to rename it.",
   "menu.useTip": "Uncheck to hide this item from the menu",
   "menu.toOthers": "Move to Other",

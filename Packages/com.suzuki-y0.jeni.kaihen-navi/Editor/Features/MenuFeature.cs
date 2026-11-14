@@ -48,6 +48,8 @@ namespace Jeni.KaihenNavi
         public const string RootName = "KaihenNavi_AvatarMenu";
         public const string HiddenName = "KaihenNavi_HiddenMenu";
         public const string OtherName = "others";
+        /// <summary>取り出したときに差し替えた元のメニューを覚えておく目印（EditorOnly の空オブジェクト。名前の後ろに GUID）。</summary>
+        public const string OriginalMarkerPrefix = "KaihenNavi_OriginalMenu_";
         private const int MaxDepth = 8;
 
         public override string Id { get { return "menu"; } }
@@ -110,8 +112,9 @@ namespace Jeni.KaihenNavi
                 if (!EditorUtility.DisplayDialog(L10n.Tr("app.name"), L10n.Tr("menu.restoreConfirm"), L10n.Tr("dialog.ok"), L10n.Tr("dialog.cancel"))) return;
                 ctx.BeginEdit();
                 UndoHelper.Separate();
-                RemoveMenu(avatar, L10n.Tr("undo.menu"));
+                var removed = RemoveMenu(avatar, L10n.Tr("undo.menu"));
                 UndoHelper.Separate();
+                if (!removed) EditorUtility.DisplayDialog(L10n.Tr("app.name"), L10n.Tr("menu.originalMissing"), L10n.Tr("dialog.ok"));
                 ctx.Rebuild();
             }, "kn-button--ghost"));
             root.Add(buttons);
@@ -329,7 +332,7 @@ namespace Jeni.KaihenNavi
             if (index < 0 || t.parent == null || index >= t.parent.childCount) return;
             // 「その他」と使わない置き場は動かさない
             var neighbor = t.parent.GetChild(index);
-            if (neighbor.name == OtherName || neighbor.name == HiddenName) return;
+            if (neighbor.name == OtherName || neighbor.name == HiddenName || neighbor.GetComponent<ModularAvatarMenuItem>() == null) return;
             Restructure(ctx, t.name, (menuRoot, target, undo) => target.SetSiblingIndex(index));
         }
 
@@ -392,6 +395,15 @@ namespace Jeni.KaihenNavi
             var byKey = edits.items.Where(e => e != null && !string.IsNullOrEmpty(e.key)).GroupBy(e => e.key).ToDictionary(g => g.Key, g => g.First());
             var created = new Dictionary<string, Transform>();
             BuildLevel(original, root.transform, "", 0, new HashSet<VRCExpressionsMenu> { original }, byKey, created);
+
+            // 差し替えた元のメニューを覚えておく（「元のメニューに戻す」で使う）。独自スクリプトは足さず、
+            // EditorOnly の空オブジェクトの名前に GUID を入れる。メニュー項目の部品は付けないので MA は見ない
+            var guid = AssetDatabase.AssetPathToGUID(edits.originalMenu);
+            if (!string.IsNullOrEmpty(guid))
+            {
+                var marker = new GameObject(OriginalMarkerPrefix + guid) { tag = "EditorOnly" };
+                marker.transform.SetParent(root.transform, false);
+            }
 
             // 「その他」と「使わない」を当てる
             if (byKey.Values.Any(e => e.other))
@@ -551,29 +563,62 @@ namespace Jeni.KaihenNavi
             return empty;
         }
 
-        /// <summary>取り出したメニューを消し、アバター設定のメニューを元に戻す。</summary>
-        public static void RemoveMenu(VRCAvatarDescriptor avatar, string undoName)
+        /// <summary>
+        /// 取り出したメニューを消し、アバター設定のメニューを元に戻す。
+        /// 元のメニューが分からないときは、取り出したメニューを消さずに false を返す（消すとメニューが空になるため）。
+        /// knownOriginal は、バックアップに残っていた元のメニューのパス（見つからないときの予備）。
+        /// </summary>
+        public static bool RemoveMenu(VRCAvatarDescriptor avatar, string undoName, string knownOriginal = null)
         {
-            var edits = ReadEdits(avatar);
+            var original = OriginalMenu(avatar);
+            if (original == null && !string.IsNullOrEmpty(knownOriginal)) original = AssetDatabase.LoadAssetAtPath<VRCExpressionsMenu>(knownOriginal);
             var root = avatar.transform.Find(RootName);
+            if (original == null) return root == null;
             if (root != null) Undo.DestroyObjectImmediate(root.gameObject);
-            var original = edits != null ? AssetDatabase.LoadAssetAtPath<VRCExpressionsMenu>(edits.originalMenu) : null;
-            if (original == null) original = OriginalMenu(avatar);
-            if (original == null) return;
             Undo.RecordObject(avatar, undoName);
             avatar.expressionsMenu = original;
             EditorUtility.SetDirty(avatar);
+            return true;
         }
 
         // ---------------------------------------------------------------- 状態を読む（バックアップ用）
 
-        /// <summary>元のメニュー（取り出す前のもの）。改変アバターなら元アバターの設定から探す。</summary>
+        /// <summary>
+        /// 元のメニュー（取り出す前のもの）。取り出したときに覚えたメニューを使う。
+        /// 覚えていない（古い版で取り出した）ときは、元の Prefab を 1 段ずつたどり、作業フォルダの外のメニューが
+        /// 見つかったところで止める（BOOTH のアバターは途中の Variant にメニューを設定していることが多い）。
+        /// </summary>
         public static VRCExpressionsMenu OriginalMenu(VRCAvatarDescriptor avatar)
         {
+            var root = avatar.transform.Find(RootName);
+            if (root != null)
+            {
+                foreach (Transform t in root)
+                {
+                    if (!t.name.StartsWith(OriginalMarkerPrefix, StringComparison.Ordinal)) continue;
+                    var path = AssetDatabase.GUIDToAssetPath(t.name.Substring(OriginalMarkerPrefix.Length));
+                    var remembered = string.IsNullOrEmpty(path) ? null : AssetDatabase.LoadAssetAtPath<VRCExpressionsMenu>(path);
+                    if (remembered != null) return remembered;
+                }
+            }
+
             var current = avatar.expressionsMenu;
-            if (current != null && !AssetDatabase.GetAssetPath(current).StartsWith(WorkFolders.Root + "/")) return current;
-            var source = PrefabUtility.GetCorrespondingObjectFromOriginalSource(avatar);
-            return source != null ? source.expressionsMenu : null;
+            if (IsOutsideWorkFolders(current)) return current;
+            var source = PrefabUtility.GetCorrespondingObjectFromSource(avatar);
+            for (var i = 0; source != null && i < 32; i++)
+            {
+                if (IsOutsideWorkFolders(source.expressionsMenu)) return source.expressionsMenu;
+                source = PrefabUtility.GetCorrespondingObjectFromSource(source);
+            }
+
+            return null;
+        }
+
+        private static bool IsOutsideWorkFolders(VRCExpressionsMenu menu)
+        {
+            if (menu == null) return false;
+            var path = (AssetDatabase.GetAssetPath(menu) ?? "").Replace('\\', '/');
+            return !path.StartsWith(WorkFolders.Root + "/");
         }
 
         public static MenuEdits ReadEdits(VRCAvatarDescriptor avatar)
@@ -630,7 +675,7 @@ namespace Jeni.KaihenNavi
             var edits = JsonUtility.FromJson<MenuEdits>(json);
             if (edits == null) return;
             if (edits.extracted) MenuFeature.BuildMenu(avatar, edits, undoName);
-            else MenuFeature.RemoveMenu(avatar, undoName);
+            else if (!MenuFeature.RemoveMenu(avatar, undoName, edits.originalMenu)) Debug.LogWarning("[KaihenNavi] " + L10n.Tr("menu.originalMissing"));
 #endif
         }
     }

@@ -891,7 +891,8 @@ namespace UnityEditor
         public static GameObject SaveAsPrefabAssetAndConnect(GameObject g, string path, InteractionMode m, out bool ok) { ok = true; return g; }
         public static bool HasPrefabInstanceAnyOverrides(GameObject g, bool includeDefault) { return OverridesForTests; }
         public static void ApplyPrefabInstance(GameObject g, InteractionMode m) { if (ApplyForTests != null) ApplyForTests(g, m); }
-        public static T GetCorrespondingObjectFromSource<T>(T o) where T : Object { return null; }
+        public static Func<Object, Object> SourceForTests;
+        public static T GetCorrespondingObjectFromSource<T>(T o) where T : Object { return SourceForTests == null ? null : SourceForTests(o) as T; }
         public static Object InstantiatePrefab(Object o) { return null; }
         public static Object InstantiatePrefab(Object o, Transform parent) { return null; }
         public static void RevertObjectOverride(Object o, InteractionMode m) { }

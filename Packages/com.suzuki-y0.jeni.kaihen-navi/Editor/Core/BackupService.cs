@@ -316,7 +316,8 @@ namespace Jeni.KaihenNavi
                 var sorted = group.OrderByDescending(s => s.createdTicks).ToList();
                 var oldSessions = new HashSet<long>(sorted.Where(s => !s.hiddenFromHistory).Select(s => s.SessionTicks)
                     .Distinct().Skip(MaxBackupsPerAvatar));
-                stale.AddRange(sorted.Where(s => s.hiddenFromHistory || oldSessions.Contains(s.SessionTicks)));
+                stale.AddRange(sorted.Where(s => s.hiddenFromHistory || oldSessions.Contains(s.SessionTicks) ||
+                                                 FromEarlierUnsavedScene(s, sessionStart)));
             }
 
             var paths = new List<string>();
@@ -340,6 +341,16 @@ namespace Jeni.KaihenNavi
                 InvalidateCache();
             }
             return paths.Count;
+        }
+
+        /// <summary>
+        /// 前の起動のうちに保存前のシーンで取ったバックアップ（シーンを保存しなかった・古い版で取った）。
+        /// 名前で照合できるのはこの起動中に取ったものだけなので、もうどのアバターの履歴にも出ず、消してよい。
+        /// </summary>
+        private static bool FromEarlierUnsavedScene(BackupSnapshot snapshot, DateTime sessionStart)
+        {
+            return snapshot.avatarId != null && snapshot.avatarId.Contains(UnsavedSceneMarker) &&
+                   snapshot.createdTicks < sessionStart.Ticks;
         }
 
         // ---------------------------------------------------------------- 保存前のシーン
@@ -836,6 +847,16 @@ namespace Jeni.KaihenNavi
             try
             {
                 BackupService.DeleteStale(BackupService.SessionStart, path => System.IO.File.GetLastWriteTime(path));
+            }
+            catch (Exception e)
+            {
+                Debug.LogException(e);
+            }
+
+            // 消した履歴だけが指していた、色を変えた画像も片付ける（起動直後なので Undo から参照されていない）
+            try
+            {
+                ColorLayers.SweepUnusedBakes(BackupService.SessionStart, path => System.IO.File.GetLastWriteTime(path));
             }
             catch (Exception e)
             {

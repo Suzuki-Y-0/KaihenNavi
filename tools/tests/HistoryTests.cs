@@ -73,6 +73,51 @@ internal static class HistoryTests
         return new VRCAvatarDescriptor { name = go.name, gameObject = go, transform = root };
     }
 
+    /// <summary>起動時の片付けで、どこからも参照されない、起動前からある焼いた画像だけを消す。</summary>
+    private static void SweepBakesChecks()
+    {
+        var oldDirectory = Environment.CurrentDirectory;
+        var temp = Path.Combine(Path.GetTempPath(), "kaihennavi-sweep-" + Guid.NewGuid().ToString("N"));
+        var oldFind = AssetDatabase.FindForTests;
+        var oldDelete = AssetDatabase.DeleteForTests;
+        var oldDependencies = AssetDatabase.DependenciesForTests;
+        var oldImporter = AssetImporter.LoadForTests;
+        var oldResources = Resources.FindForTests;
+        try
+        {
+            var folder = WorkFolders.AvatarsRoot + "/A/Textures";
+            Directory.CreateDirectory(Path.Combine(temp, folder));
+            Environment.CurrentDirectory = temp;
+            var unused = folder + "/Body_2nd.png";
+            var used = folder + "/Body_2nd 1.png";
+            var fresh = folder + "/Body_2nd 2.png";
+            var foreign = folder + "/Photo.png";
+            foreach (var path in new[] { unused, used, fresh, foreign }) File.WriteAllBytes(path, new byte[] { 1 });
+            AssetDatabase.FindForTests = (filter, folders) => filter == "t:Texture2D" ? new[] { unused, used, fresh, foreign } :
+                filter == "t:Material" ? new[] { "Assets/Mat.mat" } : new string[0];
+            AssetDatabase.DependenciesForTests = roots => roots.Contains("Assets/Mat.mat") ? new[] { used } : new string[0];
+            AssetImporter.LoadForTests = path => new AssetImporter
+                { assetPath = path, userData = path == foreign ? "" : "kaihen-navi-color-source:0123" };
+            Resources.FindForTests = type => new Object[0];
+            var deleted = new List<string>();
+            AssetDatabase.DeleteForTests = path => deleted.Add(path);
+            var start = new DateTime(2000, 1, 1);
+            var removed = ColorLayers.SweepUnusedBakes(start, path => path == fresh ? start : start.AddDays(-1));
+            Check(removed == 1 && deleted.SequenceEqual(new[] { unused }),
+                "Startup sweep deletes only unreferenced tool-baked images written before this editor session");
+        }
+        finally
+        {
+            Environment.CurrentDirectory = oldDirectory;
+            AssetDatabase.FindForTests = oldFind;
+            AssetDatabase.DeleteForTests = oldDelete;
+            AssetDatabase.DependenciesForTests = oldDependencies;
+            AssetImporter.LoadForTests = oldImporter;
+            Resources.FindForTests = oldResources;
+            try { Directory.Delete(temp, true); } catch (IOException) { }
+        }
+    }
+
     public static void Main()
     {
         VisualElement.StyleForTests = () => new Style();
@@ -272,6 +317,22 @@ internal static class HistoryTests
             "Only the oldest tasks beyond the limit are deleted");
         Check(deletedPaths.All(p => ((BackupSnapshot)Assets[p]).hiddenFromHistory || p.Contains("/Old/")),
             "Visible backups within the limit are kept");
+        // 前の起動で保存前のシーンで取ったものは、もう照合できないので消す。この起動中のものは残す
+        var unsavedMarkerId = "GlobalObjectId_V1-2-00000000000000000000000000000000-99-0";
+        Assets.Add(WorkFolders.AvatarsRoot + "/Unsaved/Backups/earlier.asset", new BackupSnapshot
+            { avatarId = unsavedMarkerId, avatarName = "unsaved", createdTicks = BackupService.SessionStart.Ticks - 1 });
+        Assets.Add(WorkFolders.AvatarsRoot + "/Unsaved/Backups/current.asset", new BackupSnapshot
+            { avatarId = unsavedMarkerId, avatarName = "unsaved", sceneHandle = 3, createdTicks = DateTime.Now.Ticks });
+        BackupService.InvalidateCache();
+        deletedPaths.Clear();
+        BackupService.DeleteStale(BackupService.SessionStart, path => DateTime.MinValue);
+        Check(deletedPaths.Contains(WorkFolders.AvatarsRoot + "/Unsaved/Backups/earlier.asset") &&
+              !deletedPaths.Contains(WorkFolders.AvatarsRoot + "/Unsaved/Backups/current.asset"),
+            "Unsaved-scene backups from an earlier editor session are deleted, this session's are kept");
+        Assets.Remove(WorkFolders.AvatarsRoot + "/Unsaved/Backups/earlier.asset");
+        Assets.Remove(WorkFolders.AvatarsRoot + "/Unsaved/Backups/current.asset");
+        BackupService.InvalidateCache();
+        SweepBakesChecks();
 
         // 保存前のシーンでは、この起動中に同じシーンで取った同名のバックアップだけを同じアバターとみなす。
         var sameAvatar = typeof(BackupService).GetMethod("SameAvatar", Static);

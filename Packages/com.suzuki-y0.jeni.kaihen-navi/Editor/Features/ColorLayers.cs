@@ -302,6 +302,38 @@ namespace Jeni.KaihenNavi
             if (stale.Count == 0) return;
             // ディスク上の参照を数える前に、差し替えたマテリアルを保存する
             AssetDatabase.SaveAssetIfDirty(material);
+            DeleteUnreferenced(stale, "t:BackupSnapshot t:Prefab", WorkFolders.Root);
+        }
+
+        /// <summary>
+        /// 起動時の片付け：ツールのフォルダにある焼いた画像のうち、どこからも参照されないものを消す。
+        /// 焼いた画像は、同じマテリアル・層を焼き直したときにしか片付かず、それを指していた履歴は起動時に消えるので、ここで拾う。
+        /// Undo が指し得るのはこの起動後に書いたファイルだけなので、起動前から変わっていない画像に限る。
+        /// 起動時（BackupMaintenance で古い履歴を消した後）だけ呼ぶ。
+        /// </summary>
+        /// <returns>消した数。</returns>
+        internal static int SweepUnusedBakes(System.DateTime sessionStart, System.Func<string, System.DateTime> lastWrite)
+        {
+            if (!AssetDatabase.IsValidFolder(WorkFolders.Root)) return 0;
+            var stale = new HashSet<string>();
+            foreach (var guid in AssetDatabase.FindAssets("t:Texture2D", new[] { WorkFolders.Root }))
+            {
+                var path = AssetDatabase.GUIDToAssetPath(guid);
+                if (string.IsNullOrEmpty(path) || !path.EndsWith(".png", System.StringComparison.OrdinalIgnoreCase)) continue;
+                if (!WorkFolders.IsToolPath(path) || !File.Exists(path) || lastWrite(path) >= sessionStart) continue;
+                var importer = AssetImporter.GetAtPath(path);
+                if (importer != null && (importer.userData ?? "").StartsWith(SourceTag)) stale.Add(path);
+            }
+
+            if (stale.Count == 0) return 0;
+            // 起動時はまとめて 1 回なので、ツール外のプレハブ・シーン・アニメーションも参照元に数える（消しすぎないように）
+            return DeleteUnreferenced(stale, "t:BackupSnapshot t:Prefab t:Scene t:AnimationClip", "Assets");
+        }
+
+        /// <summary>stale のうち、開いているマテリアル・プロジェクトのマテリアル・folder の中の filter に当たるもののどれからも参照されないものを消す。</summary>
+        /// <returns>消した数。</returns>
+        private static int DeleteUnreferenced(HashSet<string> stale, string filter, string folder)
+        {
             var used = new HashSet<string>();
             foreach (var loaded in Resources.FindObjectsOfTypeAll<Material>())
             {
@@ -314,12 +346,14 @@ namespace Jeni.KaihenNavi
             }
 
             var roots = AssetDatabase.FindAssets("t:Material", new[] { "Assets" })
-                .Concat(AssetDatabase.FindAssets("t:BackupSnapshot t:Prefab", new[] { WorkFolders.Root }))
+                .Concat(AssetDatabase.FindAssets(filter, new[] { folder }))
                 .Select(AssetDatabase.GUIDToAssetPath)
                 .Where(p => !string.IsNullOrEmpty(p) && !stale.Contains(p)).Distinct().ToArray();
             foreach (var path in AssetDatabase.GetDependencies(roots, false)) used.Add(path);
+            var deleted = 0;
             foreach (var path in stale.OrderBy(p => p, System.StringComparer.Ordinal))
-                if (!used.Contains(path)) AssetDatabase.DeleteAsset(path);
+                if (!used.Contains(path) && AssetDatabase.DeleteAsset(path)) deleted++;
+            return deleted;
         }
 
         private static void WriteShifted(Texture2D source, string path, float hue, float saturation, float brightness)

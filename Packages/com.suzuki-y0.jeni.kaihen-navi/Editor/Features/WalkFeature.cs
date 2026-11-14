@@ -457,16 +457,27 @@ namespace Jeni.KaihenNavi
         }
 
         /// <summary>
-        /// 歩き方の入れ物（boundary の直下の子）を探す。自分用アバターは自身が最も外側の Prefab なので、
-        /// GetOutermostPrefabInstanceRoot だとアバター本体を返してしまう。boundary より上には行かない。
+        /// 歩き方の入れ物を探す。部品から上へ、boundary より下にある入れ子の Prefab の根元だけをたどり、いちばん外側を返す。
+        /// 「Gimmicks」のようなただの整理用の入れ物や、服（メッシュを持つ Prefab）まで上がると関係ないものごと消えるので、そこでは止まる。
+        /// 入れ子の Prefab の中でなければ、部品の付いたオブジェクトだけを返す。boundary 自身やその上は返さない。
         /// </summary>
         private static GameObject GimmickRoot(GameObject g, GameObject boundary)
         {
             if (g == null || boundary == null || g == boundary) return g;
-            var t = g.transform;
-            if (!t.IsChildOf(boundary.transform)) return g;
-            while (t.parent != null && t.parent != boundary.transform) t = t.parent;
-            return t.parent == boundary.transform ? t.gameObject : g;
+            if (!g.transform.IsChildOf(boundary.transform)) return g;
+            GameObject found = null;
+            var root = PrefabUtility.GetNearestPrefabInstanceRoot(g);
+            while (root != null && root != boundary && root.transform.IsChildOf(boundary.transform))
+            {
+                // 服などメッシュを持つ Prefab は歩き方の入れ物ではない（ここで止める）
+                if (root.GetComponentsInChildren<Renderer>(true).Length > 0) break;
+                found = root;
+                var parent = root.transform.parent;
+                if (parent == null || parent == boundary.transform) break;
+                root = PrefabUtility.GetNearestPrefabInstanceRoot(parent.gameObject);
+            }
+
+            return found ?? g;
         }
 
         /// <summary>このアバターで足した歩き方を外し、ベースの歩き方をこのアバター用に書き換えて使う（重ならないように）。</summary>

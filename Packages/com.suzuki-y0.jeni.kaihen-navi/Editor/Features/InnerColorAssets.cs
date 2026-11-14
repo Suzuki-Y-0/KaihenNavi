@@ -230,31 +230,41 @@ namespace Jeni.KaihenNavi
         /// 使用中で残した生成物を、少し後にもう一度片付ける（次の更新で作り直される MA・NDMF のプレビュー用の複製が
         /// 古い参照を一時的に持っている場合のため）。次の更新で 1 回、さらに約 1 秒後に 1 回だけ試す。
         /// 参照は毎回調べ直す。消すときは同じ Undo のまとまりにファイルの記録を足すので、Ctrl+Z 1 回で全部戻る。
-        /// 別の操作が入った（Undo のまとまりが変わった）ら何もしない。
+        /// 別の操作が入った（Undo のまとまりが変わった）か、Ctrl+Z・やり直しをした（まとまりの番号は変わらないことがある）ら何もしない。
         /// </summary>
         internal static void RetryCleanup(VRCAvatarDescriptor avatar, HashSet<string> kept, int group, string undoName)
         {
             if (avatar == null || kept == null || kept.Count == 0) return;
             var remaining = new HashSet<string>(kept);
+            var undoRedo = _undoRedoCount;
             EditorApplication.delayCall += () =>
             {
-                if (RetryOnce(avatar, remaining, group, undoName)) return;
+                if (RetryOnce(avatar, remaining, group, undoRedo, undoName)) return;
                 var at = EditorApplication.timeSinceStartup + 1.0;
                 EditorApplication.CallbackFunction later = null;
                 later = () =>
                 {
-                    if (EditorApplication.timeSinceStartup < at) return;
+                    if (EditorApplication.timeSinceStartup < at && _undoRedoCount == undoRedo) return;
                     EditorApplication.update -= later;
-                    RetryOnce(avatar, remaining, group, undoName);
+                    RetryOnce(avatar, remaining, group, undoRedo, undoName);
                 };
                 EditorApplication.update += later;
             };
         }
 
-        /// <summary>1 回だけ片付け直す。もう試さなくてよければ true。</summary>
-        private static bool RetryOnce(VRCAvatarDescriptor avatar, HashSet<string> remaining, int group, string undoName)
+        /// <summary>Ctrl+Z・やり直しの回数。片付け直しの間に戻されたら、戻した操作のまとまりに記録を足さない。</summary>
+        private static int _undoRedoCount;
+
+        static InnerColorAssets()
         {
-            if (avatar == null || EditorApplication.isPlayingOrWillChangePlaymode || Undo.GetCurrentGroup() != group) return true;
+            Undo.undoRedoPerformed += () => _undoRedoCount++;
+        }
+
+        /// <summary>1 回だけ片付け直す。もう試さなくてよければ true。</summary>
+        private static bool RetryOnce(VRCAvatarDescriptor avatar, HashSet<string> remaining, int group, int undoRedo, string undoName)
+        {
+            if (avatar == null || EditorApplication.isPlayingOrWillChangePlaymode || Undo.GetCurrentGroup() != group ||
+                _undoRedoCount != undoRedo) return true;
             remaining.RemoveWhere(p => !File.Exists(p));
             if (remaining.Count == 0) return true;
             var journal = InnerColorAssetUndo.Begin(avatar);

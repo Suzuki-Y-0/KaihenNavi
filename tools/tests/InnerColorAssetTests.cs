@@ -501,6 +501,20 @@ namespace Jeni.KaihenNavi
             delayed = EditorApplication.delayCall; EditorApplication.delayCall = null; delayed();
             Check(File.Exists(proxyInnerPath) && EditorApplication.update != null, "The retry must re-check references and keep used files");
             EditorApplication.update = null;
+            // Ctrl+Z の後（まとまりの番号は変わらない）は、片付け直しで消さない・記録を足さない。
+            typeof(InnerColorFeature).GetMethod("Preview", Private).Invoke(feature, new object[] { context });
+            proxyInner = hair.sharedMaterials[2]; proxyInnerPath = AssetDatabase.GetAssetPath(proxyInner);
+            proxy.sharedMaterials = new[] { proxyInner };
+            EditorApplication.delayCall = null;
+            typeof(InnerColorFeature).GetMethod("Reset", Private).Invoke(feature, new object[] { context });
+            Check(File.Exists(proxyInnerPath) && EditorApplication.delayCall != null, "The test schedules a retry");
+            proxy.sharedMaterials = new Material[0];
+            var journalsBefore = transient.OfType<InnerColorAssetUndo>().Count();
+            Undo.ReplayForTests();
+            delayed = EditorApplication.delayCall; EditorApplication.delayCall = null; delayed();
+            Check(File.Exists(proxyInnerPath) && EditorApplication.update == null &&
+                  transient.OfType<InnerColorAssetUndo>().Count() == journalsBefore,
+                "An Undo/Redo after the reset cancels the pending retry");
             proxy.sharedMaterials = new Material[0];
             renderers.Remove(proxy);
             InnerColorAssets.Cleanup(new HashSet<string> { proxyInnerPath }, InnerColorAssetUndo.Begin(avatar));

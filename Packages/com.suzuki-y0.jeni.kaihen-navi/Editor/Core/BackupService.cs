@@ -1,8 +1,11 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Reflection;
 using UnityEditor;
+using UnityEditor.SceneManagement;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 using VRC.SDK3.Avatars.Components;
 using Object = UnityEngine.Object;
 
@@ -46,15 +49,26 @@ namespace Jeni.KaihenNavi
 #endif
         };
 
+        /// <summary>
+        /// このウィンドウで Unity の Undo に載せた手順。どのアバターの手順か、載せた直後の Undo の積み方も控え、
+        /// 「元に戻す」の時点で上に別の操作（カメラの移動・別のアバターの復元など）が積まれていないか確かめる。
+        /// </summary>
+        private sealed class LiveStep
+        {
+            public string AvatarId;
+            public string UndoState;
+        }
+
         private string _sessionKey;
         private BackupSnapshot _current;
         private BackupSnapshot _pending;
         private BackupSnapshot _restoredTarget;
+        private LiveStep _restoredStep;
         private VRCAvatarDescriptor _editingAvatar;
         private long _sessionTicks;
         private int _lastGroup = -1;
         private static long _lastTicks;
-        private readonly HashSet<BackupSnapshot> _liveSteps = new HashSet<BackupSnapshot>();
+        private readonly Dictionary<BackupSnapshot, LiveStep> _liveSteps = new Dictionary<BackupSnapshot, LiveStep>();
 
         /// <summary>同じ時刻に操作が重なっても、履歴の順番とまとまりを取り違えない。</summary>
         private static long NextTicks()
@@ -109,6 +123,7 @@ namespace Jeni.KaihenNavi
                     if (!_current.createdPaths.Contains(path)) _current.createdPaths.Add(path);
                 SaveMetadata(_current);
                 ReleaseUnsaved(snapshot);
+                MarkLive(_current, _editingAvatar);
                 return;
             }
             snapshot.operationName = Undo.GetCurrentGroupName();
@@ -120,14 +135,25 @@ namespace Jeni.KaihenNavi
             Undo.RecordObject(snapshot, undoName);
             snapshot.hiddenFromHistory = false;
             _current = snapshot;
-            _liveSteps.Add(snapshot);
             _lastGroup = group;
             Prune(_editingAvatar);
             Undo.SetCurrentGroupName(undoName);
             Undo.FlushUndoRecordObjects();
             Undo.CollapseUndoOperations(group);
             SaveMetadata(snapshot);
+            MarkLive(snapshot, _editingAvatar);
             RaiseChanged();
+        }
+
+        /// <summary>
+        /// 操作が失敗して Undo.RevertAllDownToGroup などで取り消したときに呼ぶ。
+        /// 取りかけのバックアップを履歴に載せずに捨てる（何も変わっていない手順を残さない）。
+        /// </summary>
+        public void CancelPending()
+        {
+            EditorApplication.delayCall -= CompletePending;
+            if (_pending != null) ReleaseUnsaved(_pending);
+            _pending = null;
         }
 
         /// <summary>今の操作のまとまりを終える（別の機能やアバターに切り替えたとき）。</summary>
@@ -151,6 +177,9 @@ namespace Jeni.KaihenNavi
             _current = null;
             _editingAvatar = null;
             _lastGroup = -1;
+            // Undo で戻った履歴の表示状態や照合用 ID を、Undo の通知が終わってからファイルにも書く。
+            EditorApplication.delayCall -= SaveDirtySnapshots;
+            EditorApplication.delayCall += SaveDirtySnapshots;
             RaiseChanged();
         }
 
@@ -174,32 +203,197 @@ namespace Jeni.KaihenNavi
             if (avatar == null || !AssetDatabase.IsValidFolder(WorkFolders.Root)) return result;
 
             var id = AvatarId(avatar);
-            foreach (var guid in AssetDatabase.FindAssets("t:BackupSnapshot", new[] { WorkFolders.Root }))
+            foreach (var snapshot in AllSnapshots())
             {
-                var snapshot = AssetDatabase.LoadAssetAtPath<BackupSnapshot>(AssetDatabase.GUIDToAssetPath(guid));
-                if (snapshot != null && (includeHidden || !snapshot.hiddenFromHistory) && SameAvatar(snapshot, id, avatar.name)) result.Add(snapshot);
+                if ((includeHidden || !snapshot.hiddenFromHistory) && SameAvatar(snapshot, id, avatar)) result.Add(snapshot);
             }
 
             result.Sort((a, b) => b.createdTicks.CompareTo(a.createdTicks));
             return result;
         }
 
+        // ---------------------------------------------------------------- 読み込みの控え
+
+        private static List<BackupSnapshot> _all;
+        private static HashSet<string> _allPaths;
+
+        /// <summary>
+        /// すべてのバックアップ（読み込みは 1 回だけ）。フッターの更新のたびに全アバター分を探し直さない。
+        /// 表示状態や照合用 ID はアセットの中身を見るので、作成・削除・移動のときだけ読み直せばよい。
+        /// </summary>
+        private static List<BackupSnapshot> AllSnapshots()
+        {
+            if (_all == null)
+            {
+                _all = new List<BackupSnapshot>();
+                _allPaths = new HashSet<string>();
+                if (AssetDatabase.IsValidFolder(WorkFolders.Root))
+                {
+                    foreach (var guid in AssetDatabase.FindAssets("t:BackupSnapshot", new[] { WorkFolders.Root }))
+                    {
+                        var path = AssetDatabase.GUIDToAssetPath(guid);
+                        var snapshot = AssetDatabase.LoadAssetAtPath<BackupSnapshot>(path);
+                        if (snapshot == null) continue;
+                        _all.Add(snapshot);
+                        _allPaths.Add(path);
+                    }
+                }
+            }
+
+            // 消されたアセットは Unity の null になる
+            _all.RemoveAll(s => s == null);
+            return _all;
+        }
+
+        /// <summary>次の一覧でファイルから読み直す。</summary>
+        internal static void InvalidateCache()
+        {
+            _all = null;
+            _allPaths = null;
+        }
+
+        /// <summary>バックアップのファイルやフォルダが増えた・消えた・動いたら読み直す（BackupAssetWatcher から呼ぶ）。</summary>
+        internal static void OnAssetsChanged(string[] imported, string[] deleted, string[] moved, string[] movedFrom)
+        {
+            if (_all == null) return;
+            if (AffectsBackups(deleted, false) || AffectsBackups(moved, false) || AffectsBackups(movedFrom, false) ||
+                AffectsBackups(imported, true)) InvalidateCache();
+        }
+
+        private static bool AffectsBackups(string[] paths, bool imported)
+        {
+            if (paths == null) return false;
+            foreach (var raw in paths)
+            {
+                if (string.IsNullOrEmpty(raw)) continue;
+                var path = raw.Replace('\\', '/');
+                if (path != WorkFolders.Root && !path.StartsWith(WorkFolders.Root + "/")) continue;
+                // フォルダごとの移動・削除や、バックアップのファイル。マテリアルなどの保存では読み直さない。
+                var isFolder = string.IsNullOrEmpty(System.IO.Path.GetExtension(path));
+                if (!isFolder && !path.Contains("/Backups/")) continue;
+                // 読み込み済みのファイルの再インポート（表示状態の保存など）は、同じオブジェクトのまま
+                if (imported && !isFolder && _allPaths != null && _allPaths.Contains(path)) continue;
+                return true;
+            }
+            return false;
+        }
+
+        private static void SaveDirtySnapshots()
+        {
+            EditorApplication.delayCall -= SaveDirtySnapshots;
+            if (_all == null) return;
+            foreach (var snapshot in _all)
+                if (snapshot != null) AssetDatabase.SaveAssetIfDirty(snapshot);
+        }
+
+        // ---------------------------------------------------------------- 古いバックアップの片付け
+
+        private static long _sessionStartTicks;
+
+        /// <summary>このエディタを起動した時刻。これより前のファイルは、今の Undo から参照されていない。</summary>
+        internal static DateTime SessionStart
+        {
+            get
+            {
+                if (_sessionStartTicks == 0)
+                    _sessionStartTicks = DateTime.Now.AddSeconds(-EditorApplication.timeSinceStartup).Ticks;
+                return new DateTime(_sessionStartTicks, DateTimeKind.Local);
+            }
+        }
+
+        /// <summary>
+        /// 履歴に出ないバックアップ（復元で隠した・上限を超えた）のファイルを消す。Prune は Undo のために隠すだけなので、ここで消す。
+        /// Undo が参照し得るのは、このエディタの起動後に書いたファイルだけ。起動前から変わっていないファイルに限って消す。
+        /// </summary>
+        /// <param name="sessionStart">エディタを起動した時刻。</param>
+        /// <param name="lastWrite">アセットのパスから、ファイルの最終更新時刻を返す。</param>
+        /// <returns>消した数。</returns>
+        internal static int DeleteStale(DateTime sessionStart, Func<string, DateTime> lastWrite)
+        {
+            var stale = new List<BackupSnapshot>();
+            foreach (var group in AllSnapshots().GroupBy(s => s.avatarId ?? ""))
+            {
+                var sorted = group.OrderByDescending(s => s.createdTicks).ToList();
+                var oldSessions = new HashSet<long>(sorted.Where(s => !s.hiddenFromHistory).Select(s => s.SessionTicks)
+                    .Distinct().Skip(MaxBackupsPerAvatar));
+                stale.AddRange(sorted.Where(s => s.hiddenFromHistory || oldSessions.Contains(s.SessionTicks)));
+            }
+
+            var paths = new List<string>();
+            foreach (var snapshot in stale)
+            {
+                var path = AssetDatabase.GetAssetPath(snapshot);
+                if (string.IsNullOrEmpty(path) || EditorUtility.IsDirty(snapshot)) continue;
+                if (lastWrite(path) >= sessionStart) continue;
+                paths.Add(path);
+            }
+            if (paths.Count == 0) return 0;
+
+            AssetDatabase.StartAssetEditing();
+            try
+            {
+                foreach (var path in paths) AssetDatabase.DeleteAsset(path);
+            }
+            finally
+            {
+                AssetDatabase.StopAssetEditing();
+                InvalidateCache();
+            }
+            return paths.Count;
+        }
+
+        // ---------------------------------------------------------------- 保存前のシーン
+
+        /// <summary>
+        /// 保存前のシーンで取ったバックアップは、シーンを保存すると照合用 ID が変わる。
+        /// 保存したシーンのアバターの ID に付け替え、再起動後も同じアバターの履歴として出す。
+        /// </summary>
+        internal static void OnSceneSaved(Scene scene)
+        {
+            if (!scene.IsValid() || !AssetDatabase.IsValidFolder(WorkFolders.Root)) return;
+            var roots = scene.GetRootGameObjects();
+            if (roots == null) return;
+            var changed = new List<BackupSnapshot>();
+            foreach (var root in roots)
+            {
+                foreach (var avatar in root.GetComponentsInChildren<VRCAvatarDescriptor>(true))
+                {
+                    var id = AvatarId(avatar);
+                    if (id.Contains(UnsavedSceneMarker)) continue;
+                    foreach (var snapshot in AllSnapshots())
+                    {
+                        if (snapshot.avatarId == null || !snapshot.avatarId.Contains(UnsavedSceneMarker) ||
+                            !SameUnsavedScene(snapshot, avatar)) continue;
+                        snapshot.avatarId = id;
+                        EditorUtility.SetDirty(snapshot);
+                        changed.Add(snapshot);
+                    }
+                }
+            }
+            foreach (var snapshot in changed) AssetDatabase.SaveAssetIfDirty(snapshot);
+        }
+
         /// <summary>
         /// アバターの照合用 ID が変わったとき（自分用アバターにつなぎ替えたときなど）、
         /// 前の ID で取ったバックアップを今のアバターのものとして付け替える。
+        /// 付け替えも今の Undo グループに入れる。つなぎ替えを Ctrl+Z すると ID も元に戻り、履歴が離れない。
+        /// 隠れたバックアップ（復元で隠したものなど）も、Undo で再び出たときのために一緒に付け替える。
         /// </summary>
         public void Rekey(VRCAvatarDescriptor avatar, List<BackupSnapshot> snapshots)
         {
             if (avatar == null || snapshots == null) return;
             var id = AvatarId(avatar);
+            var undoName = Undo.GetCurrentGroupName();
             foreach (var s in snapshots)
             {
                 if (s == null) continue;
+                Undo.RecordObject(s, undoName);
                 s.avatarId = id;
                 s.avatarName = avatar.name;
                 EditorUtility.SetDirty(s);
             }
 
+            Undo.FlushUndoRecordObjects();
             AssetDatabase.SaveAssets();
             EndSession();
             RaiseChanged();
@@ -216,12 +410,77 @@ namespace Jeni.KaihenNavi
             return List(avatar).Select(s => s.SessionTicks).Distinct().Count();
         }
 
-        /// <summary>直前の手順をこのウィンドウで Undo に載せたか。再起動後はバックアップで戻す。</summary>
+        /// <summary>
+        /// Unity の Undo の 1 手目が、このアバターの直前の手順（またはこのアバターの復元）か。
+        /// 上に別の操作が積まれている・別のアバターの手順・再起動後などは false にし、バックアップで戻す。
+        /// </summary>
         public bool HasLiveUndo(VRCAvatarDescriptor avatar)
         {
+            if (avatar == null) return false;
+            var state = UndoState();
+            if (state == null) return false;
+            var id = AvatarId(avatar);
+            if (_restoredTarget != null && _restoredTarget.hiddenFromHistory && IsTop(_restoredStep, id, state)) return true;
             var latest = List(avatar).FirstOrDefault();
-            return (_restoredTarget != null && _restoredTarget.hiddenFromHistory) ||
-                   (latest != null && _liveSteps.Contains(latest));
+            LiveStep step;
+            return latest != null && _liveSteps.TryGetValue(latest, out step) && IsTop(step, id, state);
+        }
+
+        private static bool IsTop(LiveStep step, string avatarId, string state)
+        {
+            return step != null && step.AvatarId == avatarId && step.UndoState == state;
+        }
+
+        /// <summary>Undo に載せた直後の積み方を控える（取れない環境では控えず、バックアップで戻す）。</summary>
+        private LiveStep Live(VRCAvatarDescriptor avatar)
+        {
+            var state = UndoState();
+            return avatar == null || state == null ? null : new LiveStep { AvatarId = AvatarId(avatar), UndoState = state };
+        }
+
+        private void MarkLive(BackupSnapshot snapshot, VRCAvatarDescriptor avatar)
+        {
+            var step = Live(avatar);
+            if (step == null) _liveSteps.Remove(snapshot);
+            else _liveSteps[snapshot] = step;
+        }
+
+        private static bool _undoRecordsSearched;
+        private static MethodInfo _undoRecords;
+
+        /// <summary>
+        /// 今の Undo の積み方（件数と名前）の要約。Unity の公開 API には Undo の中身を調べる方法が無く、
+        /// グループ番号はクリックだけでも進むため、内部の Undo.GetRecords を使う。見つからなければ null。
+        /// </summary>
+        internal static string UndoState()
+        {
+            if (!_undoRecordsSearched)
+            {
+                _undoRecordsSearched = true;
+                _undoRecords = typeof(Undo).GetMethod("GetRecords", BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic,
+                    null, new[] { typeof(List<string>), typeof(List<string>) }, null);
+            }
+            if (_undoRecords == null) return null;
+            try
+            {
+                var undo = new List<string>();
+                _undoRecords.Invoke(null, new object[] { undo, new List<string>() });
+                if (undo.Count == 0) return null;
+                var hash = 14695981039346656037UL;
+                unchecked
+                {
+                    foreach (var name in undo)
+                    {
+                        foreach (var c in name ?? "") hash = (hash ^ c) * 1099511628211UL;
+                        hash = (hash ^ 0xFFFFUL) * 1099511628211UL;
+                    }
+                }
+                return undo.Count + ":" + hash.ToString("x16");
+            }
+            catch (Exception)
+            {
+                return null;
+            }
         }
 
         /// <summary>いちばん新しいバックアップに戻す。</summary>
@@ -259,12 +518,23 @@ namespace Jeni.KaihenNavi
                 snapshot.hiddenFromHistory = true;
                 EditorUtility.SetDirty(snapshot);
             }
+            // 戻した状態を改変アバターの Prefab にも書き込む（FeatureContext.CompleteEdit と同じ形）。
+            // 同じグループに入れるので、Ctrl+Z で Prefab も復元前に戻る。
             Undo.FlushUndoRecordObjects();
-            Undo.CollapseUndoOperations(group);
+            try
+            {
+                MyAvatar.Save(avatar);
+            }
+            finally
+            {
+                Undo.SetCurrentGroupName(L10n.Tr("undo.restore"));
+                Undo.CollapseUndoOperations(group);
+            }
             UndoHelper.Separate();
 
             EndSession();
             _restoredTarget = target;
+            _restoredStep = Live(avatar);
             AssetDatabase.SaveAssets();
             RaiseChanged();
         }
@@ -279,13 +549,21 @@ namespace Jeni.KaihenNavi
         /// <summary>
         /// 同じアバターのバックアップか。保存前のシーンでは識別子が保存後に変わってしまうため、
         /// どちらかが保存前のシーンで取ったものなら名前で照合する。
+        /// 名前だけでは、別のシーンや前回の起動の同名アバターと取り違えるので、この起動中に同じシーンで取ったものに限る。
         /// </summary>
-        private static bool SameAvatar(BackupSnapshot snapshot, string id, string name)
+        private static bool SameAvatar(BackupSnapshot snapshot, string id, VRCAvatarDescriptor avatar)
         {
             if (snapshot.avatarId == id) return true;
             var unsaved = (snapshot.avatarId != null && snapshot.avatarId.Contains(UnsavedSceneMarker)) ||
                           id.Contains(UnsavedSceneMarker);
-            return unsaved && snapshot.avatarName == name;
+            return unsaved && SameUnsavedScene(snapshot, avatar);
+        }
+
+        /// <summary>シーンのハンドルは起動中だけ一意なので、起動後に取ったものかも確かめる（古いバックアップは 0）。</summary>
+        private static bool SameUnsavedScene(BackupSnapshot snapshot, VRCAvatarDescriptor avatar)
+        {
+            return snapshot.avatarName == avatar.name && snapshot.sceneHandle != 0 &&
+                   snapshot.sceneHandle == avatar.gameObject.scene.handle && snapshot.createdTicks >= SessionStart.Ticks;
         }
 
         // ---------------------------------------------------------------- 保存
@@ -296,6 +574,7 @@ namespace Jeni.KaihenNavi
             var snapshot = ScriptableObject.CreateInstance<BackupSnapshot>();
             snapshot.avatarId = AvatarId(avatar);
             snapshot.avatarName = avatar.name;
+            snapshot.sceneHandle = avatar.gameObject.scene.handle;
             snapshot.createdTicks = NextTicks();
             snapshot.featureId = featureId;
             snapshot.viewPosition = avatar.ViewPosition;
@@ -326,7 +605,8 @@ namespace Jeni.KaihenNavi
                 });
                 foreach (var m in mats)
                 {
-                    if (m != null && WorkFolders.IsOwned(m)) ownedMaterials.Add(m);
+                    // ほかのアバターのフォルダのマテリアルは保存しない（復元でそのアバターの変更を上書きしないため）。
+                    if (m != null && WorkFolders.IsOwnedBy(m, avatar.gameObject)) ownedMaterials.Add(m);
                 }
 
                 var smr = r as SkinnedMeshRenderer;
@@ -375,6 +655,11 @@ namespace Jeni.KaihenNavi
             AssetDatabase.CreateAsset(snapshot, path);
             foreach (var material in snapshot.materials) AssetDatabase.AddObjectToAsset(material.saved, snapshot);
             SaveMetadata(snapshot);
+            if (_all != null && !_all.Contains(snapshot))
+            {
+                _all.Add(snapshot);
+                _allPaths.Add(AssetDatabase.GetAssetPath(snapshot) ?? path);
+            }
         }
 
         private static void SaveMetadata(BackupSnapshot snapshot)
@@ -497,6 +782,8 @@ namespace Jeni.KaihenNavi
             foreach (var state in snapshot.materials)
             {
                 if (state.live == null || state.saved == null) continue;
+                // 古いバックアップには、ほかのアバターの複製マテリアルが入っていることがある。このアバターの物だけ戻す。
+                if (!WorkFolders.IsOwnedBy(state.live, avatar.gameObject)) continue;
                 Undo.RecordObject(state.live, undoName);
                 var name = state.live.name;
                 EditorUtility.CopySerialized(state.saved, state.live);
@@ -514,6 +801,46 @@ namespace Jeni.KaihenNavi
         private void RaiseChanged()
         {
             if (Changed != null) Changed();
+        }
+    }
+
+    /// <summary>バックアップのファイルが増えた・消えたことを BackupService の読み込みの控えに伝える。</summary>
+    internal sealed class BackupAssetWatcher : AssetPostprocessor
+    {
+        private static void OnPostprocessAllAssets(string[] importedAssets, string[] deletedAssets, string[] movedAssets, string[] movedFromAssetPaths)
+        {
+            BackupService.OnAssetsChanged(importedAssets, deletedAssets, movedAssets, movedFromAssetPaths);
+        }
+    }
+
+    /// <summary>
+    /// エディタの起動時に、履歴に出ない古いバックアップを片付ける（ドメインリロードのたびではなく、起動ごとに 1 回）。
+    /// シーンの保存時には、保存前のシーンで取ったバックアップの ID を付け替える。
+    /// </summary>
+    [InitializeOnLoad]
+    internal static class BackupMaintenance
+    {
+        private const string CleanedKey = "KaihenNavi.BackupsCleaned";
+
+        static BackupMaintenance()
+        {
+            EditorSceneManager.sceneSaved += BackupService.OnSceneSaved;
+            if (SessionState.GetString(CleanedKey, "") == "1") return;
+            EditorApplication.delayCall += Clean;
+        }
+
+        private static void Clean()
+        {
+            if (EditorApplication.isPlayingOrWillChangePlaymode) return;
+            SessionState.SetString(CleanedKey, "1");
+            try
+            {
+                BackupService.DeleteStale(BackupService.SessionStart, path => System.IO.File.GetLastWriteTime(path));
+            }
+            catch (Exception e)
+            {
+                Debug.LogException(e);
+            }
         }
     }
 }

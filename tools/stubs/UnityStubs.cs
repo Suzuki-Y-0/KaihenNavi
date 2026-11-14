@@ -860,6 +860,8 @@ namespace UnityEditor
         public static void AddObjectToAsset(Object o, Object asset) { }
         public static bool DeleteAsset(string path) { if (DeleteForTests != null) DeleteForTests(path); return true; }
         public static void SaveAssets() { }
+        public static void StartAssetEditing() { }
+        public static void StopAssetEditing() { }
         public static void SaveAssetIfDirty(Object o) { }
         public static bool CopyAsset(string a, string b) { return true; }
         public static void ImportAsset(string path) { if (ImportForTests != null) ImportForTests(path); }
@@ -1102,6 +1104,8 @@ namespace UnityEditor.SceneManagement
     {
         public delegate void SceneClosingCallback(UnityEngine.SceneManagement.Scene scene, bool removingScene);
         public static event SceneClosingCallback sceneClosing;
+        public delegate void SceneSavedCallback(UnityEngine.SceneManagement.Scene scene);
+        public static event SceneSavedCallback sceneSaved;
     }
 }
 

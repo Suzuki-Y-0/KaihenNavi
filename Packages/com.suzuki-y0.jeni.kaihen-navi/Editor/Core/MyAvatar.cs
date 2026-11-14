@@ -81,11 +81,26 @@ namespace Jeni.KaihenNavi
         {
             if (avatar == null || KindOf(avatar) == AvatarKind.Mine) return null;
 
+            // つなぎ替えとバックアップの付け替えを 1 つの Undo グループにする（Ctrl+Z で両方戻り、履歴が離れない）
+            Undo.IncrementCurrentGroup();
+            var group = Undo.GetCurrentGroup();
+            try
+            {
+                return CreateInGroup(avatar, backup);
+            }
+            finally
+            {
+                Undo.CollapseUndoOperations(group);
+            }
+        }
+
+        private static string CreateInGroup(VRCAvatarDescriptor avatar, BackupService backup)
+        {
             var target = InstanceRoot(avatar);
             if (target == null) target = avatar.gameObject;
 
-            // つなぎ替えるとバックアップの照合用 ID が変わるので、先に控えておく
-            var backups = backup.List(avatar);
+            // つなぎ替えるとバックアップの照合用 ID が変わるので、先に控えておく（隠れたバックアップも含める）
+            var backups = backup.List(avatar, true);
             var basePrefab = PrefabUtility.IsPartOfPrefabInstance(target) ? PrefabUtility.GetCorrespondingObjectFromSource(target) : null;
 
             // 買ったときの Prefab につながっていれば、先にベースへつなぎ替える（今までの改変はそのまま残る）。

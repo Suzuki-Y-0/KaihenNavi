@@ -31,6 +31,7 @@ namespace Jeni.KaihenNavi
         private static readonly HashSet<Material> Excluded = new HashSet<Material>();
 
         private readonly Dictionary<Material, Color> _baselines = new Dictionary<Material, Color>();
+        private readonly HashSet<Material> _recorded = new HashSet<Material>();
         private readonly Dictionary<string, Color> _layerBaselines = new Dictionary<string, Color>();
         private readonly HashSet<Material> _bakeQueue = new HashSet<Material>();
         private readonly HashSet<Material> _colorizeQueue = new HashSet<Material>();
@@ -142,6 +143,8 @@ namespace Jeni.KaihenNavi
             {
                 // 色を変えられないマテリアル（色の項目がない）は出さない
                 if (!IsLilToon(pair.Key) && !pair.Key.HasProperty(ColorProperty)) continue;
+                // インナーカラーの内側用マテリアルは、インナーカラーのページで色を決める（ここで変えると色味の補正が上書きされる）
+                if (InnerColorAssets.IsGenerated(pair.Key)) continue;
 
                 BodyPart part;
                 if (!Overrides.TryGetValue(pair.Key, out part))
@@ -217,7 +220,14 @@ namespace Jeni.KaihenNavi
         private static Vector3 InitialValues(List<Entry> targets)
         {
             var lil = targets.FirstOrDefault(e => !Excluded.Contains(e.Material) && IsLilToon(e.Material));
-            if (lil == null) return new Vector3(0f, 100f, 100f);
+            if (lil == null)
+            {
+                // lilToon 以外は、覚えている元の色と今の色の差から戻す（作り直した後に動かしても色が跳ばない）
+                var other = targets.FirstOrDefault(e => !Excluded.Contains(e.Material));
+                Color baseline;
+                if (other == null || !ColorLayers.TryBaseline(other.Material, ColorProperty, out baseline)) return new Vector3(0f, 100f, 100f);
+                return Offsets(baseline, other.Material.GetColor(ColorProperty));
+            }
             var v = lil.Material.GetVector(HsvgProperty);
             return new Vector3(v.x * 360f, v.y * 100f, v.z * 100f);
         }
@@ -237,6 +247,8 @@ namespace Jeni.KaihenNavi
                 var material = Own(ctx, entry, undoName);
                 if (material == null) continue;
 
+                // 元が分からない複製（以前の版・明るさで作ったもの）は、初めて色を変える前の色を元として覚える
+                if (_recorded.Add(material)) ColorLayers.RecordBaselines(material, material);
                 Undo.RecordObject(material, undoName);
                 if (IsLilToon(material))
                 {
@@ -261,7 +273,8 @@ namespace Jeni.KaihenNavi
                     Color baseline;
                     if (!_baselines.TryGetValue(material, out baseline))
                     {
-                        baseline = material.GetColor(ColorProperty);
+                        // 画面を作り直した後も、今のずれた色ではなく元の色からずらす（ずれを重ねない）
+                        if (!ColorLayers.TryBaseline(material, ColorProperty, out baseline)) baseline = material.GetColor(ColorProperty);
                         _baselines[material] = baseline;
                     }
 
@@ -330,7 +343,8 @@ namespace Jeni.KaihenNavi
                 else
                 {
                     Color baseline;
-                    if (!_baselines.TryGetValue(material, out baseline)) continue;
+                    if (!_baselines.TryGetValue(material, out baseline) &&
+                        !ColorLayers.TryBaseline(material, ColorProperty, out baseline)) continue;
                     Undo.RecordObject(material, undoName);
                     material.SetColor(ColorProperty, baseline);
                     EditorUtility.SetDirty(material);
@@ -350,11 +364,25 @@ namespace Jeni.KaihenNavi
             var original = entry.Material;
             var owned = MaterialCopier.EnsureOwned(ctx.Avatar, original, undoName);
             if (owned == null || owned == original) return owned;
+            // 複製の元の色を覚えさせる（画面を作り直しても、元の色からずらし、元に戻せる）
+            ColorLayers.RecordBaselines(owned, original);
 
             BodyPart part;
             if (Overrides.TryGetValue(original, out part)) Overrides[owned] = part;
             entry.Material = owned;
             return owned;
+        }
+
+        /// <summary>Shift の逆。元の色から今の色へのずれを（色相°, 彩度%, 明度%）で返す。</summary>
+        private static Vector3 Offsets(Color baseline, Color current)
+        {
+            float h0, s0, v0, h1, s1, v1;
+            Color.RGBToHSV(baseline, out h0, out s0, out v0);
+            Color.RGBToHSV(current, out h1, out s1, out v1);
+            var hue = s0 > 0.001f ? Mathf.DeltaAngle(h0 * 360f, h1 * 360f) : 0f;
+            var saturation = s0 > 0.001f ? Mathf.Clamp(s1 / s0 * 100f, 0f, 200f) : 100f;
+            var brightness = v0 > 0.001f ? Mathf.Clamp(v1 / v0 * 100f, 0f, 200f) : 100f;
+            return new Vector3(hue, saturation, brightness);
         }
 
         private static Color Shift(Color baseline, float hueDegrees, float saturationPercent, float brightnessPercent)

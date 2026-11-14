@@ -478,6 +478,7 @@ namespace UnityEngine.SceneManagement
     {
         public bool isLoaded;
         public bool validForTests;
+        public string name { get { return ""; } }
         public bool IsValid() { return validForTests; }
         public UnityEngine.GameObject[] GetRootGameObjects() { return null; }
     }

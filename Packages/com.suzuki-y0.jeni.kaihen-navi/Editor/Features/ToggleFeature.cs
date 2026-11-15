@@ -32,6 +32,8 @@ namespace Jeni.KaihenNavi
             public bool Picked;
             public bool IsOther;
             public bool InMenu = false;
+            /// <summary>メニューの初期値（InMenu のときだけ使う）。</summary>
+            public bool DefaultOn = false;
         }
 
         private static bool _othersExpanded;
@@ -241,7 +243,9 @@ namespace Jeni.KaihenNavi
                     texts.Add(Ui.Text(c.Target.name, "kn-list__title"));
                 }
 
-                var state = c.Target.activeSelf ? L10n.Tr("toggle.stateVisible") : L10n.Tr("toggle.stateHidden");
+                // メニューに入っているものは、シーンの表示ではなくメニューの初期値（ゲームでの最初の状態）を出す
+                var shown = c.InMenu ? c.DefaultOn : c.Target.activeSelf;
+                var state = shown ? L10n.Tr("toggle.stateVisible") : L10n.Tr("toggle.stateHidden");
                 if (c.InMenu) state += "  ・  " + L10n.Tr("toggle.inMenu");
                 // 表示名を変えたものは、元のオブジェクト名も添えて見分けられるようにする
                 if (editableLabel && c.Label != c.Target.name) state += "  ・  " + c.Target.name;
@@ -288,6 +292,9 @@ namespace Jeni.KaihenNavi
             public GameObject Target;
             public bool IsDefault;
             public bool OriginalActive;
+            public string Parameter;
+            /// <summary>元の表示の目印が無い＝古い版で作ったメニュー（古い版は ON の服を非表示にしていた）。</summary>
+            public bool Legacy;
         }
 
         private static void BuildWithModularAvatar(FeatureContext ctx, VisualElement root, List<Candidate> candidates)
@@ -298,6 +305,7 @@ namespace Jeni.KaihenNavi
                 var candidate = candidates.FirstOrDefault(c => c.Target == e.Target);
                 if (candidate == null) continue;
                 candidate.InMenu = true;
+                candidate.DefaultOn = e.IsDefault;
                 if (!Picks.ContainsKey(e.Target)) candidate.Picked = true;
                 if (!Labels.ContainsKey(e.Target)) candidate.Label = e.Item.name;
             }
@@ -309,8 +317,9 @@ namespace Jeni.KaihenNavi
                 root.Add(Ui.Notice(L10n.Tr("toggle.none"), "warn"));
             }
 
-            // 同期パラメータの消費量（1 項目 1 bit）。チェックを変えるたびに数え直す
-            var baseCost = AvatarParameterCost(ctx.Avatar);
+            // 同期パラメータの消費量（1 項目 1 bit）。チェックを変えるたびに数え直す。
+            // アバター本体の分には、ほかの MA の部品が足す同期パラメータ（目安）も含める
+            var baseCost = AvatarParameterCost(ctx.Avatar) + ModularAvatarParameterCost(ctx.Avatar);
             var max = VRCExpressionParameters.MAX_PARAMETER_COST;
             var bits = Ui.Text("", "kn-bits");
             var over = Ui.Notice(L10n.Tr("toggle.bitsOver"), "warn");
@@ -366,6 +375,74 @@ namespace Jeni.KaihenNavi
             root.Add(Ui.Notice(L10n.Tr("toggle.howToUse"), "ok"));
         }
 
+        /// <summary>
+        /// ほかの MA の部品（MA Parameters・MA Menu Item）が足す同期パラメータの bit 数（目安）。
+        /// Expression Parameters にある名前と、この脱ぎ着メニュー自身の項目、EditorOnly の中のものは数えない。
+        /// Bool は 1 bit、Int・Float は 8 bit。MA が実際に作る型とはずれることがある。
+        /// </summary>
+        private static int ModularAvatarParameterCost(VRCAvatarDescriptor avatar)
+        {
+            var counted = new HashSet<string>();
+            var expression = avatar.expressionParameters;
+            if (expression != null && expression.parameters != null)
+            {
+                foreach (var p in expression.parameters)
+                {
+                    if (p != null && !string.IsNullOrEmpty(p.name)) counted.Add(p.name);
+                }
+            }
+
+            var cost = 0;
+            foreach (var component in avatar.GetComponentsInChildren<ModularAvatarParameters>(true))
+            {
+                if (component.parameters == null || IsEditorOnly(component.transform, avatar.transform)) continue;
+                foreach (var p in component.parameters)
+                {
+                    if (p.isPrefix || p.localOnly || p.syncType == ParameterSyncType.NotSynced) continue;
+                    var name = string.IsNullOrEmpty(p.remapTo) ? p.nameOrPrefix : p.remapTo;
+                    if (string.IsNullOrEmpty(name) || !counted.Add(name)) continue;
+                    cost += p.syncType == ParameterSyncType.Bool ? 1 : 8;
+                }
+            }
+
+            // パラメータを書いていない MA Menu Item は、MA が同期パラメータを作る（0 か 1 なら Bool、ほかの値なら Int）
+            var menuRoot = avatar.transform.Find(MenuObjectName);
+            foreach (var item in avatar.GetComponentsInChildren<ModularAvatarMenuItem>(true))
+            {
+                if (menuRoot != null && item.transform.IsChildOf(menuRoot)) continue;
+                if (!item.isSynced || item.Control == null || item.Control.parameter == null) continue;
+                if (item.Control.type != VRCExpressionsMenu.Control.ControlType.Toggle &&
+                    item.Control.type != VRCExpressionsMenu.Control.ControlType.Button) continue;
+                if (IsEditorOnly(item.transform, avatar.transform)) continue;
+                var name = item.Control.parameter.name;
+                if (string.IsNullOrEmpty(name) || !counted.Add(name)) continue;
+                var value = item.Control.value;
+                cost += Mathf.Approximately(value, 0f) || Mathf.Approximately(value, 1f) ? 1 : 8;
+            }
+
+            return cost;
+        }
+
+        private static bool IsEditorOnly(Transform t, Transform avatarRoot)
+        {
+            for (; t != null && t != avatarRoot; t = t.parent)
+            {
+                if (t.gameObject.tag == "EditorOnly") return true;
+            }
+
+            return false;
+        }
+
+        /// <summary>
+        /// 脱ぎ着メニューで対象を切り替える項目（無ければ null）。メニューに入っている服は、
+        /// シーンの表示ではなく、この項目の初期値（isDefault）でゲームでの最初の状態が決まる。
+        /// </summary>
+        internal static ModularAvatarMenuItem MenuItemFor(VRCAvatarDescriptor avatar, GameObject target)
+        {
+            var existing = ReadExisting(avatar).FirstOrDefault(e => e.Target == target);
+            return existing == null ? null : existing.Item.GetComponent<ModularAvatarMenuItem>();
+        }
+
         private static void SyncPicksWithMenu(VRCAvatarDescriptor avatar)
         {
             var signature = string.Join("|", ReadExisting(avatar)
@@ -393,7 +470,8 @@ namespace Jeni.KaihenNavi
                     var target = obj.Object.Get(toggle);
                     if (target == null) continue;
                     var visibility = item.transform.Find(VisibilityName);
-                    result.Add(new ExistingToggle { Item = item.gameObject, Target = target, IsDefault = item.isDefault,
+                    result.Add(new ExistingToggle { Item = item.gameObject, Target = target, IsDefault = item.isDefault, Legacy = visibility == null,
+                        Parameter = item.Control != null && item.Control.parameter != null ? item.Control.parameter.name : null,
                         // 旧版は実際の値を残していない。初期値で、旧版が強制した非表示から復旧する。
                         OriginalActive = visibility != null ? visibility.gameObject.activeSelf : item.isDefault });
                 }
@@ -402,18 +480,24 @@ namespace Jeni.KaihenNavi
             return result;
         }
 
-        /// <summary>前回作ったメニューを消し、対象の表示状態を作る前に戻す。</summary>
+        /// <summary>
+        /// 古い版が強制した非表示だけを戻す。今の版はシーンの表示を変えないので、後から「脱がす」などで
+        /// わざと変えた表示は戻さない。古い版は初期値 ON の服を非表示にしていたので、その形のままのときだけ戻す。
+        /// </summary>
+        private static void RestoreLegacyVisibility(ExistingToggle e, string undoName)
+        {
+            if (!e.Legacy || !e.IsDefault || e.Target.activeSelf) return;
+            Undo.RecordObject(e.Target, undoName);
+            e.Target.SetActive(true);
+            PrefabUtility.RecordPrefabInstancePropertyModifications(e.Target);
+        }
+
+        /// <summary>前回作ったメニューを消す。古い版が非表示にした対象は表示に戻す。</summary>
         private static void RemoveMenu(VRCAvatarDescriptor avatar, string undoName, bool restoreVisibility = true)
         {
             if (restoreVisibility)
             {
-                foreach (var e in ReadExisting(avatar))
-                {
-                    if (e.Target.activeSelf == e.OriginalActive) continue;
-                    Undo.RecordObject(e.Target, undoName);
-                    e.Target.SetActive(e.OriginalActive);
-                    PrefabUtility.RecordPrefabInstancePropertyModifications(e.Target);
-                }
+                foreach (var e in ReadExisting(avatar)) RestoreLegacyVisibility(e, undoName);
             }
 
             var menuRoot = avatar.transform.Find(MenuObjectName);
@@ -432,31 +516,32 @@ namespace Jeni.KaihenNavi
             Undo.SetCurrentGroupName(undoName);
 
             var previous = ReadExisting(avatar);
-            // チェックを外した項目は、その切り替えを削除するので元の表示に戻す。
-            foreach (var old in previous.Where(e => !targets.Any(c => c.Target == e.Target)))
-            {
-                if (old.Target.activeSelf == old.OriginalActive) continue;
-                Undo.RecordObject(old.Target, undoName);
-                old.Target.SetActive(old.OriginalActive);
-                PrefabUtility.RecordPrefabInstancePropertyModifications(old.Target);
-            }
+            // チェックを外した項目は、その切り替えを削除するので、古い版が非表示にしたものだけ表示に戻す。
+            foreach (var old in previous.Where(e => !targets.Any(c => c.Target == e.Target))) RestoreLegacyVisibility(old, undoName);
             // 作り直しでも現在の表示は変えず、最初に作る前の状態を引き継ぐ。
             RemoveMenu(avatar, undoName, false);
 
-            var used = new HashSet<string>();
+            // 残す項目は前のパラメータ名をそのまま使う（名前を作り直すと、保存された状態や OSC が別の服に付いてしまう）。
+            // 新しい項目には、前のメニューで使っていた名前（外した項目の分も）と重ならない名前を作る
+            var used = new HashSet<string>(previous.Select(e => e.Parameter).Where(n => !string.IsNullOrEmpty(n)));
+            var reused = new HashSet<string>();
             var data = new MenuData { menuName = L10n.Tr("toggle.menuName") };
             foreach (var c in targets)
             {
                 var label = string.IsNullOrEmpty(c.Label) ? c.Target.name : c.Label;
                 var old = previous.FirstOrDefault(e => e.Target == c.Target);
+                var parameter = old != null && !string.IsNullOrEmpty(old.Parameter) && reused.Add(old.Parameter)
+                    ? old.Parameter
+                    : ParameterName(label, used);
                 data.items.Add(new MenuItemData
                 {
                     label = label,
-                    parameter = ParameterName(label, used),
+                    parameter = parameter,
                     targetPath = HierarchyPath.Get(avatar.transform, c.Target.transform),
                     // 今見えているものは最初から ON（着ている状態）にする
                     isDefault = old != null ? old.IsDefault : c.Target.activeSelf,
-                    hasOriginalActive = true,
+                    // 古い版の項目は古い版のまま残す（後で消したときに、強制された非表示を戻せるように）
+                    hasOriginalActive = old == null || !old.Legacy,
                     originalActive = old != null ? old.OriginalActive : c.Target.activeSelf,
                 });
             }
@@ -542,11 +627,13 @@ namespace Jeni.KaihenNavi
 
                 // EditorOnly の空オブジェクトの activeSelf に元の表示を保存する。
                 // 独自スクリプトは追加せず、メニューと一緒に Undo・Prefab 保存・バックアップで復元できる。
+                // 元の表示を持たない古い版のデータからは目印を作らず、古い版のメニューとして扱う。
+                if (!spec.hasOriginalActive) continue;
                 var visibility = new GameObject(VisibilityName) { tag = "EditorOnly" };
                 Undo.RegisterCreatedObjectUndo(visibility, undoName);
                 Undo.SetTransformParent(visibility.transform, itemObject.transform, undoName);
                 Undo.RecordObject(visibility, undoName);
-                visibility.SetActive(spec.hasOriginalActive ? spec.originalActive : spec.isDefault);
+                visibility.SetActive(spec.originalActive);
             }
 
             return menuRoot;
@@ -577,7 +664,7 @@ namespace Jeni.KaihenNavi
                     parameter = item.Control != null && item.Control.parameter != null ? item.Control.parameter.name : "",
                     targetPath = HierarchyPath.Get(avatar.transform, target.transform),
                     isDefault = item.isDefault,
-                    hasOriginalActive = true,
+                    hasOriginalActive = item.transform.Find(VisibilityName) != null,
                     originalActive = item.transform.Find(VisibilityName) != null ?
                         item.transform.Find(VisibilityName).gameObject.activeSelf : item.isDefault,
                 });

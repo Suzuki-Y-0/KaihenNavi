@@ -11,7 +11,7 @@ namespace Jeni.KaihenNavi
 {
     /// <summary>
     /// 髪の色を、見本の髪（ほかの髪・シーンで選んだもの・画像ファイル）の色に合わせる。
-    /// 色を合わせた画像の複製（マテリアル名_main.png）を作って差し替えるので、元の画像とマテリアルは変わらない。
+    /// 色を合わせた画像の複製を作って差し替えるので、元の画像とマテリアルは変わらない。
     /// 複製の置き場所と「元に戻す」は、色変えの「色をのせる」（ColorLayers）と同じ仕組みを使う。
     /// 計算は HairColorMatch。
     /// </summary>
@@ -505,14 +505,11 @@ namespace Jeni.KaihenNavi
             if (material == null) return false;
             entry.Material = material;
 
-            var path = ColorLayers.BakedPath(material, "main");
-            if (path == null) return false;
-            ColorLayers.WriteConverted(source, path, c => HairColorMatch.Apply(c, lut, strength));
-            var baked = AssetDatabase.LoadAssetAtPath<Texture2D>(path);
+            // 複製したマテリアルは元と同じ画像を指しているので、ここでも元の画像から作られる
+            var baked = ColorLayers.BakeMain(material, c => HairColorMatch.Apply(c, lut, strength), undoName);
             if (baked == null) return false;
 
             Undo.RecordObject(material, undoName);
-            if (baked != current) material.SetTexture(MainTex, baked);
             if (material.HasProperty(HsvgProperty))
             {
                 // 色を合わせた画像に色調補正が重なると色がずれるので、補正は無しに戻す（ガンマだけ残す）

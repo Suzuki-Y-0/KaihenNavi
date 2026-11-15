@@ -59,7 +59,63 @@ internal static class HistoryTests
     {
         Undo.IncrementCurrentGroup();
         Undo.SetCurrentGroupName(name);
+        // Unity では操作の記録が Undo 履歴に積まれてから、遅れて CompletePending が呼ばれる。
+        Undo.RecordsForTests.Add(name);
         backup.CompletePending();
+    }
+
+    private static VRCAvatarDescriptor MakeAvatar(string name)
+    {
+        var go = new GameObject { name = name };
+        var root = new Transform { gameObject = go, name = "Root", localScale = new Vector3(1, 1, 1) };
+        go.transform = root;
+        go.ComponentsForTests = type => type == typeof(Transform) ? new object[] { root } : new object[0];
+        return new VRCAvatarDescriptor { name = go.name, gameObject = go, transform = root };
+    }
+
+    /// <summary>起動時の片付けで、どこからも参照されない、起動前からある焼いた画像だけを消す。</summary>
+    private static void SweepBakesChecks()
+    {
+        var oldDirectory = Environment.CurrentDirectory;
+        var temp = Path.Combine(Path.GetTempPath(), "kaihennavi-sweep-" + Guid.NewGuid().ToString("N"));
+        var oldFind = AssetDatabase.FindForTests;
+        var oldDelete = AssetDatabase.DeleteForTests;
+        var oldDependencies = AssetDatabase.DependenciesForTests;
+        var oldImporter = AssetImporter.LoadForTests;
+        var oldResources = Resources.FindForTests;
+        try
+        {
+            var folder = WorkFolders.AvatarsRoot + "/A/Textures";
+            Directory.CreateDirectory(Path.Combine(temp, folder));
+            Environment.CurrentDirectory = temp;
+            var unused = folder + "/Body_2nd.png";
+            var used = folder + "/Body_2nd 1.png";
+            var fresh = folder + "/Body_2nd 2.png";
+            var foreign = folder + "/Photo.png";
+            foreach (var path in new[] { unused, used, fresh, foreign }) File.WriteAllBytes(path, new byte[] { 1 });
+            AssetDatabase.FindForTests = (filter, folders) => filter == "t:Texture2D" ? new[] { unused, used, fresh, foreign } :
+                filter == "t:Material" ? new[] { "Assets/Mat.mat" } : new string[0];
+            AssetDatabase.DependenciesForTests = roots => roots.Contains("Assets/Mat.mat") ? new[] { used } : new string[0];
+            AssetImporter.LoadForTests = path => new AssetImporter
+                { assetPath = path, userData = path == foreign ? "" : "kaihen-navi-color-source:0123" };
+            Resources.FindForTests = type => new Object[0];
+            var deleted = new List<string>();
+            AssetDatabase.DeleteForTests = path => deleted.Add(path);
+            var start = new DateTime(2000, 1, 1);
+            var removed = ColorLayers.SweepUnusedBakes(start, path => path == fresh ? start : start.AddDays(-1));
+            Check(removed == 1 && deleted.SequenceEqual(new[] { unused }),
+                "Startup sweep deletes only unreferenced tool-baked images written before this editor session");
+        }
+        finally
+        {
+            Environment.CurrentDirectory = oldDirectory;
+            AssetDatabase.FindForTests = oldFind;
+            AssetDatabase.DeleteForTests = oldDelete;
+            AssetDatabase.DependenciesForTests = oldDependencies;
+            AssetImporter.LoadForTests = oldImporter;
+            Resources.FindForTests = oldResources;
+            try { Directory.Delete(temp, true); } catch (IOException) { }
+        }
     }
 
     public static void Main()
@@ -76,6 +132,8 @@ internal static class HistoryTests
         var deletions = 0;
         AssetDatabase.DeleteForTests = path => deletions++;
         Undo.RecordForTests = target => Recorded.Add(target);
+        EditorApplication.timeSinceStartup = 3600;
+        GlobalObjectId.IdForTests = o => "GlobalObjectId_V1-2-0123456789abcdef0123456789abcdef-" + o.name + "-0";
         // JSON を扱う参加機能の挙動は本物の Unity で確認する。このテストでは履歴自身に絞る。
         ((IList)typeof(BackupService).GetField("Participants", Static).GetValue(null)).Clear();
         var go = new GameObject { name = "テスト用アバター" };
@@ -112,7 +170,10 @@ internal static class HistoryTests
         backup.EndSession();
         Check(new BackupService().List(avatar).Count == 4, "Fine steps survive a service restart");
         var legacy = new BackupSnapshot { avatarId = BackupService.AvatarId(avatar), createdTicks = 1, featureId = "color" };
-        Assets.Add("legacy.asset", legacy);
+        var legacyPath = WorkFolders.AvatarsRoot + "/Legacy/Backups/legacy.asset";
+        Assets.Add(legacyPath, legacy);
+        // Unity ではインポートの通知（BackupAssetWatcher）で読み込みの控えが更新される
+        BackupService.OnAssetsChanged(new[] { legacyPath }, new string[0], new string[0], new string[0]);
         Check(legacy.SessionTicks == legacy.createdTicks && backup.List(avatar).Contains(legacy), "Legacy backups are shown as one-step tasks");
         Recorded.Clear();
         backup.Restore(avatar, second);
@@ -161,6 +222,144 @@ internal static class HistoryTests
         Undo.PerformUndoForTests = () => { nativeUndoCalls++; Call(restartedWindow, "OnUndoRedo"); };
         Call(restartedWindow, "RestoreLatest");
         Check(nativeUndoCalls == 2, "The next arrow can undo the restoration itself, including a backup restored after restart");
+
+        // 上に別の操作（カメラの移動など）が積まれたら、Unity の Undo ではなくバックアップで戻す。
+        var records = Undo.RecordsForTests;
+        var liveBackup = new BackupService();
+        var liveWindow = new KaihenNaviWindow();
+        Set(liveWindow, "_avatar", avatar);
+        Set(liveWindow, "_features", FeatureCatalog.Create());
+        Set(liveWindow, "_backup", liveBackup);
+        Undo.PerformUndoForTests = () => { nativeUndoCalls++; records.RemoveAt(records.Count - 1); Call(liveWindow, "OnUndoRedo"); };
+        liveBackup.BeginEdit(avatar, "color");
+        Finish(liveBackup, L10n.Tr("undo.body"));
+        Check(liveBackup.HasLiveUndo(avatar), "A step just recorded by this window is the top Undo step");
+        // 自動保存（Prefab への Apply）が同じグループにまとまれば、積み方が変わっても Unity の Undo を使う。
+        var liveGroup = liveBackup.LiveGroup(avatar);
+        Check(liveGroup == Undo.GetCurrentGroup(), "The live step remembers its Undo group");
+        var beforeSave = BackupService.UndoState();
+        records.Add("Apply Prefab");
+        Check(!liveBackup.HasLiveUndo(avatar), "A save changes the Undo fingerprint");
+        liveBackup.KeepLive(avatar, liveGroup + 1, beforeSave);
+        Check(!liveBackup.HasLiveUndo(avatar), "A save merged into another group does not keep the step live");
+        liveBackup.KeepLive(avatar, liveGroup, beforeSave);
+        Check(liveBackup.HasLiveUndo(avatar), "A save merged into the same group keeps the step live");
+        records.Add("Move Main Camera");
+        Check(!liveBackup.HasLiveUndo(avatar), "Another Undo step on top must not be undone by the arrow");
+        var colorStep = liveBackup.List(avatar)[0];
+        var callsBefore = nativeUndoCalls;
+        Call(liveWindow, "RestoreLatest");
+        Check(nativeUndoCalls == callsBefore && colorStep.hiddenFromHistory, "With a foreign step on top the arrow restores the backup instead");
+
+        // 別のアバターの復元が上にあるとき、このアバターの「元に戻す」で取り消さない。
+        var other = MakeAvatar("別のアバター");
+        Check(BackupService.AvatarId(other) != BackupService.AvatarId(avatar), "Test avatars have distinct identifiers");
+        liveBackup.EndSession();
+        liveBackup.BeginEdit(other, "body");
+        Finish(liveBackup, L10n.Tr("undo.body"));
+        liveBackup.EndSession();
+        liveBackup.BeginEdit(avatar, "body");
+        Finish(liveBackup, L10n.Tr("undo.body"));
+        liveBackup.EndSession();
+        liveBackup.Restore(avatar, liveBackup.List(avatar)[0]);
+        records.Add(L10n.Tr("undo.restore"));
+        Check(!liveBackup.HasLiveUndo(other), "A restoration of another avatar is not this avatar's Undo step");
+        var otherStep = liveBackup.List(other)[0];
+        Set(liveWindow, "_avatar", other);
+        callsBefore = nativeUndoCalls;
+        Call(liveWindow, "RestoreLatest");
+        Check(nativeUndoCalls == callsBefore && otherStep.hiddenFromHistory, "The other avatar falls back to its own latest backup");
+        Set(liveWindow, "_avatar", avatar);
+
+        // 失敗して取り消した操作は履歴に残さない。
+        var assetsBeforeCancel = Assets.Count;
+        liveBackup.EndSession();
+        liveBackup.BeginEdit(avatar, "outfit");
+        liveBackup.CancelPending();
+        liveBackup.CompletePending();
+        Check(Assets.Count == assetsBeforeCancel, "A cancelled operation leaves no history entry");
+
+        // 一覧は読み込みを控え、バックアップのファイルが増えた・消えたときだけ探し直す。
+        var finds = 0;
+        var find = AssetDatabase.FindForTests;
+        AssetDatabase.FindForTests = (filter, folders) => { finds++; return find(filter, folders); };
+        BackupService.InvalidateCache();
+        liveBackup.List(avatar);
+        liveBackup.List(avatar, true);
+        liveBackup.Count(avatar);
+        Check(finds == 1, "Listing reuses the loaded backups");
+        var none = new string[0];
+        var knownPath = AssetDatabase.GetAssetPath(liveBackup.List(avatar)[0]);
+        BackupService.OnAssetsChanged(new[] { WorkFolders.AvatarsRoot + "/A/Materials/Hair.mat", knownPath }, none, none, none);
+        liveBackup.List(avatar);
+        Check(finds == 1, "Saving materials or a loaded backup does not reload the list");
+        BackupService.OnAssetsChanged(none, new[] { knownPath }, none, none);
+        liveBackup.List(avatar);
+        Check(finds == 2, "Deleting a backup reloads the list");
+        liveBackup.EndSession();
+        liveBackup.BeginEdit(avatar, "body");
+        Finish(liveBackup, L10n.Tr("undo.body"));
+        Check(finds == 2 && liveBackup.List(avatar)[0].createdTicks > first.createdTicks, "A new backup joins the list without reloading");
+
+        // 自分用アバターへのつなぎ替えで ID を付け替えるとき、隠れたバックアップも含めて Undo に記録する。
+        var withHidden = liveBackup.List(avatar, true);
+        Check(withHidden.Any(s => s.hiddenFromHistory), "The test has hidden backups");
+        Recorded.Clear();
+        liveBackup.Rekey(avatar, withHidden);
+        Check(withHidden.All(Recorded.Contains), "Re-keying is part of Ctrl+Z, hidden backups included");
+
+        // 起動前から変わっていない、履歴に出ないバックアップだけを消す。
+        for (var i = 0; i < BackupService.MaxBackupsPerAvatar + 3; i++)
+        {
+            Assets.Add(WorkFolders.AvatarsRoot + "/Old/Backups/old" + i + ".asset",
+                new BackupSnapshot { avatarId = "old-avatar", avatarName = "old", createdTicks = 100 + i });
+        }
+        BackupService.InvalidateCache();
+        var deletedPaths = new List<string>();
+        AssetDatabase.DeleteForTests = path => deletedPaths.Add(path);
+        Check(BackupService.DeleteStale(BackupService.SessionStart, path => DateTime.MaxValue) == 0 && deletedPaths.Count == 0,
+            "Backups written in this editor session are never deleted");
+        var hiddenPaths = Assets.Where(p => p.Value is BackupSnapshot && ((BackupSnapshot)p.Value).hiddenFromHistory).Select(p => p.Key).ToList();
+        var removed = BackupService.DeleteStale(BackupService.SessionStart, path => DateTime.MinValue);
+        Check(removed == deletedPaths.Count && hiddenPaths.All(deletedPaths.Contains), "Hidden backups from earlier sessions are deleted");
+        var oldDeleted = deletedPaths.Where(p => p.Contains("/Old/")).ToList();
+        Check(oldDeleted.Count == 3 && oldDeleted.All(p => ((BackupSnapshot)Assets[p]).createdTicks < 103),
+            "Only the oldest tasks beyond the limit are deleted");
+        Check(deletedPaths.All(p => ((BackupSnapshot)Assets[p]).hiddenFromHistory || p.Contains("/Old/")),
+            "Visible backups within the limit are kept");
+        // 前の起動で保存前のシーンで取ったものは、もう照合できないので消す。この起動中のものは残す
+        var unsavedMarkerId = "GlobalObjectId_V1-2-00000000000000000000000000000000-99-0";
+        Assets.Add(WorkFolders.AvatarsRoot + "/Unsaved/Backups/earlier.asset", new BackupSnapshot
+            { avatarId = unsavedMarkerId, avatarName = "unsaved", createdTicks = BackupService.SessionStart.Ticks - 1 });
+        Assets.Add(WorkFolders.AvatarsRoot + "/Unsaved/Backups/current.asset", new BackupSnapshot
+            { avatarId = unsavedMarkerId, avatarName = "unsaved", sceneHandle = 3, createdTicks = DateTime.Now.Ticks });
+        BackupService.InvalidateCache();
+        deletedPaths.Clear();
+        BackupService.DeleteStale(BackupService.SessionStart, path => DateTime.MinValue);
+        Check(deletedPaths.Contains(WorkFolders.AvatarsRoot + "/Unsaved/Backups/earlier.asset") &&
+              !deletedPaths.Contains(WorkFolders.AvatarsRoot + "/Unsaved/Backups/current.asset"),
+            "Unsaved-scene backups from an earlier editor session are deleted, this session's are kept");
+        Assets.Remove(WorkFolders.AvatarsRoot + "/Unsaved/Backups/earlier.asset");
+        Assets.Remove(WorkFolders.AvatarsRoot + "/Unsaved/Backups/current.asset");
+        BackupService.InvalidateCache();
+        SweepBakesChecks();
+
+        // 保存前のシーンでは、この起動中に同じシーンで取った同名のバックアップだけを同じアバターとみなす。
+        var sameAvatar = typeof(BackupService).GetMethod("SameAvatar", Static);
+        var unsavedId = "GlobalObjectId_V1-2-00000000000000000000000000000000-1234-0";
+        avatar.gameObject.scene = new UnityEngine.SceneManagement.Scene { handle = 7 };
+        var unsavedStep = new BackupSnapshot { avatarId = unsavedId, avatarName = avatar.name, sceneHandle = 7, createdTicks = DateTime.Now.Ticks };
+        Func<BackupSnapshot, bool> matches = snap => (bool)sameAvatar.Invoke(null, new object[] { snap, BackupService.AvatarId(avatar), avatar });
+        Check(matches(unsavedStep), "An unsaved-scene backup from this session and scene matches by name");
+        unsavedStep.sceneHandle = 8;
+        Check(!matches(unsavedStep), "Another scene's avatar with the same name does not match");
+        unsavedStep.sceneHandle = 7;
+        unsavedStep.createdTicks = BackupService.SessionStart.Ticks - 1;
+        Check(!matches(unsavedStep), "A backup from an earlier editor session does not match by name");
+        Check(!matches(new BackupSnapshot { avatarId = unsavedId, avatarName = avatar.name, createdTicks = DateTime.Now.Ticks }),
+            "Old backups without a scene handle do not match by name alone");
+        Check(matches(legacy), "Backups with the same identifier still match");
+        avatar.gameObject.scene = new UnityEngine.SceneManagement.Scene();
         Check(((string)Call(window, "OperationTitle", new BackupSnapshot { featureId = "body", operationName = "Add Component" })) ==
             L10n.Tr("history.operation", L10n.Tr("feature.body.nav")), "Unknown English steps use the navigation name");
 

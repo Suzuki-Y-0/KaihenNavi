@@ -134,6 +134,12 @@ namespace Jeni.KaihenNavi
             }
         }
 
+        /// <summary>操作が失敗して取り消したとき、BeginEdit で取りかけたバックアップを履歴に残さない。</summary>
+        public void CancelEdit()
+        {
+            Backup.CancelPending();
+        }
+
         public void NoteCreated(GameObject created)
         {
             Backup.NoteCreated(Avatar, created);

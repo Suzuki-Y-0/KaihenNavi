@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using UnityEditor;
 using UnityEngine;
 using UnityEngine.TextCore.Text;
 using UnityEngine.UIElements;
@@ -43,6 +44,25 @@ namespace Jeni.KaihenNavi
         private static readonly Dictionary<string, Pair> Loaded = new Dictionary<string, Pair>();
         private static readonly Dictionary<string, Pair> Combined = new Dictionary<string, Pair>();
         private static readonly Dictionary<VisualElement, IVisualElementScheduledItem> Sweeps = new Dictionary<VisualElement, IVisualElementScheduledItem>();
+
+        // 作った FontAsset は HideAndDontSave なので、ドメインリロードでも自動では消えない。
+        // リロードの直前に壊して、古いフォントが Editor に溜まらないようにする。
+        static FontLoader() { AssemblyReloadEvents.beforeAssemblyReload += Release; }
+
+        private static void Release()
+        {
+            foreach (var sweep in Sweeps.Values) if (sweep != null) sweep.Pause();
+            var assets = new HashSet<FontAsset>();
+            foreach (var pair in Loaded.Values) { assets.Add(pair.Regular); assets.Add(pair.Bold); }
+            foreach (var pair in Combined.Values) { assets.Add(pair.Regular); assets.Add(pair.Bold); }
+            foreach (var asset in assets)
+            {
+                if (asset != null) UnityEngine.Object.DestroyImmediate(asset);
+            }
+            Loaded.Clear();
+            Combined.Clear();
+            Sweeps.Clear();
+        }
 
         /// <summary>
         /// root 以下の文字にフォントを当てる。太字（USS の -unity-font-style: bold）は、

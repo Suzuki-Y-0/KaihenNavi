@@ -603,6 +603,13 @@ namespace Jeni.KaihenNavi
             }
 
             if (group == _savedGroup || now - _seenAt < AutoSaveDelay) return;
+            // 外部ツールの Undo グループ（ExecuteDynamicScript など）やコンストレイントが動かした骨のずれだけなら、
+            // 保存の手順を通さない（Prefab への書き込みも Undo の記録もしない。フッターの「元に戻す」の控えも崩さない）
+            if (MyAvatar.KindOf(_avatar) == AvatarKind.Mine && !MyAvatar.HasUnsaved(_avatar) && !HasUnsavedMaterials())
+            {
+                _savedGroup = group;
+                return;
+            }
             SaveNow();
         }
 
@@ -618,6 +625,10 @@ namespace Jeni.KaihenNavi
             _backup.SaveHistory(_avatar);
             var materialsChanged = HasUnsavedMaterials();
             MyAvatar.SaveMaterials(_avatar);
+            // 保存前にフッターの「元に戻す」が Unity の Undo を使える状態だったか（保存先のグループと同じときだけ引き継ぐ）
+            var liveGroup = _backup.LiveGroup(_avatar);
+            var liveState = liveGroup >= 0 ? BackupService.UndoState() : null;
+            var saveGroup = editGroup >= 0 ? editGroup : Undo.GetCurrentGroup();
             var saved = MyAvatar.Save(_avatar);
             // Scene の移動ツールからの編集も、記録されたグループに保存をまとめる。
             if (saved && editGroup >= 0)
@@ -625,6 +636,8 @@ namespace Jeni.KaihenNavi
                 Undo.SetCurrentGroupName(editName);
                 Undo.CollapseUndoOperations(editGroup);
             }
+            // 保存は直前の手順と同じ Ctrl+Z 1 回で戻るので、保存で Undo の積み方が変わっても「元に戻す」は Undo を使う
+            if (saved && liveGroup >= 0 && liveGroup == saveGroup) _backup.KeepLive(_avatar, liveGroup, liveState);
             _saveEditGroup = -1;
             _savedGroup = Undo.GetCurrentGroup();
             if (saved || materialsChanged || manual) _lastSavedAt = System.DateTime.Now;
@@ -971,8 +984,8 @@ namespace Jeni.KaihenNavi
             if (_avatar == null) return;
             CloseHistory();
             _backup.CompletePending();
-            // このウィンドウで記録した手順は Unity と同じ直前の 1 手。
-            // 再起動後など、Undo との対応が分からない履歴は最新のバックアップ 1 件で戻す。
+            // Unity の Undo の 1 手目がこのアバターの直前の手順だと確かめられたときだけ Undo する。
+            // 上に別の操作がある・再起動後など、Undo との対応が分からないときは最新のバックアップ 1 件で戻す。
             _undoPerformed = false;
             if (_backup.HasLiveUndo(_avatar)) Undo.PerformUndo();
             if (!_undoPerformed)
@@ -1075,9 +1088,11 @@ namespace Jeni.KaihenNavi
             CloseHistory();
             if (_selected != null) _selected.OnClosed();
             _backup.Restore(_avatar, snapshot);
-            _savedGroup = -1;
+            // 復元は新しい操作で、Prefab への保存も復元の Undo グループの中で済んでいる。
+            // Undo/Redo の直後とは違い、この後の自動保存・保存ボタンを止めない。
+            if (MyAvatar.KindOf(_avatar) == AvatarKind.Mine) _lastSavedAt = System.DateTime.Now;
             _seenAt = EditorApplication.timeSinceStartup;
-            RefreshAfterUndo();
+            RefreshAfterUndo(false);
         }
 
         private string FeatureTitle(string id)
@@ -1123,13 +1138,14 @@ namespace Jeni.KaihenNavi
             RefreshAfterUndo();
         }
 
-        private void RefreshAfterUndo()
+        /// <param name="undone">Undo/Redo の後なら true。履歴からの復元（新しい操作）なら false。</param>
+        private void RefreshAfterUndo(bool undone = true)
         {
             if (_panelArea == null) return;
             UndoHelper.Separate();
             // Undo/Redo の直後に再適用すると、新しい保存の履歴が Redo を消してしまう。
             // 保存済みの編集は Prefab 側も同じ Undo で戻る。次の編集か明示的な保存まで待つ。
-            _afterUndoRedo = true;
+            _afterUndoRedo = undone;
             _saveEditGroup = -1;
             TransformFeature.CancelAdjustment();
             _seenGroup = _savedGroup = Undo.GetCurrentGroup();

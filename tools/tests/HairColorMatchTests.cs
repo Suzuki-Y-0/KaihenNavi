@@ -30,6 +30,12 @@ namespace Jeni.KaihenNavi
             }
             return pixels;
         }
+        private static void Throws(Action action, string message)
+        {
+            var threw = false;
+            try { action(); } catch (ArgumentException) { threw = true; }
+            Check(threw, message);
+        }
         private static float Lum(Color c) { return HairColorMatch.Luminance(c.r, c.g, c.b); }
 
         public static void Main()
@@ -134,6 +140,40 @@ namespace Jeni.KaihenNavi
                 HairColorMatch.HsvToRgb(h, s, v, out r, out g, out b);
                 Check(Near(new Color(r, g, b), c, 0.0001f), "RGB -> HSV -> RGB must round-trip");
             }
+
+            // ---- 画素ごとの見た目（ApplyLook と同じ計算）
+            var px = new Color(0.8f, 0.2f, 0.2f, 0.5f);
+            var lookPx = HairColorMatch.Look(px, new Color(1f, 1f, 1f, 0.5f), new Vector4(1f / 3f, 1f, 1f, 1f), true);
+            Check(Near(lookPx, new Color(0.2f, 0.8f, 0.2f), 0.001f) && Near(lookPx.a, 0.25f, 0.0001f), "Per-pixel look must match point look and multiply alpha");
+
+            // ---- 層を重ねる
+            var baseColors = new[] { new Color(0.2f, 0.4f, 0.6f, 1f), new Color(0.2f, 0.4f, 0.6f, 0.3f) };
+            var layerColors = new[] { new Color(1f, 0.5f, 0f, 1f), new Color(1f, 0.5f, 0f, 1f) };
+            Func<float[], Color, int, bool, Color[]> comp = (m, tint, mode, lin) =>
+            {
+                var copy = baseColors.ToArray();
+                HairColorMatch.Composite(copy, layerColors, m, tint, mode, lin);
+                return copy;
+            };
+            var opaque = new Color(1f, 1f, 1f, 1f);
+            Check(comp(new[] { 0f, 0f }, opaque, 0, false).SequenceEqual(baseColors), "Mask 0 must leave colors unchanged");
+            var normal = comp(null, opaque, 0, false);
+            Check(Near(normal[0], layerColors[0], 0.0001f) && Near(normal[1].a, 0.3f, 0.0001f), "Normal blend at full mask replaces color and keeps base alpha");
+            var halfMask = comp(new[] { 0.5f, 0.5f }, opaque, 0, false);
+            Check(Near(halfMask[0], new Color(0.6f, 0.45f, 0.3f), 0.0001f), "Normal blend must lerp by mask");
+            var tintedLayer = comp(null, new Color(1f, 0.5f, 1f, 0.5f), 0, false);
+            Check(Near(tintedLayer[0], new Color(0.6f, 0.325f, 0.3f), 0.0001f), "Layer color must tint the layer and its alpha must scale the blend");
+            Check(Near(comp(null, opaque, 1, false)[0], new Color(1f, 0.9f, 0.6f), 0.0001f), "Add blend");
+            Check(Near(comp(null, opaque, 2, false)[0], new Color(1f, 0.7f, 0.6f), 0.0001f), "Screen blend");
+            Check(Near(comp(null, opaque, 3, false)[0], new Color(0.2f, 0.2f, 0f), 0.0001f), "Multiply blend");
+            var noLayer = baseColors.ToArray();
+            HairColorMatch.Composite(noLayer, null, null, new Color(1f, 0f, 0f, 1f), 0, false);
+            Check(Near(noLayer[0], new Color(1f, 0f, 0f), 0.0001f), "A layer without an image must use the plain layer color");
+            var linMix = comp(new[] { 0.5f, 0.5f }, opaque, 0, true)[0];
+            Check(linMix.r > 0.6f && linMix.r < 0.75f, "Linear blending must mix in linear space (brighter midpoint than gamma)");
+            Check(Near(comp(null, opaque, 0, true)[0], layerColors[0], 0.001f), "Linear round-trip must be exact at full mask");
+            for (var x = 0f; x <= 1f; x += 0.05f) Check(Near(HairColorMatch.ToGamma(HairColorMatch.ToLinear(x)), x, 0.0001f), "sRGB conversion must round-trip");
+            Throws(() => HairColorMatch.Composite(new Color[2], new Color[3], null, opaque, 0, false), "Reject mismatched layer size");
 
             Console.WriteLine("Hair color match tests passed (" + checks + " checks).");
         }

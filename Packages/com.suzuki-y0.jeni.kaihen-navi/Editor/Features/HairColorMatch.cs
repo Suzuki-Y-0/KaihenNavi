@@ -245,26 +245,93 @@ namespace Jeni.KaihenNavi
             var result = new Point[points.Length];
             for (var i = 0; i < points.Length; i++)
             {
-                float r = points[i].R, g = points[i].G, b = points[i].B;
-                if (useHsvg)
-                {
-                    var gamma = hsvg.w <= 0f ? 1f : hsvg.w;
-                    r = (float)Math.Pow(Math.Max(r, 0f), gamma);
-                    g = (float)Math.Pow(Math.Max(g, 0f), gamma);
-                    b = (float)Math.Pow(Math.Max(b, 0f), gamma);
-                    float h, s, v;
-                    RgbToHsv(r, g, b, out h, out s, out v);
-                    h += hsvg.x;
-                    h -= (float)Math.Floor(h);
-                    s = Clamp01(s * hsvg.y);
-                    v = Clamp01(v * hsvg.z);
-                    HsvToRgb(h, s, v, out r, out g, out b);
-                }
-
-                result[i] = new Point(Clamp01(r * tint.r), Clamp01(g * tint.g), Clamp01(b * tint.b));
+                var c = Look(points[i].ToColor(), tint, hsvg, useHsvg);
+                result[i] = new Point(c.r, c.g, c.b);
             }
 
             return result;
+        }
+
+        /// <summary>画素 1 つに、lilToon のメインの色の決め方（色調補正 → 色を掛ける）を当てる。透明度は色の a を掛ける。</summary>
+        public static Color Look(Color c, Color tint, Vector4 hsvg, bool useHsvg)
+        {
+            float r = c.r, g = c.g, b = c.b;
+            if (useHsvg)
+            {
+                var gamma = hsvg.w <= 0f ? 1f : hsvg.w;
+                r = (float)Math.Pow(Math.Max(r, 0f), gamma);
+                g = (float)Math.Pow(Math.Max(g, 0f), gamma);
+                b = (float)Math.Pow(Math.Max(b, 0f), gamma);
+                float h, s, v;
+                RgbToHsv(r, g, b, out h, out s, out v);
+                h += hsvg.x;
+                h -= (float)Math.Floor(h);
+                s = Clamp01(s * hsvg.y);
+                v = Clamp01(v * hsvg.z);
+                HsvToRgb(h, s, v, out r, out g, out b);
+            }
+
+            return new Color(Clamp01(r * tint.r), Clamp01(g * tint.g), Clamp01(b * tint.b), c.a * tint.a);
+        }
+
+        /// <summary>
+        /// lilToon の 2nd / 3rd の層を、メインの色の上に重ねる（見本の「見えている色」を作るため）。
+        /// layer は層の画像（null なら白）、mask は重ねる所のマスク（null なら全体、赤の値を使う）。
+        /// blendMode は lilToon の _Main2ndTexBlendMode（0 通常・1 加算・2 スクリーン・3 乗算）。
+        /// linear が true なら、色をリニアに直してから混ぜる（リニアのプロジェクトでのシェーダーの計算に合わせる）。
+        /// </summary>
+        public static void Composite(Color[] colors, Color[] layer, float[] mask, Color tint, int blendMode, bool linear)
+        {
+            if (colors == null) return;
+            if (layer != null && layer.Length != colors.Length) throw new ArgumentException("layer");
+            if (mask != null && mask.Length != colors.Length) throw new ArgumentException("mask");
+            for (var i = 0; i < colors.Length; i++)
+            {
+                var src = layer == null ? new Color(1f, 1f, 1f, 1f) : layer[i];
+                var a = Clamp01(src.a * tint.a * (mask == null ? 1f : mask[i]));
+                if (a <= 0f) continue;
+                var dst = colors[i];
+                float dr = dst.r, dg = dst.g, db = dst.b;
+                float sr = src.r * tint.r, sg = src.g * tint.g, sb = src.b * tint.b;
+                if (linear)
+                {
+                    dr = ToLinear(dr); dg = ToLinear(dg); db = ToLinear(db);
+                    sr = ToLinear(sr); sg = ToLinear(sg); sb = ToLinear(sb);
+                }
+
+                dr = Blend(dr, sr, a, blendMode);
+                dg = Blend(dg, sg, a, blendMode);
+                db = Blend(db, sb, a, blendMode);
+                if (linear)
+                {
+                    dr = ToGamma(dr); dg = ToGamma(dg); db = ToGamma(db);
+                }
+
+                colors[i] = new Color(Clamp01(dr), Clamp01(dg), Clamp01(db), dst.a);
+            }
+        }
+
+        private static float Blend(float dst, float src, float a, int mode)
+        {
+            switch (mode)
+            {
+                case 1: return dst + src * a;
+                case 2: return dst + (1f - (1f - dst) * (1f - src) - dst) * a;
+                case 3: return dst + (dst * src - dst) * a;
+                default: return dst + (src - dst) * a;
+            }
+        }
+
+        public static float ToLinear(float v)
+        {
+            v = Clamp01(v);
+            return v <= 0.04045f ? v / 12.92f : (float)Math.Pow((v + 0.055f) / 1.055f, 2.4f);
+        }
+
+        public static float ToGamma(float v)
+        {
+            v = Clamp01(v);
+            return v <= 0.0031308f ? v * 12.92f : 1.055f * (float)Math.Pow(v, 1f / 2.4f) - 0.055f;
         }
 
         public static void RgbToHsv(float r, float g, float b, out float h, out float s, out float v)

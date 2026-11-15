@@ -383,6 +383,12 @@ namespace Jeni.KaihenNavi
             var scale = Mathf.Min(1f, maxSize / (float)Mathf.Max(source.width, source.height));
             width = Mathf.Max(1, (int)(source.width * scale));
             height = Mathf.Max(1, (int)(source.height * scale));
+            return ReadPixelsAt(source, width, height);
+        }
+
+        /// <summary>画像を指定の大きさに引き伸ばして読む（別の大きさの画像どうしを画素ごとに重ねるため）。</summary>
+        internal static Color[] ReadPixelsAt(Texture source, int width, int height)
+        {
             var importer = AssetImporter.GetAtPath(AssetDatabase.GetAssetPath(source)) as TextureImporter;
             var linear = importer != null && !importer.sRGBTexture;
 
@@ -398,6 +404,13 @@ namespace Jeni.KaihenNavi
             var pixels = copy.GetPixels();
             Object.DestroyImmediate(copy);
             return pixels;
+        }
+
+        /// <summary>画像が sRGB（色の画像）として読み込まれているか。</summary>
+        internal static bool IsSrgb(Texture texture)
+        {
+            var importer = AssetImporter.GetAtPath(AssetDatabase.GetAssetPath(texture)) as TextureImporter;
+            return importer == null || importer.sRGBTexture;
         }
 
         internal static void WriteConverted(Texture2D source, string path, System.Func<Color, Color> convert)

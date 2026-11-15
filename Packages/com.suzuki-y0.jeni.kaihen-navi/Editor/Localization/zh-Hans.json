@@ -629,6 +629,6 @@
   "hairMatch.openColor": "打开“更改颜色”",
   "undo.hairMatch": "改装导航：头发配色",
   "undo.hairMatchReset": "改装导航：恢复头发颜色",
-  "hairMatch.copyLook": "阴影和描边的颜色也配成样本的颜色",
-  "hairMatch.copyLookHint": "头发还有阴影和描边的颜色设置。关闭时，阴影可能会残留原来的色调。样本是图片文件时不会使用。"
+  "hairMatch.copyLook": "阴影和光泽的颜色也配成样本的颜色",
+  "hairMatch.copyLookHint": "头发还有阴影、描边和边缘光的颜色设置。关闭时，阴影和光泽可能会残留原来的色调。样本是图片文件时不会使用。"
 }

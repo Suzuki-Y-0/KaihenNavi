@@ -134,7 +134,10 @@
 - 見本は 3 通り：アバターの中の髪（プルダウン。非表示の元の髪も選べる）、シーンで選んだもの、画像ファイル（PNG/JPG）。見本から取った 7 色を画面に出す。
 - 計算は `Features/HairColorMatch.cs`（Unity の機能を使わない）。画像を明るさの順に 7 つの帯に分けて平均色（色点）を取り、変える側の同じ帯を見本の色に置き換える。明るさの順番は変えないので、毛の流れと影は残る。メッシュの UV の中だけを調べ、画像の余白は拾わない。見本が lilToon なら色調補正（`_MainTexHSVG`）と `_Color` を掛けた「見えている色」に合わせる。
 - 画面と保存は `Features/HairMatchFeature.cs`。色を合わせた画像は色変えの「色をのせる」と同じ仕組み（`ColorLayers.BakeMain`。毎回別名の PNG を書いて差し替えを Undo に記録）で `_MainTex` を差し替える。何度合わせても元の画像から作り直す。`_MainTexHSVG` は補正なしに戻す。
-- 「影とふちの色も見本に合わせる」（既定オン）：`_ShadowColor` / `_Shadow2ndColor` / `_Shadow3rdColor` / `_ShadowBorderColor` / `_OutlineColor` を見本からコピー。ふち・影の画像がメインと同じ画像なら、そこも差し替える。
+- 「影やつやの色も見本に合わせる」（既定オン）：`_ShadowColor` / `_Shadow2ndColor` / `_Shadow3rdColor` / `_ShadowBorderColor` / `_OutlineColor` / `_RimColor` / `_RimShadeColor` / `_BacklightColor` を見本からコピー。ふち・影・逆光・リム・発光・`_BaseMap` などの画像がメインと同じ画像なら、そこも差し替える。
+- 見本の色は「見えている色」で取る：見本のメイン画像に色調補正と `_Color` を掛け、2nd / 3rd の層（UV0・シールでない・くり返し無しのもの）をマスク付きで重ねてから色点を取る（`HairColorMatch.Look` / `Composite`、リニアのプロジェクトではリニアで混ぜる）。
+  - きっかけ（ユーザーの指摘「影やつやの出方が微妙」）：公式 Sakura は毛先のピンクを 2nd の層＋マスクで付けていて、メイン画像だけから色を取ると濃いピンクが抜け、全体が淡く影が紫っぽくなっていた。ふちの光（`_RimColor`）も元の青のままだった。直した後は、影がピンク寄りになり青白いふちの光も消えて公式に近づいた。
+  - 残る差：公式は前髪の下のほうなど「場所で決まった」濃いピンクがある（マスクで場所を指定した層）。明るさで色を決める方式では場所までは写せない。同じ作者の色違い（同じ UV）なら、見本の層の設定ごと写す方法がある（未着手）。
 - `tools/check.sh` に計算のテスト（`tools/tests/HairColorMatchTests.cs`）を足した。
 
 **Unity 実機での確認（2026-11-15・MCP Project・EditorEye の一時スクリプトで。アバターとシーンは変えていない。一時ファイルは削除済み）**

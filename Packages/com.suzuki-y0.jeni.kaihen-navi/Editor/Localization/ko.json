@@ -629,6 +629,6 @@
   "hairMatch.openColor": "“색 바꾸기” 열기",
   "undo.hairMatch": "카이헨 내비: 머리 색 맞추기",
   "undo.hairMatchReset": "카이헨 내비: 머리 색 되돌리기",
-  "hairMatch.copyLook": "그림자와 외곽선 색도 견본에 맞추기",
-  "hairMatch.copyLookHint": "머리에는 그림자와 외곽선에 쓰이는 색 설정도 있습니다. 끄면 그림자에만 이전 색감이 남을 수 있습니다. 견본이 이미지 파일일 때는 쓰이지 않습니다."
+  "hairMatch.copyLook": "그림자와 윤기 색도 견본에 맞추기",
+  "hairMatch.copyLookHint": "머리에는 그림자, 외곽선, 림라이트에 쓰이는 색 설정도 있습니다. 끄면 그림자나 윤기에 이전 색감이 남을 수 있습니다. 견본이 이미지 파일일 때는 쓰이지 않습니다."
 }

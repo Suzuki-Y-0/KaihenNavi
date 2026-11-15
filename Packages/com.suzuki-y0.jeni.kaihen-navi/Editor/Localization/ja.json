@@ -629,6 +629,6 @@
   "hairMatch.openColor": "「色を変える」を開く",
   "undo.hairMatch": "かいへんナビ: 髪の色を合わせる",
   "undo.hairMatchReset": "かいへんナビ: 髪の色を戻す",
-  "hairMatch.copyLook": "影とふちの色も見本に合わせる",
-  "hairMatch.copyLookHint": "髪には、影やふちに付く色の設定もあります。オフのままだと、影だけ前の色味が残ることがあります。見本が画像ファイルのときは使われません。"
+  "hairMatch.copyLook": "影やつやの色も見本に合わせる",
+  "hairMatch.copyLookHint": "髪には、影・ふち・ふちの光（リムライト）に付く色の設定もあります。オフにすると、影やつやに前の色味が残ることがあります。見本が画像ファイルのときは使われません。"
 }

@@ -629,6 +629,6 @@
   "hairMatch.openColor": "Open “Change colors”",
   "undo.hairMatch": "Kaihen Navi: Match hair color",
   "undo.hairMatchReset": "Kaihen Navi: Restore hair color",
-  "hairMatch.copyLook": "Also match shadow and outline colors",
-  "hairMatch.copyLookHint": "Hair also has color settings for shadows and outlines. If this is off, shadows may keep the old tint. Not used when the sample is an image file."
+  "hairMatch.copyLook": "Also match shadow and shine colors",
+  "hairMatch.copyLookHint": "Hair also has color settings for shadows, outlines and rim light. If this is off, shadows and shine may keep the old tint. Not used when the sample is an image file."
 }

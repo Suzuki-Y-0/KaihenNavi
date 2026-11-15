@@ -21,10 +21,24 @@ namespace Jeni.KaihenNavi
         private const string HsvgProperty = "_MainTexHSVG";
         private const string ColorProperty = "_Color";
 
-        // lilToon の影とふちの色。髪の色に合わせて作者が決めていることが多く、元のままだと影だけ前の色味が残る
-        private static readonly string[] LookColors = { "_ShadowColor", "_Shadow2ndColor", "_Shadow3rdColor", "_ShadowBorderColor", "_OutlineColor" };
+        // lilToon の影・ふち・ふちの光（リムライト）・逆光の色。髪の色に合わせて作者が決めていることが多く、
+        // 元のままだと影やつやにだけ前の色味が残る（例：ピンクの髪に青いふちの光）
+        private static readonly string[] LookColors =
+        {
+            "_ShadowColor", "_Shadow2ndColor", "_Shadow3rdColor", "_ShadowBorderColor", "_OutlineColor",
+            "_RimColor", "_RimShadeColor", "_BacklightColor",
+        };
+
         // メインと同じ画像を使っていたら、いっしょに色を合わせた画像へ差し替える枠
-        private static readonly string[] SameTextureSlots = { "_OutlineTex", "_ShadowColorTex", "_Shadow2ndColorTex", "_Shadow3rdColorTex" };
+        // （_BaseMap / _BaseColorMap はシェーダーが使えないときの代わりの表示に使われる）
+        private static readonly string[] SameTextureSlots =
+        {
+            "_OutlineTex", "_ShadowColorTex", "_Shadow2ndColorTex", "_Shadow3rdColorTex",
+            "_BacklightColorTex", "_RimColorTex", "_EmissionMap", "_BaseMap", "_BaseColorMap",
+        };
+
+        // 見本の「見えている色」に重ねる lilToon の層
+        private static readonly string[] Layers = { "2nd", "3rd" };
 
         // 色を調べるときに画像を縮める大きさ（色点を取るだけなので小さくてよい）
         private const int AnalyzeSize = 256;
@@ -353,17 +367,69 @@ namespace Jeni.KaihenNavi
         {
             if (target.Preview == null) return null;
             int width, height;
-            var pixels = target.FromFile
-                ? ReadLoaded(target.Preview, out width, out height)
-                : ColorLayers.ReadPixels(target.Preview, AnalyzeSize, out width, out height);
-            var points = AnalyzePixels(pixels, width, height, target.Material, target.Renderers);
-            if (points == null || target.FromFile) return points;
+            if (target.FromFile)
+            {
+                var loaded = ReadLoaded(target.Preview, out width, out height);
+                return AnalyzePixels(loaded, width, height, null, null);
+            }
 
-            // 見本が色調補正や色で見た目を変えているなら、画面で見えている色に合わせる
-            var tint = target.Material.HasProperty(ColorProperty) ? target.Material.GetColor(ColorProperty) : new Color(1f, 1f, 1f, 1f);
-            var useHsvg = target.Material.HasProperty(HsvgProperty);
-            var hsvg = useHsvg ? target.Material.GetVector(HsvgProperty) : new Vector4(0f, 1f, 1f, 1f);
-            return HairColorMatch.ApplyLook(points, tint, hsvg, useHsvg);
+            var pixels = ColorLayers.ReadPixels(target.Preview, AnalyzeSize, out width, out height);
+            VisibleColors(target.Material, pixels, width, height);
+            return AnalyzePixels(pixels, width, height, target.Material, target.Renderers);
+        }
+
+        /// <summary>
+        /// 見本の画素を、画面で見えている色に近づける：色調補正（_MainTexHSVG）と色（_Color）を掛け、
+        /// 2nd / 3rd の層（毛先に色を重ねる髪など）を重ねる。メインの画像だけでは、層で付けた色を取りこぼすため。
+        /// </summary>
+        private static void VisibleColors(Material material, Color[] pixels, int width, int height)
+        {
+            var tint = material.HasProperty(ColorProperty) ? material.GetColor(ColorProperty) : new Color(1f, 1f, 1f, 1f);
+            var useHsvg = material.HasProperty(HsvgProperty);
+            var hsvg = useHsvg ? material.GetVector(HsvgProperty) : new Vector4(0f, 1f, 1f, 1f);
+            for (var i = 0; i < pixels.Length; i++) pixels[i] = HairColorMatch.Look(pixels[i], tint, hsvg, useHsvg);
+
+            var linear = PlayerSettings.colorSpace == ColorSpace.Linear;
+            foreach (var layer in Layers)
+            {
+                if (!UsesLayer(material, layer)) continue;
+                var texture = material.GetTexture("_Main" + layer + "Tex");
+                var layerPixels = texture == null ? null : ColorLayers.ReadPixelsAt(texture, width, height);
+                float[] mask = null;
+                var maskTexture = material.HasProperty("_Main" + layer + "BlendMask") ? material.GetTexture("_Main" + layer + "BlendMask") : null;
+                if (maskTexture != null)
+                {
+                    var maskPixels = ColorLayers.ReadPixelsAt(maskTexture, width, height);
+                    // sRGB のマスクは、リニアのプロジェクトではシェーダーにリニアに直した値で渡る
+                    var toLinear = linear && ColorLayers.IsSrgb(maskTexture);
+                    mask = new float[maskPixels.Length];
+                    for (var i = 0; i < mask.Length; i++) mask[i] = toLinear ? HairColorMatch.ToLinear(maskPixels[i].r) : maskPixels[i].r;
+                }
+
+                var color = material.HasProperty("_Color" + layer) ? material.GetColor("_Color" + layer) : new Color(1f, 1f, 1f, 1f);
+                var mode = material.HasProperty("_Main" + layer + "TexBlendMode") ? (int)material.GetFloat("_Main" + layer + "TexBlendMode") : 0;
+                HairColorMatch.Composite(pixels, layerPixels, mask, color, mode, linear);
+            }
+        }
+
+        /// <summary>
+        /// 層を重ねて計算できるか。シール（デカール）・UV0 以外・くり返しやずらしのある層は、
+        /// 画像の同じ場所どうしで重ならないので使わない。
+        /// </summary>
+        private static bool UsesLayer(Material material, string layer)
+        {
+            var use = "_UseMain" + layer + "Tex";
+            if (!material.HasProperty(use) || material.GetFloat(use) < 0.5f) return false;
+            var decal = "_Main" + layer + "TexIsDecal";
+            if (material.HasProperty(decal) && material.GetFloat(decal) > 0.5f) return false;
+            var uv = "_Main" + layer + "Tex_UVMode";
+            if (material.HasProperty(uv) && material.GetFloat(uv) > 0.5f) return false;
+            var tex = "_Main" + layer + "Tex";
+            if (!material.HasProperty(tex)) return false;
+            var scale = material.GetTextureScale(tex);
+            var offset = material.GetTextureOffset(tex);
+            return Mathf.Approximately(scale.x, 1f) && Mathf.Approximately(scale.y, 1f) &&
+                   Mathf.Approximately(offset.x, 0f) && Mathf.Approximately(offset.y, 0f);
         }
 
         /// <summary>ファイルから読んだ画像（読み取り可）の画素。大きい画像は間引いて減らす。</summary>

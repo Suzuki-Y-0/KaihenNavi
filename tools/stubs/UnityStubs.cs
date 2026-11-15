@@ -191,6 +191,7 @@ namespace UnityEngine
     public struct Hash128 { }
     public class Texture : Object { public TextureWrapMode wrapMode; public int width; public int height; public FilterMode filterMode; public Hash128 imageContentsHash; }
     public enum TextureFormat { RGBA32, RGB24, RGBAFloat }
+    public enum ColorSpace { Gamma, Linear }
     public enum TextureWrapMode { Repeat, Clamp }
     public class Texture2D : Texture
     {
@@ -1012,6 +1013,8 @@ namespace UnityEditor
         public static T AddComponent<T>(GameObject go) where T : Component { return go.AddComponent<T>(); }
         public static Component AddComponent(GameObject go, Type type) { return go.AddComponent(type); }
     }
+
+    public static class PlayerSettings { public static ColorSpace colorSpace; }
 
     public static class EditorUtility
     {

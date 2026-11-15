@@ -945,6 +945,7 @@ namespace UnityEditor
     public static class EditorUtility
     {
         public static string OpenFolderPanel(string title, string folder, string defaultName) { return ""; }
+        public static string OpenFilePanel(string title, string directory, string extension) { return ""; }
         public static Func<Object, bool> PersistentForTests;
         public static bool IsPersistent(Object o) { return PersistentForTests != null && PersistentForTests(o); }
         public static Action<float> ProgressForTests;

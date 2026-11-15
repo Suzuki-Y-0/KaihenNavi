@@ -185,6 +185,11 @@ namespace Jeni.KaihenNavi
                         Curve(painter, 5, 20, 5, -1, 19, -1, 19, 20);
                         Curve(painter, 10, 9, 9, 13, 9, 17, 10, 20);
                         break;
+                    case "hairMatch":
+                        // 左の色を右へ合わせる（丸 2 つと矢印）
+                        Circle(painter, 5.5f, 12, 3.5f); Circle(painter, 18.5f, 12, 3.5f);
+                        Stroke(painter, 10.5f, 12, 13.5f, 12); Stroke(painter, 12.3f, 10.8f, 13.5f, 12, 12.3f, 13.2f);
+                        break;
                     case "light":
                         Circle(painter, 12, 12, 4);
                         Stroke(painter, 12, 2, 12, 4); Stroke(painter, 12, 20, 12, 22);

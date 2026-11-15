@@ -22,7 +22,7 @@ namespace Jeni.KaihenNavi
                 switch (Id)
                 {
                     case "outfit": case "transform": case "toggle": case "skin": return "outfit";
-                    case "color": case "innerColor": case "light": case "pink": return "appearance";
+                    case "color": case "innerColor": case "hairMatch": case "light": case "pink": return "appearance";
                     case "body": case "view": case "walk": return "body";
                     default: return "finish";
                 }

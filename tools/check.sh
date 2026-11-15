@@ -35,6 +35,14 @@ mcs -nologo -langversion:7 -warnaserror+ -nowarn:0618 -define:INNER_COLOR_ASSET_
     "$here/tests/InnerColorTriangleTests.cs" "$here/tests/InnerColorAssetTests.cs"
 mono "$out/InnerColorTests.exe"
 
+# 髪の色合わせの計算（色点・明るさの順序・UV の範囲・見本の色調補正）を数値で確認する。
+echo "== HairColorMatch"
+mcs -nologo -langversion:7 -warnaserror+ -nowarn:0618 \
+    -r:System.Core.dll -out:"$out/HairColorMatchTests.exe" \
+    "$here/stubs/UnityStubs.cs" \
+    "$src/Features/HairColorMatch.cs" "$here/tests/HairColorMatchTests.cs"
+mono "$out/HairColorMatchTests.exe"
+
 # 言語ファイルのキーがそろっているか
 python3 - "$src/Localization" <<'EOF'
 import json, sys, os

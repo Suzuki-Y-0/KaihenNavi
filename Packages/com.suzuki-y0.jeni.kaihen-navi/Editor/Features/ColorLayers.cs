@@ -175,7 +175,7 @@ namespace Jeni.KaihenNavi
         }
 
         /// <summary>複製した画像なら、元のテクスチャを返す。</summary>
-        private static Texture2D SourceOf(Texture2D texture)
+        internal static Texture2D SourceOf(Texture2D texture)
         {
             var importer = AssetImporter.GetAtPath(AssetDatabase.GetAssetPath(texture));
             if (importer == null || string.IsNullOrEmpty(importer.userData) || !importer.userData.StartsWith(SourceTag)) return null;
@@ -183,7 +183,7 @@ namespace Jeni.KaihenNavi
             return AssetDatabase.LoadAssetAtPath<Texture2D>(AssetDatabase.GUIDToAssetPath(guid));
         }
 
-        private static string BakedPath(Material material, string layer)
+        internal static string BakedPath(Material material, string layer)
         {
             var materialPath = AssetDatabase.GetAssetPath(material);
             if (string.IsNullOrEmpty(materialPath)) return null;
@@ -196,7 +196,33 @@ namespace Jeni.KaihenNavi
             WriteConverted(source, path, c => Shift(c, hue, saturation, brightness));
         }
 
-        private static void WriteConverted(Texture2D source, string path, System.Func<Color, Color> convert)
+        /// <summary>
+        /// 画像の画素を読む（読み取り不可のテクスチャでも読める）。maxSize より大きい画像は縮めて読む。
+        /// 色を調べるだけの用途向け。並びは下の行から。
+        /// </summary>
+        internal static Color[] ReadPixels(Texture2D source, int maxSize, out int width, out int height)
+        {
+            var scale = Mathf.Min(1f, maxSize / (float)Mathf.Max(source.width, source.height));
+            width = Mathf.Max(1, (int)(source.width * scale));
+            height = Mathf.Max(1, (int)(source.height * scale));
+            var importer = AssetImporter.GetAtPath(AssetDatabase.GetAssetPath(source)) as TextureImporter;
+            var linear = importer != null && !importer.sRGBTexture;
+
+            var rt = RenderTexture.GetTemporary(width, height, 0, RenderTextureFormat.ARGB32,
+                linear ? RenderTextureReadWrite.Linear : RenderTextureReadWrite.sRGB);
+            var previous = RenderTexture.active;
+            Graphics.Blit(source, rt);
+            RenderTexture.active = rt;
+            var copy = new Texture2D(width, height, TextureFormat.RGBA32, false, linear);
+            copy.ReadPixels(new Rect(0, 0, width, height), 0, 0);
+            RenderTexture.active = previous;
+            RenderTexture.ReleaseTemporary(rt);
+            var pixels = copy.GetPixels();
+            Object.DestroyImmediate(copy);
+            return pixels;
+        }
+
+        internal static void WriteConverted(Texture2D source, string path, System.Func<Color, Color> convert)
         {
             var sourcePath = AssetDatabase.GetAssetPath(source);
             var sourceImporter = AssetImporter.GetAtPath(sourcePath) as TextureImporter;

@@ -15,6 +15,7 @@ namespace Jeni.KaihenNavi
                 new SkinFeature(),
                 new ColorFeature(),
                 new InnerColorFeature(),
+                new HairMatchFeature(),
                 new LightFeature(),
                 new PinkFeature(),
                 new BodyFeature(),

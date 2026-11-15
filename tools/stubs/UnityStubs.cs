@@ -34,7 +34,7 @@ namespace UnityEngine
         public static implicit operator bool(Object o) { return !ReferenceEquals(o, null); }
     }
 
-    [Flags] public enum HideFlags { None = 0, HideInHierarchy = 1, DontSave = 52, HideAndDontSave = 61 }
+    [Flags] public enum HideFlags { None = 0, HideInHierarchy = 1, DontSaveInEditor = 4, DontSave = 52, HideAndDontSave = 61 }
 
     public class Component : Object
     {
@@ -127,7 +127,7 @@ namespace UnityEngine
         public System.Collections.IEnumerator GetEnumerator() { return _children.GetEnumerator(); }
     }
 
-    public class Renderer : Component { public Material[] sharedMaterials; public Bounds bounds; public bool enabled, forceRenderingOff; }
+    public class Renderer : Component { public Material[] sharedMaterials; public Bounds bounds; public bool enabled, forceRenderingOff; public Transform probeAnchor; }
     public class MeshRenderer : Renderer { }
     public class MeshFilter : Component { public Mesh sharedMesh; }
     public class ParticleSystemRenderer : Renderer { public int meshCount; public int GetMeshes(Mesh[] meshes) { return 0; } }
@@ -135,6 +135,7 @@ namespace UnityEngine
     {
         public Mesh sharedMesh;
         public Transform rootBone;
+        public Bounds localBounds { get; set; }
         public Transform[] bones;
         public float GetBlendShapeWeight(int i) { return 0; }
         public void SetBlendShapeWeight(int i, float v) { }
@@ -158,6 +159,7 @@ namespace UnityEngine
         public void SetTriangles(int[] value, int submesh) { submeshes[submesh] = value; }
         public void RecalculateNormals() { }
         public void RecalculateBounds() { }
+        public Bounds bounds;
         public string GetBlendShapeName(int i) { return ""; }
         public int GetBlendShapeIndex(string name) { return -1; }
     }
@@ -178,6 +180,7 @@ namespace UnityEngine
         public static Matrix4x4 identity;
         public static Matrix4x4 TRS(Vector3 p, Quaternion q, Vector3 s) { return default(Matrix4x4); }
         public static Matrix4x4 Scale(Vector3 s) { return default(Matrix4x4); }
+        public Vector3 MultiplyPoint3x4(Vector3 point) { return point; }
         public static Matrix4x4 Ortho(float l, float r, float b, float t, float n, float f) { return default(Matrix4x4); }
         public static Matrix4x4 operator *(Matrix4x4 a, Matrix4x4 b) { return a; }
         public Matrix4x4 inverse { get { return this; } }
@@ -239,6 +242,13 @@ namespace UnityEngine
     public class Shader : Object { public bool isSupported; public static Shader Find(string name) { return null; } }
     public static class Graphics { public static void Blit(Texture source, RenderTexture dest) { } }
     public class RuntimeAnimatorController : Object { }
+    public class Motion : Object { }
+    public class AnimationClip : Motion { public void ClearCurves() { } }
+    public class AnimationCurve
+    {
+        public static AnimationCurve Linear(float timeStart, float valueStart, float timeEnd, float valueEnd) { return new AnimationCurve(); }
+    }
+    public enum AnimatorControllerParameterType { Float = 1, Int = 3, Bool = 4, Trigger = 9 }
 
     public class Material : Object
     {
@@ -327,6 +337,7 @@ namespace UnityEngine
     {
         public Bounds(Vector3 center, Vector3 size) { this.center = center; max = center + size * 0.5f; }
         public Vector3 center, max;
+        public Vector3 min { get { return center * 2f - max; } }
         public void Encapsulate(Bounds b) { }
     }
 
@@ -462,12 +473,22 @@ namespace UnityEngine
     [AttributeUsage(AttributeTargets.Class)] public class AddComponentMenu : Attribute { public AddComponentMenu(string s) { } }
 }
 
+namespace UnityEngine.Animations
+{
+    // 本物は Unity のコンストレイント（Parent・Position・Rotation・Aim など）が実装するインターフェース
+    public interface IConstraint { bool constraintActive { get; set; } float weight { get; set; } }
+    public class ParentConstraint : Behaviour, IConstraint { public bool constraintActive { get; set; } public float weight { get; set; } }
+}
+
 namespace UnityEngine.SceneManagement
 {
     public struct Scene
     {
         public bool isLoaded;
         public bool validForTests;
+        public string name { get { return ""; } }
+        public int handle;
+        public string path;
         public bool IsValid() { return validForTests; }
         public UnityEngine.GameObject[] GetRootGameObjects() { return null; }
     }
@@ -797,6 +818,17 @@ namespace UnityEditor
         public static void EraseString(string key) { }
     }
 
+    public struct EditorCurveBinding
+    {
+        public static EditorCurveBinding FloatCurve(string inPath, Type inType, string inPropertyName) { return new EditorCurveBinding(); }
+    }
+
+    public static class AnimationUtility
+    {
+        public static void SetEditorCurve(AnimationClip clip, EditorCurveBinding binding, AnimationCurve curve) { }
+        public static string CalculateTransformPath(Transform targetTransform, Transform root) { return ""; }
+    }
+
     public static class AssetDatabase
     {
         public static void ImportPackage(string path, bool interactive) { }
@@ -840,6 +872,8 @@ namespace UnityEditor
         public static void AddObjectToAsset(Object o, Object asset) { }
         public static bool DeleteAsset(string path) { if (DeleteForTests != null) DeleteForTests(path); return true; }
         public static void SaveAssets() { }
+        public static void StartAssetEditing() { }
+        public static void StopAssetEditing() { }
         public static void SaveAssetIfDirty(Object o) { }
         public static bool CopyAsset(string a, string b) { return true; }
         public static void ImportAsset(string path) { if (ImportForTests != null) ImportForTests(path); }
@@ -868,12 +902,22 @@ namespace UnityEditor
         public static Action<GameObject, InteractionMode> ApplyForTests;
         public static bool IsPartOfPrefabInstance(Object o) { return RootForTests != null; }
         public static bool IsOutermostPrefabInstanceRoot(GameObject g) { return false; }
+        public static System.Collections.Generic.HashSet<GameObject> InstanceRootsForTests = new System.Collections.Generic.HashSet<GameObject>();
+        public static bool IsAnyPrefabInstanceRoot(GameObject g) { return InstanceRootsForTests.Contains(g); }
+        public static GameObject GetNearestPrefabInstanceRoot(Object o)
+        {
+            var go = o as GameObject ?? (o is Component ? ((Component)o).gameObject : null);
+            for (var t = go == null ? null : go.transform; t != null; t = t.parent)
+                if (InstanceRootsForTests.Contains(t.gameObject)) return t.gameObject;
+            return null;
+        }
         public static GameObject GetOutermostPrefabInstanceRoot(Object o) { return RootForTests; }
         public static string GetPrefabAssetPathOfNearestInstanceRoot(Object o) { return PathForTests; }
         public static GameObject SaveAsPrefabAssetAndConnect(GameObject g, string path, InteractionMode m, out bool ok) { ok = true; return g; }
         public static bool HasPrefabInstanceAnyOverrides(GameObject g, bool includeDefault) { return OverridesForTests; }
         public static void ApplyPrefabInstance(GameObject g, InteractionMode m) { if (ApplyForTests != null) ApplyForTests(g, m); }
-        public static T GetCorrespondingObjectFromSource<T>(T o) where T : Object { return null; }
+        public static Func<Object, Object> SourceForTests;
+        public static T GetCorrespondingObjectFromSource<T>(T o) where T : Object { return SourceForTests == null ? null : SourceForTests(o) as T; }
         public static Object InstantiatePrefab(Object o) { return null; }
         public static Object InstantiatePrefab(Object o, Transform parent) { return null; }
         public static void RevertObjectOverride(Object o, InteractionMode m) { }
@@ -883,6 +927,29 @@ namespace UnityEditor
         public static T GetCorrespondingObjectFromOriginalSource<T>(T o) where T : Object { return null; }
         public static void ReplacePrefabAssetOfPrefabInstance(GameObject root, GameObject asset, PrefabReplacingSettings s, InteractionMode m) { }
         public static void UnpackPrefabInstance(GameObject root, PrefabUnpackMode mode, InteractionMode m) { }
+        public static Object GetPrefabInstanceHandle(Object instanceComponentOrGameObject) { return null; }
+        public static PropertyModification[] ModificationsForTests;
+        public static PropertyModification[] GetPropertyModifications(Object targetPrefab) { return ModificationsForTests; }
+        public static bool IsDefaultOverride(PropertyModification modification) { return false; }
+        // null なら、OverridesForTests のとき「ルートの何かが変わった」1 件を返す
+        public static List<UnityEditor.SceneManagement.ObjectOverride> ObjectOverridesForTests;
+        public static List<UnityEditor.SceneManagement.ObjectOverride> GetObjectOverrides(GameObject prefabInstance, bool includeDefaultOverrides = false)
+        {
+            if (ObjectOverridesForTests != null) return new List<UnityEditor.SceneManagement.ObjectOverride>(ObjectOverridesForTests);
+            var result = new List<UnityEditor.SceneManagement.ObjectOverride>();
+            if (OverridesForTests) result.Add(new UnityEditor.SceneManagement.ObjectOverride { instanceObject = prefabInstance });
+            return result;
+        }
+        public static List<UnityEditor.SceneManagement.AddedComponent> AddedComponentsForTests = new List<UnityEditor.SceneManagement.AddedComponent>();
+        public static List<UnityEditor.SceneManagement.AddedComponent> GetAddedComponents(GameObject prefabInstance)
+        { return new List<UnityEditor.SceneManagement.AddedComponent>(AddedComponentsForTests); }
+        public static List<UnityEditor.SceneManagement.RemovedComponent> GetRemovedComponents(GameObject prefabInstance)
+        { return new List<UnityEditor.SceneManagement.RemovedComponent>(); }
+        public static List<UnityEditor.SceneManagement.AddedGameObject> GetAddedGameObjects(GameObject prefabInstance)
+        { return new List<UnityEditor.SceneManagement.AddedGameObject>(); }
+        public static List<UnityEditor.SceneManagement.RemovedGameObject> GetRemovedGameObjects(GameObject prefabInstance)
+        { return new List<UnityEditor.SceneManagement.RemovedGameObject>(); }
+        public static void SetPropertyModifications(Object targetPrefab, PropertyModification[] modifications) { }
     }
 
     public enum PrefabUnpackMode { OutermostRoot, Completely }
@@ -903,7 +970,7 @@ namespace UnityEditor
 
     public enum PlayModeStateChange { EnteredEditMode, ExitingEditMode, EnteredPlayMode, ExitingPlayMode }
 
-    public class PropertyModification { public Object target; }
+    public class PropertyModification { public Object target; public string propertyPath; public string value; public Object objectReference; }
     public struct UndoPropertyModification { public PropertyModification currentValue; }
 
     public static class Undo
@@ -912,6 +979,10 @@ namespace UnityEditor
         public static string GroupNameForTests;
         public static Action PerformUndoForTests;
         public static void PerformUndo() { if (PerformUndoForTests != null) PerformUndoForTests(); }
+        public static System.Collections.Generic.List<string> RecordsForTests = new System.Collections.Generic.List<string>();
+        // 本物は internal（Undo・Redo の履歴の名前を返す）。BackupService はリフレクションで呼ぶ。
+        internal static void GetRecords(System.Collections.Generic.List<string> undoRecords, System.Collections.Generic.List<string> redoRecords)
+        { undoRecords.AddRange(RecordsForTests); }
         public static string GetCurrentGroupName() { return GroupNameForTests; }
         public static void FlushUndoRecordObjects() { }
         public static void RevertAllDownToGroup(int group) { }
@@ -1034,16 +1105,59 @@ namespace UnityEditor
 
     public struct GlobalObjectId
     {
-        public static GlobalObjectId GetGlobalObjectIdSlow(Object o) { return default(GlobalObjectId); }
+        public static Func<Object, string> IdForTests;
+        private string _id;
+        public static GlobalObjectId GetGlobalObjectIdSlow(Object o)
+        { return new GlobalObjectId { _id = IdForTests == null ? null : IdForTests(o) }; }
+        public override string ToString() { return _id ?? "UnityEditor.GlobalObjectId"; }
+    }
+}
+
+namespace UnityEditor.Animations
+{
+    using UnityEngine;
+
+    public class AnimatorController : RuntimeAnimatorController
+    {
+        public AnimatorControllerLayer[] layers;
+        public static AnimatorController CreateAnimatorControllerAtPath(string path) { return new AnimatorController(); }
+        public void AddParameter(string name, AnimatorControllerParameterType type) { }
+    }
+
+    public class AnimatorControllerLayer
+    {
+        public AnimatorStateMachine stateMachine;
+    }
+
+    public class AnimatorStateMachine : Object
+    {
+        public AnimatorState AddState(string name) { return new AnimatorState(); }
+    }
+
+    public class AnimatorState : Object
+    {
+        public Motion motion;
+        public bool timeParameterActive;
+        public string timeParameter;
+        public bool writeDefaultValues;
     }
 }
 
 namespace UnityEditor.SceneManagement
 {
+    public abstract class PrefabOverride { }
+    public class ObjectOverride : PrefabOverride { public UnityEngine.Object instanceObject { get; set; } }
+    public class AddedComponent : PrefabOverride { public UnityEngine.Component instanceComponent { get; set; } }
+    public class RemovedComponent : PrefabOverride { public UnityEngine.Component assetComponent { get; set; } }
+    public class AddedGameObject : PrefabOverride { public UnityEngine.GameObject instanceGameObject { get; set; } }
+    public class RemovedGameObject : PrefabOverride { public UnityEngine.GameObject assetGameObject { get; set; } }
+
     public static class EditorSceneManager
     {
         public delegate void SceneClosingCallback(UnityEngine.SceneManagement.Scene scene, bool removingScene);
         public static event SceneClosingCallback sceneClosing;
+        public delegate void SceneSavedCallback(UnityEngine.SceneManagement.Scene scene);
+        public static event SceneSavedCallback sceneSaved;
     }
 }
 

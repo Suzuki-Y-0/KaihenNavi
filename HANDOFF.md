@@ -2,9 +2,63 @@
 
 次の作業者（人でも AI でも）が、これだけ読めば続きから始められるようにまとめたもの。
 
-## 0. 最新の状況（2026-10-31・Claude Code へ引き継ぎ）
+## 0. 最新の状況（2026-11-14 更新・Claude Code へ引き継ぎ）
 
 **最初に読むところ。** 下の 1 章以降は経緯の記録で、古い記述（「Unity 実機は未確認」など）を含む。食い違ったらこの 0 章が正しい。
+
+### 0.0 2026-11-14：洗い出しと一括修正（ブランチ work/1114・main には未マージ・Unity 未確認）
+**いまの作業の正は `work/1114`。** test/integration-1103（11-03 の統合）の上に、コードレビューで見つけた問題の修正を重ねたもの。main へのマージはユーザーの確認待ち。
+- 進め方：Opus（推論・中）4 体でコード全体をレビュー → 33 件。Haiku（簡単な修正）2 班・Opus 3 班に、ファイルが重ならないよう分けて直し、統合後に別の Opus が差分全体をレビュー → 追加 6 件も修正。Fable は使っていない（そこまで難しい問題が無かった）。
+- `bash tools/check.sh` は通る（History 53、InnerColor 327＋139、Feature edits 52、KonoAsset 84 など）。**Unity の実機ではまだ一度も動かしていない。**
+
+主な修正（重い順）
+- 元に戻す（フッター）：Unity の Undo の一覧の指紋（内部 API `Undo.GetRecords` をリフレクションで）とアバター ID が、最後の手順と一致するときだけ Unity の Undo を使う。違えばバックアップから戻す（別アバターやカメラ移動を取り消していた）。
+- 履歴：他のアバターのマテリアルを記録・復元しない（IsOwnedBy）。履歴から戻したら改変アバターの Prefab にも保存。失敗した操作は履歴に残さない（CancelEdit）。自分用アバターの作成を Ctrl+Z しても履歴が外れない。保存前のシーンはシーンの handle とこの起動以降の作成で照合し、シーン保存時に ID を付け替え。
+- バックアップの整理：一覧をキャッシュ。エディタ起動時に、隠れた／上限を超えた／前回以前の保存前シーンのバックアップを削除し、続けて誰も使っていない色の焼き込み PNG を削除（起動前に書かれた物だけ）。
+- インナーカラー：後から色変えや明るさで差し替えたマテリアルを元に戻さない。色変えがインナー用マテリアルを触らない。.mat が残る件は、残したときに参照元をログに出す（`[KaihenNavi] インナーカラー：使用中のため残したファイル …`）＋次のフレームと約 1 秒後に再試行（その間に Undo/Redo したら中止）。
+- 色変え：焼き込み PNG を毎回別名で書き、差し替えを Undo に記録（Ctrl+Z で戻る）。PNG の名前は .mat のファイル名から（同名マテリアルの上書きを防ぐ）。色の基準は複製を作るときに元の色を importer の userData に記録。
+- メニュー整理：取り出したときに元のメニューを EditorOnly の目印 `KaihenNavi_OriginalMenu_<GUID>` で記録。古い版で取り出した物は Prefab をさかのぼって探し、見つからなければ消さずに知らせる（`menu.originalMissing`）。その他 の Undo と表示状態も直した。
+- 脱ぎ着：作り直しでパラメータ名を引き継ぐ。服ページの 脱がす／着せる は、メニューに入っている服ならメニューの既定（isDefault）も変える。通信量に MA の同期パラメータも数える。
+- 歩き方：消すのは入れ子の Prefab のギミック単位まで（メッシュを含む Prefab＝服 の手前で止まる）。アバター直下のフォルダごと消していたのを直した。
+- 体型：自分で作っていない MA Scale Adjuster を履歴の復元で動かさない。100% の基準を骨の基準と同じに。
+- 明るさの基準：非表示の服の範囲を localBounds から計算。DontSet の服を「ばらばら」に数えない。
+- アクセ：服の中の小物から服全体を「アクセ」として出さない。
+- 服の検索：ー・ん（m）・を（wo）・うぃ/うぇ のローマ字、かな 1 文字では使わない、語ごとのキャッシュ。KonoAsset に読めないファイルがあっても 5 秒ごとに作り直さない。プロジェクトに Prefab が増えたら一覧を更新（ツール自身の保存では更新しない）。
+- その他：フォントを再読み込み前に解放。部位の推定を単語単位に（Hair_Brown が「その他」にならない）。
+
+**Unity で最初に見ること（work/1114 を MCP Project に入れて）**
+1. コンパイル（`Undo.GetRecords`・`localBounds`・`GetNearestPrefabInstanceRoot` などスタブに足した API）。
+2. 色を変える → すぐフッターの 元に戻す：Unity の Undo で 1 手戻るか（指紋が合わずバックアップ復元になっていないか）。カメラを動かしてから押すとバックアップ復元になるか。
+3. インナーカラー → 元に戻す：.mat が残るか、残ればコンソールの参照元のログ。
+4. 色の 2nd/3rd 層：色相 30 → 60 → Ctrl+Z で 30 に戻るか。再起動後に使われない PNG が消えるか。
+5. メニュー整理の 元に戻す（中間の Prefab バリアントでメニューを設定している BOOTH アバター）。MA が EditorOnly の目印を無視するか。
+6. 歩き方の 元に戻す・重なりを直す（Gimmicks の下・服の中・ベース）。
+7. 脱ぎ着：服ページの 脱がす → ゲーム内の既定がオフになるか、Ctrl+Z 1 回で戻るか。
+8. 自分用アバターを作る → Ctrl+Z で履歴が残るか。保存前シーンで編集 → 保存 → 再起動で履歴が残るか。
+
+**Unity 実機での確認（2026-11-15・MCP Project・一時スクリプトで、一時の改変アバターの複製を使って。元の改変アバターと元アセットは変わっていないことをハッシュで確認済み、一時ファイルは全部削除済み）**
+- コンパイル：エラーなし。`Undo.GetRecords` は (List, out int) と (List, List) の 2 つがあり、コードは型を指定して正しい方を使っている。
+- 合格：色変え＋履歴から戻す（シーンと改変アバターの Prefab ファイルの両方が戻る）、メニュー整理の目印 `KaihenNavi_OriginalMenu_<GUID>`（EditorOnly）と元のメニューの復元、脱ぎ着のパラメータ名の引き継ぎと 服ページの 脱がす → isDefault、歩き方の消す範囲（入れ子 Prefab・メッシュ入り Prefab）、非表示の服の範囲。
+- **インナーカラーの .mat が残る件：原因が判明して直した。** 参照していたのは MA のプレビューではなく、改変アバターの Prefab（バリアント）に残った古い上書き `m_Materials.Array.data[N]`（インナー用に 1 枠増やした分。配列が短くなっても Unity が消さない）。元に戻すとき・保存のときに、範囲外の上書きを消すように（MyAvatar の RemoveStaleOverrides 系）。Ctrl+Z → Ctrl+Y でも残らない。実機で Reset → Undo → Redo まで全部合格。
+- フッターの 元に戻す：自動保存のあとも Unity の Undo を使えるように直した（同じ Undo グループの保存なら印を付け直す）。ウィンドウ経由の自動保存は画面操作が要るので、実機ではまだ見ていない。
+- 未確認：色の 2nd/3rd 層の焼き込みの Undo（試したアバターに画像付きの 2nd/3rd 層が無かった）、メニュー整理の 元に戻す を古い版で取り出した BOOTH アバターで、自分用アバター作成の Ctrl+Z、保存前シーン → 保存 → 再起動、起動時の片付け。
+- MCP Project のパッケージは work/1114（57a1582 以降の修正も入れた状態）に入れ替え済み。前の版は `_kn_swap/orig_1114` に退避。
+- Unity MCP はこのチャットのツールにつながっていなかった（デスクトップアプリのローカル MCP は Blender と CoDesign だけ）。次は Unity MCP を Claude デスクトップアプリに登録しておくと、画面操作なしで確認できる。
+
+- **見つけて直した（2026-11-15・Unity 未確認）：拘束で動く骨で自動保存が止まらない。** Cazalis の `LowerArmSupport_R` は Scene の再描画のたびに拘束で少し回り、Prefab の上書きとして数えられていた → 「未保存の変更あり」・数十秒ごとの Apply instance to prefab・フッターの 元に戻す がバックアップ復元になる。Unity / VRChat の拘束で動く Transform の位置・回転・大きさの上書きは「未保存」に数えず、それだけなら保存しない（MyAvatar.DrivenTransforms / HasUserOverrides）。自動保存は、ほかのツールの Undo（例：EditorEye の ExecuteDynamicScript）だけでは保存しない。VRChat の拘束の `TargetTransform` という名前は実機で未確認（無ければ拘束が付いた Transform を対象にする）。
+- 画面操作での確認は途中で止めた（ユーザーの緊急停止）。KNTest の一時ファイルは削除済み。MCP Project のパッケージは 3ed788b の修正まで入れてある（コンパイルは Unity を前面にしたときに走る）。
+
+- **2026-11-15 13 時：EditorEye（MCP Project/EditorEye の inbox/outbox）で画面操作なしに実機確認。3 件とも合格。**
+  - 拘束（VRCRotationConstraint）で動く `LowerArmSupport_R` の上書きがあっても「未保存」にならず、8 秒待っても保存も Undo も増えない。
+  - 色を変える → 自動保存 → 上の帯の 元に戻す：Unity の Undo 1 回で編集と保存がまとめて戻る（色・Prefab ファイルとも元どおり）。
+  - 2nd 層の焼き込み 色味 30 → 60 → Ctrl+Z 1 回で 30 の画像に戻る。**ここで不具合を見つけて直した**：焼き直しのたびに前の画像を消していたが、スライダーを続けて動かすと履歴が 1 件にまとまるため、Ctrl+Z の戻り先の画像まで消えていた。この起動中に書いた画像は消さず、次の起動時の片付けに任せる（ColorLayers.DeleteUnused）。
+  - EditorEye の使い方：`EditorEye/inbox/<Id>.json` に {"Id","Tool","Params"} を書き、`outbox/<Id>.json` を読む（AGENTS.md）。`execute_dynamic_compilation`（public static Run()、async 可）・`refresh_unity`・`compile`・`get_logs` が使える。
+
+**わかっている残り（今回の分）**
+- 歩き方：メッシュを含む歩き方の Prefab は、部品の一部だけ消える可能性がある（服を丸ごと消すよりは安全側）。
+- 色の焼き込みは、履歴に残っている手順の数だけ PNG が残る（起動時に使われない物は消える）。
+- 焼き込みはスライダーを離して 0.4 秒後なので、Ctrl+Z が 2 回要る・フッターの 元に戻す がバックアップ復元になることがある（以前から）。
+- その他 を隠した状態で「その他へ」を押すと、その他 が 2 つできる（以前から）。
 
 ### 0.1 いまの main（85f3e0a）
 10-25 にユーザーが Unity で触って出したフィードバック（約 20 項目）を全部直し、Unity の実機で確かめてから main に入れた。
@@ -22,8 +76,28 @@
 ### 0.2 わかっている残り
 - インナーカラーで「元に戻す」をした後に `Cazalis_Hair_InnerColor.mat` が 1 つ残る。原因は未調査（1 ファイルで止まる）。
 - 服の検索で、英語名の商品（Sweet など）はひらがなでは見つからない。ヒントの文言で案内しているだけ。
+  - 11-03（feature/romaji-search）：かなの検索語をローマ字（ヘボン式・訓令式、長音を詰めた形も）にしても探すようにした。「しなの」→Shinano、「ききょう」→Kikyo は見つかる。外来語（すいーと→Sweet）は辞書が要るので対象外。3 文字未満のローマ字は使わない。
 - 「ピンク（シェーダーが無い）を直す」は lilToon が無い・マテリアルの枠が空、の検出までは確認済み。
 - 7 章の残り（紹介動画・説明書・BOOTH 公開・配布方法）は未着手。
+
+### 0.2.1 明るさの基準をそろえる（2026-11-02・feature/mesh-settings・Unity 未確認）
+- lilycalInventory（MIT）の AutoFixMeshSettings を参考に、コードは写さず MA の Mesh Settings で実装（独自スクリプトを残さないため）。
+- 明るさのページの先頭に「体と服の明るさをそろえる」。アバターのルートに MA Mesh Settings（Anchor・Bounds とも Set、Anchor は体で多く使われているもの→無ければ Hips、Bounds は Hips 基準で全メッシュ＋10%）。Setup Outfit が服に付けた設定（SetOrInherit）は Inherit にしてルートに従わせる。`MeshSettingsBackup` で「元に戻す」に参加（この機能より前のバックアップでは何もしない）。
+- 処理は `Features/MeshSettingsHelper.cs`。check.sh（Mono）と Unity では未確認。Unity で見ること：ばらばらの数、そろえた後 0 になるか、Ctrl+Z と「元に戻す」、Play／ビルド後の各メッシュの Anchor Override と Bounds、服を着せた後にもう一度そろえる。
+
+### 0.2.2 ゲームの中で明るさを変えるスライダー（2026-11-03・feature/light-slider＝mesh-settings の上・Unity 未確認）
+- 明るさのページの下に「ゲームの中で明るさを変えられるようにする」。アバター直下に `KaihenNavi_LightMenu`（MA Menu Installer・Menu Item＝Radial・MA Parameters＝Float/保存/初期値は今の値・Merge Animator＝FX/Absolute/WD 合わせ）。
+- `Avatars/<名前>/Animations/KaihenNavi_Light.controller`：lilToon を使う全レンダラーの `material._LightMinLimit` を 0→1、パラメータ `KaihenNavi/Light` の Motion Time で動かす。作り直しはファイルを消さずクリップの中身だけ入れ替える（GUID を保つ）。
+- 処理は `Features/LightMenu.cs`。Unity で見ること：Gesture Manager でスライダーを回して明るさが変わるか、複数マテリアルのメッシュで全部の枠に効くか、初期値で見た目が変わらないか、作り直し・外す・Ctrl+Z、同期 8 bit の表示。
+
+### 0.2.3 Unity での確認（2026-11-03・test/integration-1103 を MCP Project に入れて）
+一時スクリプト（Assets/KNTest、確認後に削除）で、シーンの「Cazalis 改変」の複製だけを使って確認。元のアバターは触っていない。NDMF の `AvatarProcessor.ProcessAvatar` でビルドまで通した。
+- コンパイル：エラーなし（新しい型がすべて読み込まれた）。
+- 明るさの基準：ばらばら 9 → 0。ルートの MA Mesh Settings の参照は MA の形式（`Anchor Target`、`Armature/Hips`）。服 2 つ（MONOLITH）の SetOrInherit は Inherit になり、Ctrl+Z で両方とも元に戻る。ビルド後は 27 個のメッシュ全部が同じ Anchor・同じ Bounds。
+- 明るさスライダー：部品 4 つ、Radial・Float・初期値 0.05・保存。クリップのカーブ 27 本（対象と同数）。作り直しで GUID が変わらない。サンプリングするとレンダラー全体の MaterialPropertyBlock に入る（＝全部のマテリアル枠に効く）。ビルド後、Expression Parameters に Float（同期・保存）、FX に入る。パラメータの合計は 78 bit。外す → Ctrl+Z で戻る。
+- ローマ字検索（KonoAsset 365 商品）：「しなの」4→24 件、「まぬか」1→7 件。「かざりす」「ねこみみ」は変化なし、「すいーと」は 0 件のまま（想定どおり）。
+- インナーカラーの .mat 残り：直し自体は効く（保存しない Renderer だけが参照するマテリアルは使用中と数えない）。ただし確認時、シーンに保存しない Renderer は 0 個で、**原因が MA のプレビューの複製だという推定は確かめられていない**。実際に髪に色を当てて「元に戻す」をする確認が残っている。
+- まだ：画面の見た目（明るさのページの表示、ボタン）、Gesture Manager でスライダーを回したときの見た目、インナーカラーの実際の操作。
 
 ### 0.3 ワーカーの比較（bench/deepseek-compare ブランチ、main には入れていない）
 同じ指示書で gpt-6.1-sol（Codex）と deepseek-v4.1-flash（OpenCode Go）を比べた。結論は `bench/BENCH.md`、数字は `bench/RESULTS.md`。
@@ -50,6 +124,7 @@
 
 ### 0.6 Unity なしの確認
 - `bash tools/check.sh`（Mono の mcs が必要）：NoMA / WithMA / Full のコンパイル、4 言語のキーの一致、各種テスト。
+- Windows では `bash tools/check-win.sh`（Git Bash）。Mono を入れずに Unity 2022.3 同梱の Mono を使い、本物の Python を探して check.sh を動かす。シンボリックリンクの権限が無いときはジャンクションで代わりに試す。
 - `bash tools/test_inner_color.sh`：インナーカラーの面判定とファイル処理のテスト。
 - スタブ（tools/stubs）は Unity の Undo 本体・Prefab・描画を再現しない。最後は必ず Unity で確かめる。
 

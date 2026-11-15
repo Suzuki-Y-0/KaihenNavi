@@ -458,6 +458,12 @@ namespace Jeni.KaihenNavi
             string[] movedAssets, string[] movedFromAssetPaths)
         {
             ItemLedger.Collect(importedAssets);
+            // プロジェクト内の服の一覧は、Prefab の追加・移動・削除でも古くなる（unitypackage 以外の変更）。
+            // ただし、このツールの作業フォルダ（アバターの自動保存など）の Prefab は服の一覧に関係しないので数えない。
+            var prefabChanged = importedAssets.Concat(deletedAssets).Concat(movedAssets).Concat(movedFromAssetPaths)
+                .Any(p => p != null && p.EndsWith(".prefab", StringComparison.OrdinalIgnoreCase)
+                          && !p.StartsWith(WorkFolders.Root + "/", StringComparison.Ordinal));
+            if (prefabChanged) ItemLedger.Invalidate();
         }
     }
 }

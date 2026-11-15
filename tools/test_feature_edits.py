@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """脱ぎ着の状態復元と保存の Undo API 選択を確認する。Unity の Undo 自体や MA のプレビューは再現しない。"""
 from pathlib import Path
+import shutil
 import subprocess
 import tempfile
 
@@ -15,6 +16,7 @@ using UnityEditor;
 using UnityEngine;
 using UnityEngine.UIElements;
 using VRC.SDK3.Avatars.Components;
+using VRC.SDK3.Avatars.ScriptableObjects;
 using nadena.dev.modular_avatar.core;
 using Jeni.KaihenNavi;
 
@@ -56,6 +58,206 @@ internal static class FeatureEditChecks
         }
         return list;
     }
+    // 通信量の目安：ほかの MA の部品が足す同期パラメータも数える
+    private static void BitChecks()
+    {
+        var go = new GameObject("BitAvatar");
+        var avatar = go.AddComponent<VRCAvatarDescriptor>();
+        var holder = Child(go, "Params", true);
+        var parameters = holder.AddComponent<ModularAvatarParameters>();
+        parameters.parameters.Add(new ParameterConfig { nameOrPrefix = "A", syncType = ParameterSyncType.Bool });
+        parameters.parameters.Add(new ParameterConfig { nameOrPrefix = "B", syncType = ParameterSyncType.Int });
+        parameters.parameters.Add(new ParameterConfig { nameOrPrefix = "C", syncType = ParameterSyncType.Float, localOnly = true });
+        parameters.parameters.Add(new ParameterConfig { nameOrPrefix = "D", syncType = ParameterSyncType.NotSynced });
+        parameters.parameters.Add(new ParameterConfig { nameOrPrefix = "E", syncType = ParameterSyncType.Bool, isPrefix = true });
+        parameters.parameters.Add(new ParameterConfig { nameOrPrefix = "A", syncType = ParameterSyncType.Bool });
+        Func<GameObject, string, ModularAvatarMenuItem> item = (parent, name) =>
+        {
+            var mi = Child(parent, name, true).AddComponent<ModularAvatarMenuItem>();
+            mi.Control = new VRCExpressionsMenu.Control
+            {
+                type = VRCExpressionsMenu.Control.ControlType.Toggle,
+                parameter = new VRCExpressionsMenu.Control.Parameter { name = name },
+                value = 1f,
+            };
+            return mi;
+        };
+        item(go, "F");
+        item(go, "A");
+        var editorOnly = Child(go, "Hidden", true);
+        editorOnly.tag = "EditorOnly";
+        item(editorOnly, "G");
+        item(Child(go, ToggleFeature.MenuObjectName, true), "KaihenNavi/Item");
+        var cost = (int)Call("ModularAvatarParameterCost", avatar);
+        Check(cost == 1 + 8 + 1, "MA synced parameters counted once, local/unsynced/prefix/EditorOnly/own menu skipped (" + cost + ")");
+    }
+
+    // コンストレイントが動かす骨の位置・回転のずれは改変に数えず、保存（Apply）もしない
+    private static void ConstraintChecks()
+    {
+        var go = new GameObject("ConstraintAvatar");
+        var avatar = go.AddComponent<VRCAvatarDescriptor>();
+        var support = Child(go, "LowerArmSupport_R", true);
+        var helper = Child(go, "Helper", true);
+        var driven = Child(go, "Driven", true);
+        var plain = Child(go, "Plain", true);
+        var sources = new Dictionary<UnityEngine.Object, UnityEngine.Object>();
+        foreach (var t in new[] { support.transform, driven.transform, plain.transform }) sources[t] = new Transform { name = t.name + "(asset)" };
+        PrefabUtility.SourceForTests = o => o != null && sources.ContainsKey(o) ? sources[o] : null;
+        PrefabUtility.RootForTests = go;
+        PrefabUtility.PathForTests = WorkFolders.AvatarsRoot + "/Constraint/Avatar.prefab";
+        PrefabUtility.OverridesForTests = true;
+        var applied = new List<InteractionMode>();
+        PrefabUtility.ApplyForTests = (g, mode) => applied.Add(mode);
+        support.AddComponent<UnityEngine.Animations.ParentConstraint>();
+        // VRChat のコンストレイントは別の Transform（TargetTransform）を動かせる
+        helper.AddComponent<VRC.SDK3.Dynamics.Constraint.Components.VRCParentConstraint>().TargetTransform = driven.transform;
+        if (EditorApplication.hierarchyChanged != null) EditorApplication.hierarchyChanged();
+        var set = MyAvatar.DrivenTransforms(go);
+        Check(set.Contains(support.transform) && set.Contains(driven.transform) && !set.Contains(helper.transform) && !set.Contains(plain.transform),
+            "Unity constraint drives its own Transform, VRC constraint drives TargetTransform");
+        Func<Transform, string, PropertyModification> mod = (t, path) => new PropertyModification { target = sources[t], propertyPath = path, value = "0.0023" };
+        PrefabUtility.ObjectOverridesForTests = new List<UnityEditor.SceneManagement.ObjectOverride>
+        {
+            new UnityEditor.SceneManagement.ObjectOverride { instanceObject = support.transform },
+            new UnityEditor.SceneManagement.ObjectOverride { instanceObject = driven.transform },
+        };
+        PrefabUtility.ModificationsForTests = new[]
+        {
+            mod(support.transform, "m_LocalRotation.z"), mod(support.transform, "m_LocalRotation.w"),
+            mod(driven.transform, "m_LocalPosition.x"), mod(driven.transform, "m_LocalEulerAnglesHint.y"),
+        };
+        Check(MyAvatar.KindOf(avatar) == AvatarKind.Mine && !MyAvatar.HasUnsaved(avatar), "constraint jitter is not an unsaved change");
+        Check(!MyAvatar.Save(avatar) && applied.Count == 0, "constraint jitter alone never applies the Prefab");
+        // 外部ツールの Undo グループが進んでも、本当の変更が無ければ保存の手順（SaveNow）を通さない
+        var window = new KaihenNaviWindow();
+        Set(window, "_avatar", avatar);
+        Set(window, "_saveEditGroup", 99);
+        var records = Undo.RecordsForTests.Count;
+        var tick = typeof(KaihenNaviWindow).GetMethod("AutoSaveTick", Private);
+        Undo.IncrementCurrentGroup();
+        tick.Invoke(window, null);
+        EditorApplication.timeSinceStartup += 2;
+        tick.Invoke(window, null);
+        Check(applied.Count == 0 && Undo.RecordsForTests.Count == records, "auto save tick with only constraint jitter records nothing");
+        Check((int)typeof(KaihenNaviWindow).GetField("_savedGroup", Private).GetValue(window) == Undo.GetCurrentGroup() &&
+            (int)typeof(KaihenNaviWindow).GetField("_saveEditGroup", Private).GetValue(window) == 99, "auto save tick skips SaveNow");
+        PrefabUtility.ModificationsForTests = new[] { mod(support.transform, "m_LocalRotation.z"), mod(support.transform, "m_RootOrder") };
+        Check(MyAvatar.HasUnsaved(avatar), "other changes on a driven Transform still count");
+        PrefabUtility.ModificationsForTests = new[] { mod(support.transform, "m_LocalRotation.z") };
+        PrefabUtility.ObjectOverridesForTests.Add(new UnityEditor.SceneManagement.ObjectOverride { instanceObject = plain.transform });
+        Check(MyAvatar.HasUnsaved(avatar) && MyAvatar.Save(avatar) && applied.Count == 1, "a real change is saved together");
+        PrefabUtility.ObjectOverridesForTests.RemoveAt(2);
+        PrefabUtility.AddedComponentsForTests.Add(new UnityEditor.SceneManagement.AddedComponent());
+        Check(MyAvatar.HasUnsaved(avatar), "added components count");
+        PrefabUtility.AddedComponentsForTests.Clear();
+        PrefabUtility.OverridesForTests = false;
+        PrefabUtility.ObjectOverridesForTests = null;
+        PrefabUtility.ModificationsForTests = null;
+        PrefabUtility.SourceForTests = null;
+        PrefabUtility.RootForTests = null;
+    }
+
+    // メニュー整理：実際に差し替えたメニューを覚えて戻す。分からないときは取り出したメニューを消さない。
+    private static void MenuTidyChecks()
+    {
+        PrefabUtility.RootForTests = null;
+        var paths = new Dictionary<UnityEngine.Object, string>();
+        var assets = new Dictionary<string, UnityEngine.Object>();
+        AssetDatabase.PathForTests = o => o != null && paths.ContainsKey(o) ? paths[o] : "";
+        AssetDatabase.LoadForTests = p => p != null && assets.ContainsKey(p) ? assets[p] : null;
+        AssetDatabase.GuidForTests = p => "guid-" + p;
+        AssetDatabase.PathFromGuidForTests = g => g.StartsWith("guid-") ? g.Substring(5) : "";
+        AssetDatabase.CreateForTests = (o, p) => { paths[o] = p; assets[p] = o; };
+        Func<string, VRCExpressionsMenu> menu = p =>
+        {
+            var m = (VRCExpressionsMenu)Activator.CreateInstance(typeof(VRCExpressionsMenu));
+            m.controls.Add(new VRCExpressionsMenu.Control { name = "A", type = VRCExpressionsMenu.Control.ControlType.Toggle });
+            paths[m] = p; assets[p] = m;
+            return m;
+        };
+        var deep = menu("Assets/Base/Deep.asset");
+        var variantMenu = menu("Assets/Booth/Variant.asset");
+        var go = new GameObject("MenuAvatar");
+        var avatar = go.AddComponent<VRCAvatarDescriptor>();
+        avatar.expressionsMenu = variantMenu;
+
+        var root = MenuFeature.BuildMenu(avatar, new MenuEdits { extracted = true, originalMenu = paths[variantMenu] }, "menu");
+        Check(root != null && !ReferenceEquals(avatar.expressionsMenu, variantMenu), "menu extracted into MA items");
+        Check(root.transform.Cast<Transform>().Any(t => t.name.StartsWith(MenuFeature.OriginalMarkerPrefix) && t.gameObject.tag == "EditorOnly"),
+            "replaced menu remembered in EditorOnly marker");
+        Check(ReferenceEquals(MenuFeature.OriginalMenu(avatar), variantMenu), "remembered menu wins over prefab source");
+        Check(MenuFeature.ReadEdits(avatar).items.All(e => !e.key.StartsWith(MenuFeature.OriginalMarkerPrefix)), "marker is not a menu item");
+        Check(MenuFeature.RemoveMenu(avatar, "menu") && ReferenceEquals(avatar.expressionsMenu, variantMenu) &&
+            go.transform.Find(MenuFeature.RootName) == null, "remove restores the replaced menu");
+
+        // 古い版で取り出したもの（目印なし）：元を 1 段ずつたどり、作業フォルダの外の最初のメニューを使う
+        root = MenuFeature.BuildMenu(avatar, new MenuEdits { extracted = true, originalMenu = paths[variantMenu] }, "menu");
+        foreach (var t in root.transform.Cast<Transform>().Where(t => t.name.StartsWith(MenuFeature.OriginalMarkerPrefix)).ToList()) t.SetParent(null, false);
+        var mine = new GameObject("Mine").AddComponent<VRCAvatarDescriptor>();
+        mine.expressionsMenu = avatar.expressionsMenu;
+        var variant = new GameObject("Variant").AddComponent<VRCAvatarDescriptor>();
+        variant.expressionsMenu = variantMenu;
+        var baseAvatar = new GameObject("Base").AddComponent<VRCAvatarDescriptor>();
+        baseAvatar.expressionsMenu = deep;
+        // スタブの Object は bool への変換を持つので、参照で比べる
+        PrefabUtility.SourceForTests = o => ReferenceEquals(o, avatar) ? mine : ReferenceEquals(o, mine) ? variant : ReferenceEquals(o, variant) ? (UnityEngine.Object)baseAvatar : null;
+        Check(ReferenceEquals(MenuFeature.OriginalMenu(avatar), variantMenu), "legacy fallback stops at first menu outside work folders");
+        PrefabUtility.SourceForTests = null;
+
+        // 元のメニューが分からないときは消さない
+        Check(!MenuFeature.RemoveMenu(avatar, "menu") && go.transform.Find(MenuFeature.RootName) != null &&
+            avatar.expressionsMenu != null && !ReferenceEquals(avatar.expressionsMenu, variantMenu), "unresolved original keeps extracted menu");
+        Check(MenuFeature.RemoveMenu(avatar, "menu", paths[variantMenu]) && ReferenceEquals(avatar.expressionsMenu, variantMenu),
+            "backup path used as last resort");
+
+        // 「その他」を使わない（隠した）状態も、バックアップから戻せる
+        var tidy = new MenuEdits { extracted = true, originalMenu = paths[variantMenu] };
+        tidy.items.Add(new MenuEdit { key = "0", other = true, order = 0 });
+        tidy.items.Add(new MenuEdit { key = MenuFeature.OtherName, label = "Misc", hidden = true, order = -1 });
+        root = MenuFeature.BuildMenu(avatar, tidy, "menu");
+        var holder = root.transform.Find(MenuFeature.HiddenName);
+        Check(root.transform.Find(MenuFeature.OtherName) == null && holder != null && holder.Find(MenuFeature.OtherName) != null &&
+            holder.Find(MenuFeature.OtherName).GetComponent<ModularAvatarMenuItem>().label == "Misc", "hidden others restored hidden");
+        var others = MenuFeature.ReadEdits(avatar).items.FirstOrDefault(e => e.key == MenuFeature.OtherName);
+        Check(others != null && others.hidden && others.label == "Misc", "others hidden state captured");
+        var oldTidy = new MenuEdits { extracted = true, originalMenu = paths[variantMenu] };
+        oldTidy.items.Add(new MenuEdit { key = "0", other = true, order = 0 });
+        root = MenuFeature.BuildMenu(avatar, oldTidy, "menu");
+        Check(root.transform.Find(MenuFeature.OtherName) != null, "old backups without others entry keep others visible");
+
+        AssetDatabase.PathForTests = null;
+        AssetDatabase.LoadForTests = null;
+        AssetDatabase.GuidForTests = null;
+        AssetDatabase.PathFromGuidForTests = null;
+        AssetDatabase.CreateForTests = null;
+    }
+
+    private static void WalkGimmickChecks()
+    {
+        // 歩き方の「元に戻す」で消すのは、入れ子の Prefab のいちばん外側まで。整理用の入れ物・服・アバター本体は消さない
+        var gimmick = typeof(WalkFeature).GetMethod("GimmickRoot", Static);
+        Func<GameObject, GameObject, GameObject> root = (g, b) => (GameObject)gimmick.Invoke(null, new object[] { g, b });
+        var avatar = new GameObject("Avatar");
+        var gimmicks = Child(avatar, "Gimmicks", true);
+        var loco = Child(gimmicks, "Loco", true);
+        var inner = Child(loco, "Inner", true);
+        var holder = Child(inner, "Holder", true);
+        var outfit = Child(avatar, "Outfit", true);
+        Child(outfit, "Body", true).AddComponent<SkinnedMeshRenderer>();
+        var outfitWalk = Child(outfit, "Walk", true);
+        var plain = Child(gimmicks, "Plain", true);
+        PrefabUtility.InstanceRootsForTests.Clear();
+        PrefabUtility.InstanceRootsForTests.Add(avatar);
+        PrefabUtility.InstanceRootsForTests.Add(loco);
+        PrefabUtility.InstanceRootsForTests.Add(inner);
+        PrefabUtility.InstanceRootsForTests.Add(outfit);
+        Check(root(holder, avatar) == loco, "walk reset removes outermost nested gimmick Prefab, not its container");
+        Check(root(outfitWalk, avatar) == outfitWalk, "walk reset inside outfit removes only its own object");
+        Check(root(plain, avatar) == plain, "walk reset outside nested Prefab removes only its own object");
+        Check(root(avatar, avatar) == avatar, "boundary itself is never climbed past");
+        PrefabUtility.InstanceRootsForTests.Clear();
+    }
     public static void Main()
     {
         ScriptableObject.CreateForTests = t => (ScriptableObject)System.Activator.CreateInstance(t);
@@ -81,7 +283,7 @@ internal static class FeatureEditChecks
         Check(menu.GetComponentsInChildren<Transform>(true).Where(t => t.name == "KaihenNavi_OriginalVisibility")
             .All(t => t.gameObject.tag == "EditorOnly"), "visibility markers are EditorOnly");
 
-        // 既定値やシーンの表示を後から変えても、削除では作成前へ戻す。
+        // 既定値やシーンの表示を後から変えたら、その変更を残す（このメニューは表示を変えないので戻すものが無い）。
         visible.SetActive(false);
         hidden.SetActive(true);
         Call("CreateMenu", ctx, Candidates(visible, hidden));
@@ -89,16 +291,16 @@ internal static class FeatureEditChecks
         Check(!visible.activeSelf && hidden.activeSelf, "rebuild preserves current scene visibility");
         Check(data.items[0].isDefault && !data.items[1].isDefault, "rebuild preserves menu defaults");
         Check(data.items[0].originalActive && !data.items[1].originalActive, "rebuild retains first original state");
-        // チェックを外した項目も削除として復元する。
+        // チェックを外した項目も、後から変えた表示を戻さない。
         Call("CreateMenu", ctx, Candidates(visible));
-        Check(!hidden.activeSelf && !visible.activeSelf, "removed rebuild target restored; retained target untouched");
+        Check(hidden.activeSelf && !visible.activeSelf, "unchecked target keeps deliberate visibility; retained target untouched");
         menu = root.transform.Find(ToggleFeature.MenuObjectName);
         menu.GetComponentsInChildren<ModularAvatarMenuItem>(true).Last().isDefault = false;
         var recorded = new List<UnityEngine.Object>();
         Undo.RecordForTests = o => recorded.Add(o);
         Call("RemoveMenu", avatar, "remove", true);
-        Check(visible.activeSelf && !hidden.activeSelf, "remove restores original independent of default");
-        Check(recorded.Contains(visible), "restored visibility is registered for Undo");
+        Check(!visible.activeSelf && hidden.activeSelf, "remove keeps deliberate visibility");
+        Check(!recorded.Contains(visible), "nothing to restore for current menus");
         Check(root.transform.Find(ToggleFeature.MenuObjectName) == null, "whole menu removed");
 
         // 元の表示を持たない古いバックアップとの互換性。
@@ -109,6 +311,19 @@ internal static class FeatureEditChecks
         visible.SetActive(false);
         Call("RemoveMenu", avatar, "remove", true);
         Check(visible.activeSelf, "legacy hidden object recovered");
+        // 古い版のメニューは作り直しても古い版のまま扱い、後で消したときに強制された非表示を戻す
+        ToggleFeature.BuildMenu(avatar, legacy, "restore");
+        visible.SetActive(false);
+        Call("CreateMenu", ctx, Candidates(visible));
+        Check(!visible.activeSelf && !ToggleFeature.ReadMenu(avatar).items[0].hasOriginalActive, "rebuild keeps legacy item as legacy");
+        Call("RemoveMenu", avatar, "remove", true);
+        Check(visible.activeSelf, "legacy item recovered after rebuild");
+        // 古い版でも、初期値が OFF のもの（古い版が非表示にしていない）は変えない
+        legacy.items[0].isDefault = false;
+        ToggleFeature.BuildMenu(avatar, legacy, "restore");
+        Call("RemoveMenu", avatar, "remove", true);
+        Check(visible.activeSelf, "legacy default-off item untouched");
+        legacy.items[0].isDefault = true;
         legacy.items[0].targetPath = "Missing#0";
         ToggleFeature.BuildMenu(avatar, legacy, "restore");
         Call("RemoveMenu", avatar, "remove", true);
@@ -174,6 +389,29 @@ internal static class FeatureEditChecks
         Check(applied.Count == 0 && !TransformFeature.IsAdjusting, "Undo cancels pending slider save");
         MyAvatar.Save(avatar, false);
         Check(applied.Last() == InteractionMode.AutomatedAction, "Undo replay does not register new history");
+        // 作り直しでもパラメータ名は項目（対象）ごとに変わらない。新しい項目は前の名前と重ならない
+        var shirt = Child(root, "シャツ", true);
+        var shoes = Child(root, "くつ", true);
+        ctx.FeatureId = "toggle";
+        Set(backup, "_sessionKey", BackupService.AvatarId(avatar) + "|toggle");
+        Func<GameObject, string> param = target => ToggleFeature.ReadMenu(avatar).items
+            .First(i => i.targetPath == HierarchyPath.Get(root.transform, target.transform)).parameter;
+        Call("CreateMenu", ctx, Candidates(shirt, shoes));
+        var shirtParam = param(shirt);
+        var shoesParam = param(shoes);
+        Check(shirtParam != shoesParam, "generated parameter names are unique");
+        Call("CreateMenu", ctx, Candidates(shoes));
+        Check(param(shoes) == shoesParam, "unchecking another item keeps parameter name");
+        Check(ToggleFeature.MenuItemFor(avatar, shoes) != null && ToggleFeature.MenuItemFor(avatar, shirt) == null,
+            "outfit rows find the menu item that decides the in-game default");
+        Call("CreateMenu", ctx, Candidates(shirt, shoes));
+        Check(param(shoes) == shoesParam && param(shirt) != shoesParam, "re-added item never takes a kept name");
+        Call("RemoveMenu", avatar, "remove", true);
+
+        BitChecks();
+        MenuTidyChecks();
+        WalkGimmickChecks();
+        ConstraintChecks();
         Console.WriteLine("Feature edit checks passed (" + count + "). Unity Undo, Prefab imports and MA preview require Unity.");
     }
 }
@@ -184,7 +422,7 @@ with tempfile.TemporaryDirectory(prefix="kaihennavi-edits-") as temporary:
     harness.write_text(source, encoding="utf-8")
     executable = temp / "Checks.exe"
     sources = sorted((repo / "Packages/com.suzuki-y0.jeni.kaihen-navi/Editor").rglob("*.cs"))
-    subprocess.run(["mcs", "-nologo", "-langversion:7", "-define:KAIHENNAVI_MA", "-r:System.Core.dll",
+    subprocess.run([shutil.which("mcs") or "mcs", "-nologo", "-langversion:7", "-define:KAIHENNAVI_MA", "-r:System.Core.dll",
                     "-out:" + str(executable), str(repo / "tools/stubs/UnityStubs.cs"),
                     str(repo / "tools/stubs/VrcAndMaStubs.cs"), *map(str, sources), str(harness)], check=True)
-    subprocess.run(["mono", str(executable)], cwd=temp, check=True)
+    subprocess.run([shutil.which("mono") or "mono", str(executable)], cwd=temp, check=True)

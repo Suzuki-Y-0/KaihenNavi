@@ -609,30 +609,34 @@ namespace Jeni.KaihenNavi
             return hips.parent;
         }
 
-        // 元の Prefab が無いアバター用に、最初に見たときの大きさを 100% として覚えておく
-        private static readonly Dictionary<int, Vector3> FirstSeenScale = new Dictionary<int, Vector3>();
-
-        /// <summary>改変前の Armature の大きさ（元の Prefab の値。無ければ最初に見たときの値）。</summary>
+        /// <summary>
+        /// 改変前の Armature の大きさ。骨の基準（BoneFollow.BaselineTransform）と同じものを使い、
+        /// 身長の 100% と骨の基準がずれないようにする。
+        /// </summary>
         private static Vector3 BaseArmatureScaleVector(Transform armature)
         {
-            var source = PrefabUtility.GetCorrespondingObjectFromOriginalSource(armature);
-            if (source != null && source != armature) return source.localScale;
-
-            Vector3 seen;
-            var id = armature.GetInstanceID();
-            if (!FirstSeenScale.TryGetValue(id, out seen))
-            {
-                seen = armature.localScale;
-                FirstSeenScale[id] = seen;
-            }
-
-            return seen;
+            return BoneFollow.BaselineScale(armature);
         }
 
         private static float BaseArmatureScale(Transform armature)
         {
             var y = BaseArmatureScaleVector(armature).y;
             return Mathf.Abs(y) < 1e-5f ? 1f : y;
+        }
+
+        /// <summary>この機能が長さ・太さを管理している骨か（Groups に入っている骨）。</summary>
+        internal static bool IsManagedBone(Animator animator, Transform t)
+        {
+            if (animator == null || t == null) return false;
+            foreach (var g in Groups)
+            {
+                foreach (var b in g.Bones)
+                {
+                    if (animator.GetBoneTransform(b) == t) return true;
+                }
+            }
+
+            return false;
         }
 
         private void SetHeight(FeatureContext ctx, float percent)
@@ -741,6 +745,7 @@ namespace Jeni.KaihenNavi
         public static Vector3 BaselineScale(Transform bone)
         {
             var source = BaselineTransform(bone);
+            // 身長の 100% の基準（BodyFeature）も同じ関数を使う
             if (source != null) return source.localScale;
             Vector3 seen;
             if (!FirstSeenScale.TryGetValue(bone.GetInstanceID(), out seen))
@@ -869,7 +874,7 @@ namespace Jeni.KaihenNavi
         }
 
         /// <summary>改変アバターの Prefab より手前（ベースや元アバター）で対応するもの。無ければ null。</summary>
-        private static Transform BaselineTransform(Transform t)
+        internal static Transform BaselineTransform(Transform t)
         {
             Object current = t;
             for (var depth = 0; depth < 8; depth++)
@@ -942,20 +947,24 @@ namespace Jeni.KaihenNavi
                 var path = HierarchyPath.Get(avatar.transform, a.transform);
                 var old = a.Scale;
                 var bone = a.transform;
+                // この機能が管理する骨だけ子の位置を合わせる。同梱の Scale Adjuster などは触らない（消さない・動かさない）
+                var managed = BodyFeature.IsManagedBone(animator, bone);
                 Vector3 scale;
                 if (path != null && wanted.TryGetValue(path, out scale))
                 {
                     Undo.RecordObject(a, undoName);
                     a.Scale = scale;
                     wanted.Remove(path);
+                    // 大きさが変わらないなら子は動かさない（ずらすと、同じ値の復元でも子がずれてしまう）
+                    if (managed && (scale - old).sqrMagnitude > 1e-12f) BoneFollow.Apply(bone, animator, old, scale, undoName);
                 }
                 else
                 {
+                    if (!managed) continue;
                     scale = Vector3.one;
                     Undo.DestroyObjectImmediate(a);
+                    if ((old - scale).sqrMagnitude > 1e-12f) BoneFollow.Apply(bone, animator, old, scale, undoName);
                 }
-
-                BoneFollow.Apply(bone, animator, old, scale, undoName);
             }
 
             foreach (var pair in wanted)
@@ -964,7 +973,10 @@ namespace Jeni.KaihenNavi
                 if (t == null) continue;
                 var added = Undo.AddComponent<ModularAvatarScaleAdjuster>(t.gameObject);
                 added.Scale = pair.Value;
-                BoneFollow.Apply(t, animator, Vector3.one, pair.Value, undoName);
+                if (BodyFeature.IsManagedBone(animator, t) && (pair.Value - Vector3.one).sqrMagnitude > 1e-12f)
+                {
+                    BoneFollow.Apply(t, animator, Vector3.one, pair.Value, undoName);
+                }
             }
 
             // 頭・手・足の大きさ（古いバックアップには無いので、そのときはベースの大きさに戻す）

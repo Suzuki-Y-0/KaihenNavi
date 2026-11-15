@@ -57,6 +57,8 @@ namespace Jeni.KaihenNavi
         /// <summary>アバターの識別子（GlobalObjectId）。同名アバターの取り違えを防ぐ。</summary>
         public string avatarId;
         public string avatarName;
+        /// <summary>取ったときのシーンのハンドル（保存前のシーンで名前照合するとき、別のシーンと取り違えないため）。旧バックアップでは 0。</summary>
+        public int sceneHandle;
         /// <summary>作成日時（DateTime.Ticks）。並べ替えに使う。</summary>
         public long createdTicks;
         /// <summary>どの「やりたいこと」の前に取ったか（FeatureBase.Id）。</summary>

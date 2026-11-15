@@ -8,6 +8,19 @@ import subprocess
 import tempfile
 import io
 import tarfile
+import os
+import shutil
+import stat
+
+
+def link_directory(link, target):
+    """フォルダへのリンクを作る。Windows で権限が無いときは、権限の要らないジャンクションにする（どちらも ReparsePoint）。"""
+    try:
+        link.symlink_to(target, target_is_directory=True)
+    except OSError:
+        if os.name != "nt":
+            raise
+        subprocess.run(["cmd", "/c", "mklink", "/J", str(link), str(target)], check=True, stdout=subprocess.DEVNULL)
 
 repo = Path(__file__).resolve().parent.parent
 source = r'''
@@ -49,6 +62,12 @@ internal static class KonoAssetChecks
         Call("UseIndex", (object)items);
         Set(Link, "_revision", (int)Link.GetField("_revision", PrivateStatic).GetValue(null) + 1);
     }
+    private static BodyPart? Part(string name)
+    {
+        var args = new object[] { name, BodyPart.Other };
+        var found = (bool)typeof(PartGuesser).GetMethod("TryMatch", PrivateStatic).Invoke(null, args);
+        return found ? (BodyPart?)args[1] : null;
+    }
     public static void Main(string[] args)
     {
         // Unity のディスク探索はモックせず、純粋な照合の間だけ既存キャッシュとして固定する。
@@ -58,6 +77,31 @@ internal static class KonoAssetChecks
         var hair = Item("two", "Long Hair", new[] { "Long-Hair", "Shared" });
         Use(monolith, hair);
         Check(KonoAssetLink.Normalize("ＭＯＮＯＬＩＴＨ _- しなの") == "monolithしなの", "Unicode normalization");
+        Check(KonoAssetLink.Contains("MONOLITH_Shinano", "しなの"), "kana query matches Hepburn romaji");
+        Check(KonoAssetLink.Contains("Kikyo Outfit", "ききょう"), "long vowel compressed");
+        Check(KonoAssetLink.Contains("kikyou", "キキョウ"), "katakana and long vowel kept");
+        Check(KonoAssetLink.Contains("Manuka", "マヌカ"), "katakana to romaji");
+        Check(KonoAssetLink.Contains("Chiffon", "ちっふぉん") || true, "no crash on small kana");
+        Check(KonoAssetLink.Contains("sitagi", "したぎ") && KonoAssetLink.Contains("shitagi", "したぎ"), "Kunrei and Hepburn");
+        Check(!KonoAssetLink.Contains("Sweet", "すいーと"), "loanwords are not guessed");
+        Check(KonoAssetLink.Contains("ねこみみ", "ネコ") && !KonoAssetLink.Contains("Shinano", "まぬか"), "existing kana match and no false positive");
+        Check(!KonoAssetLink.Contains("Avatar", "あ") && !KonoAssetLink.Contains("Kawaii", "か"), "one-kana queries do not match every Latin name");
+        Check(!KonoAssetLink.Contains("Shinano", "し") && !KonoAssetLink.Contains("Chiffon", "ち"), "one kana (shi, chi) is not turned into romaji");
+        Check(KonoAssetLink.Contains("Mishe Dress", "ミーシェ"), "long vowel mark dropped (mishe)");
+        Check(KonoAssetLink.Contains("Miishe Dress", "ミーシェ"), "long vowel mark repeats the vowel (miishe)");
+        Check(KonoAssetLink.Contains("Ramen Set", "らーめん") && KonoAssetLink.Contains("Raamen Set", "らーめん"), "らーめん as ramen or raamen");
+        Check(KonoAssetLink.Contains("Sampo Set", "さんぽ") && KonoAssetLink.Contains("Sanpo Set", "さんぽ"), "ん before p as m, and n kept");
+        Check(KonoAssetLink.Contains("Mawo Hat", "まを"), "を also as wo");
+        Check(KonoAssetLink.Contains("Wisuki Dress", "うぃすき"), "うぃ also as wi");
+        Check(KonoAssetLink.Contains("Mishe Dress", "ミーシェ") && !KonoAssetLink.Contains("Sweet Dress", "ミーシェ"), "romaji variants still reject unrelated names");
+        // 部品の推定（PartGuesser）。英字は語の単位で比べ、「Brown」「Headphone」「splash」に誤って当てない。
+        Check(Part("Hair_Brown") == BodyPart.Hair && Part("Brow") == BodyPart.Other && Part("Eyebrow_01") == BodyPart.Other, "brow is a word, not a prefix of Brown");
+        Check(Part("Headphone") == null && Part("Head") == BodyPart.Skin && Part("Head_01") == BodyPart.Skin, "head is a word, not a prefix of Headphone");
+        Check(Part("splash") == null && Part("Eyelash") == BodyPart.Other && Part("EyeLash") == BodyPart.Other && Part("Eyelashes") == BodyPart.Other, "lash inside splash ignored; eyelash kept");
+        Check(Part("hair01") == BodyPart.Hair && Part("Hairs") == BodyPart.Hair && Part("Long-Hair") == BodyPart.Hair, "hair with digits, plural and hyphen");
+        Check(Part("Body") == BodyPart.Skin && Part("Face") == BodyPart.Skin && Part("Eye") == BodyPart.Eye, "basic parts");
+        Check(Part("髪") == BodyPart.Hair && Part("Kami") == BodyPart.Hair && Part("まつ毛") == BodyPart.Other, "Japanese keywords stay substring matches");
+        Check(Part("Shirt") == BodyPart.Cloth && PartGuesser.LooksLikeCloth("Cloth_HairRibbon") && !PartGuesser.LooksLikeCloth("Splash"), "clothing words, LooksLikeCloth respects words");
         Check(KonoAssetLink.FindByPackageName("MONOLITH - Shinano.unitypackage") == monolith, "package normalization");
         Check(KonoAssetLink.FindByPackageName("missing") == null, "unknown package");
         Check(KonoAssetLink.Find("one") == monolith && KonoAssetLink.Find(null) == null, "ID lookup");
@@ -214,7 +258,7 @@ with tempfile.TemporaryDirectory(prefix="kaihennavi-kono-") as temporary:
     (data / "nested" / "Locked.unitypackage").write_bytes(b"do not read package contents")
     (data / "Root.unitypackage").write_bytes(b"do not read package contents")
     (data / "ignored.txt").write_bytes(b"ignore")
-    (data / "nested" / "cycle").symlink_to(data, target_is_directory=True)
+    link_directory(data / "nested" / "cycle", data)
     metadata = temp / "external" / "metadata"
     metadata.mkdir()
     (metadata / "avatars.json").write_text('{"version":3,"data":[]}', encoding="utf-8")
@@ -228,22 +272,43 @@ with tempfile.TemporaryDirectory(prefix="kaihennavi-kono-") as temporary:
                 info.size = len(payload)
                 archive.addfile(info, io.BytesIO(payload))
 
+    def is_link(path):
+        # Python 3.10 の is_symlink はジャンクションを見分けないので、ReparsePoint の印も見る。
+        attributes = getattr(os.lstat(path), "st_file_attributes", 0)
+        return path.is_symlink() or bool(attributes & getattr(stat, "FILE_ATTRIBUTE_REPARSE_POINT", 0))
+
+    def files_under(folder):
+        for entry in folder.iterdir():
+            if is_link(entry):
+                continue
+            if entry.is_dir():
+                yield from files_under(entry)
+            elif entry.is_file():
+                yield entry
+
     def snapshot():
         return {str(p.relative_to(temp)): (p.stat().st_mtime_ns, hashlib.sha256(p.read_bytes()).hexdigest())
-                for p in temp.glob("external/**/*") if p.is_file()}
+                for p in files_under(temp / "external")}
 
     symlink_workspace = temp / "symlink-workspace"
     symlink_cache = symlink_workspace / "Library/KaihenNavi"
     symlink_cache.mkdir(parents=True)
-    (symlink_cache / "konoasset-index.json").symlink_to(metadata / "avatars.json")
+    try:
+        (symlink_cache / "konoasset-index.json").symlink_to(metadata / "avatars.json")
+    except OSError:
+        if os.name != "nt":
+            raise
+        # ファイルのリンクが作れないときは、キャッシュのフォルダごと外部フォルダへのリンクにする（書き込み先の途中にリンクがある場合の確認）。
+        symlink_cache.rmdir()
+        link_directory(symlink_cache, metadata)
     before = snapshot()
     harness = temp / "Checks.cs"
     harness.write_text(source, encoding="utf-8")
     executable = temp / "Checks.exe"
     sources = sorted((repo / "Packages/com.suzuki-y0.jeni.kaihen-navi/Editor").rglob("*.cs"))
-    subprocess.run(["mcs", "-nologo", "-langversion:7", "-r:System.Core.dll", "-out:" + str(executable),
+    subprocess.run([shutil.which("mcs") or "mcs", "-nologo", "-langversion:7", "-r:System.Core.dll", "-out:" + str(executable),
                     str(repo / "tools/stubs/UnityStubs.cs"), str(repo / "tools/stubs/VrcAndMaStubs.cs"),
                     *map(str, sources), str(harness)], check=True)
-    subprocess.run(["mono", str(executable), str(data), str(temp / "external"), str(symlink_workspace), str(package)], cwd=temp, check=True)
+    subprocess.run([shutil.which("mono") or "mono", str(executable), str(data), str(temp / "external"), str(symlink_workspace), str(package)], cwd=temp, check=True)
     assert before == snapshot(), "external files were modified"
     print("External source files unchanged.")

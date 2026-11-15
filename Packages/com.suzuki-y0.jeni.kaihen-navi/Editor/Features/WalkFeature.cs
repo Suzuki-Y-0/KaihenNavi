@@ -396,8 +396,7 @@ namespace Jeni.KaihenNavi
                     foreach (var g in found)
                     {
                         // ベースの中に入れた Prefab ごと外す（入れ子の中の部品だけを消すことはできないため、いちばん外側を消す）
-                        var outer = PrefabUtility.GetOutermostPrefabInstanceRoot(g);
-                        Object.DestroyImmediate(outer != null && outer != contents ? outer : g);
+                        Object.DestroyImmediate(GimmickRoot(g, contents));
                     }
 
                     return true;
@@ -421,8 +420,7 @@ namespace Jeni.KaihenNavi
                     continue;
                 }
 
-                var outer = PrefabUtility.GetOutermostPrefabInstanceRoot(r.gameObject);
-                var target = outer != null && outer != avatar.gameObject && outer.transform.IsChildOf(avatar.transform) ? outer : r.gameObject;
+                var target = GimmickRoot(r.gameObject, avatar.gameObject);
                 if (target == avatar.gameObject) continue;
                 Undo.DestroyObjectImmediate(target);
             }
@@ -458,6 +456,30 @@ namespace Jeni.KaihenNavi
             }
         }
 
+        /// <summary>
+        /// 歩き方の入れ物を探す。部品から上へ、boundary より下にある入れ子の Prefab の根元だけをたどり、いちばん外側を返す。
+        /// 「Gimmicks」のようなただの整理用の入れ物や、服（メッシュを持つ Prefab）まで上がると関係ないものごと消えるので、そこでは止まる。
+        /// 入れ子の Prefab の中でなければ、部品の付いたオブジェクトだけを返す。boundary 自身やその上は返さない。
+        /// </summary>
+        private static GameObject GimmickRoot(GameObject g, GameObject boundary)
+        {
+            if (g == null || boundary == null || g == boundary) return g;
+            if (!g.transform.IsChildOf(boundary.transform)) return g;
+            GameObject found = null;
+            var root = PrefabUtility.GetNearestPrefabInstanceRoot(g);
+            while (root != null && root != boundary && root.transform.IsChildOf(boundary.transform))
+            {
+                // 服などメッシュを持つ Prefab は歩き方の入れ物ではない（ここで止める）
+                if (root.GetComponentsInChildren<Renderer>(true).Length > 0) break;
+                found = root;
+                var parent = root.transform.parent;
+                if (parent == null || parent == boundary.transform) break;
+                root = PrefabUtility.GetNearestPrefabInstanceRoot(parent.gameObject);
+            }
+
+            return found ?? g;
+        }
+
         /// <summary>このアバターで足した歩き方を外し、ベースの歩き方をこのアバター用に書き換えて使う（重ならないように）。</summary>
         private static void FixConflict(FeatureContext ctx, GameObject basePrefab)
         {
@@ -475,8 +497,8 @@ namespace Jeni.KaihenNavi
             if (inherited == null) own.RemoveAt(0);
             foreach (var r in own)
             {
-                var outer = PrefabUtility.GetOutermostPrefabInstanceRoot(r.gameObject);
-                var target = outer != null && outer != avatar.gameObject && outer.transform.IsChildOf(avatar.transform) ? outer : r.gameObject;
+                var target = GimmickRoot(r.gameObject, avatar.gameObject);
+                if (target == avatar.gameObject) continue;
                 Undo.DestroyObjectImmediate(target);
             }
 

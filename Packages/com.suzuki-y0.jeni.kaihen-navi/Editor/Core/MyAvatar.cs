@@ -81,11 +81,26 @@ namespace Jeni.KaihenNavi
         {
             if (avatar == null || KindOf(avatar) == AvatarKind.Mine) return null;
 
+            // つなぎ替えとバックアップの付け替えを 1 つの Undo グループにする（Ctrl+Z で両方戻り、履歴が離れない）
+            Undo.IncrementCurrentGroup();
+            var group = Undo.GetCurrentGroup();
+            try
+            {
+                return CreateInGroup(avatar, backup);
+            }
+            finally
+            {
+                Undo.CollapseUndoOperations(group);
+            }
+        }
+
+        private static string CreateInGroup(VRCAvatarDescriptor avatar, BackupService backup)
+        {
             var target = InstanceRoot(avatar);
             if (target == null) target = avatar.gameObject;
 
-            // つなぎ替えるとバックアップの照合用 ID が変わるので、先に控えておく
-            var backups = backup.List(avatar);
+            // つなぎ替えるとバックアップの照合用 ID が変わるので、先に控えておく（隠れたバックアップも含める）
+            var backups = backup.List(avatar, true);
             var basePrefab = PrefabUtility.IsPartOfPrefabInstance(target) ? PrefabUtility.GetCorrespondingObjectFromSource(target) : null;
 
             // 買ったときの Prefab につながっていれば、先にベースへつなぎ替える（今までの改変はそのまま残る）。
@@ -405,12 +420,136 @@ namespace Jeni.KaihenNavi
 
         // ---------------------------------------------------------------- 自動保存
 
-        /// <summary>シーン上の改変のうち、まだ自分用アバターに保存していないものがあるか。</summary>
+        /// <summary>
+        /// シーン上の改変のうち、まだ自分用アバターに保存していないものがあるか。
+        /// コンストレイントが動かしている骨の位置・回転・大きさのずれは、改変に数えない（毎秒呼ばれる）。
+        /// </summary>
         public static bool HasUnsaved(VRCAvatarDescriptor avatar)
         {
             if (KindOf(avatar) != AvatarKind.Mine) return false;
             var root = InstanceRoot(avatar);
-            return root != null && PrefabUtility.HasPrefabInstanceAnyOverrides(root, false);
+            return root != null && HasUserOverrides(root);
+        }
+
+        /// <summary>
+        /// Prefab のインスタンスに、利用者の改変といえる変更があるか。
+        /// コンストレイント（Unity・VRChat）は編集中もシーンの描画のたびに骨を動かし、ごくわずかな回転のずれが
+        /// 「Prefab からの変更」になる。これを改変と見なすと、何もしていないのに 未保存 になり、自動保存が
+        /// Prefab を何度も書き換えて Undo に「Apply instance to prefab」が積み上がる。
+        /// まず安い HasPrefabInstanceAnyOverrides で確かめ、変更があるときだけ中身を調べる。
+        /// </summary>
+        internal static bool HasUserOverrides(GameObject root)
+        {
+            if (root == null || !PrefabUtility.HasPrefabInstanceAnyOverrides(root, false)) return false;
+            if (PrefabUtility.GetAddedComponents(root).Count > 0 || PrefabUtility.GetRemovedComponents(root).Count > 0 ||
+                PrefabUtility.GetAddedGameObjects(root).Count > 0 || PrefabUtility.GetRemovedGameObjects(root).Count > 0) return true;
+            var driven = DrivenTransforms(root);
+            Dictionary<Object, bool> drivenOnly = null;
+            foreach (var o in PrefabUtility.GetObjectOverrides(root, false))
+            {
+                var t = o.instanceObject as Transform;
+                if (t == null || !driven.Contains(t)) return true;
+                if (drivenOnly == null) drivenOnly = DrivenOnlyTargets(root, driven);
+                var source = PrefabUtility.GetCorrespondingObjectFromSource(t);
+                bool only;
+                // 対応が分からなければ、安全側（改変あり）に倒す
+                if (source == null || !drivenOnly.TryGetValue(source, out only) || !only) return true;
+            }
+            return false;
+        }
+
+        /// <summary>
+        /// コンストレイントが動かす Transform（の Prefab 側）ごとに、変更が位置・回転・大きさだけか。
+        /// 変更の対象（PropertyModification.target）は 1 つ上の Prefab の部品なので、そちらで引く。
+        /// </summary>
+        private static Dictionary<Object, bool> DrivenOnlyTargets(GameObject root, HashSet<Transform> driven)
+        {
+            var sources = new HashSet<Object>();
+            foreach (var t in driven)
+            {
+                var source = PrefabUtility.GetCorrespondingObjectFromSource(t);
+                if (source != null) sources.Add(source);
+            }
+            var result = new Dictionary<Object, bool>();
+            var modifications = PrefabUtility.GetPropertyModifications(root);
+            if (modifications == null) return result;
+            foreach (var m in modifications)
+            {
+                if (m == null || m.target == null || !sources.Contains(m.target) || PrefabUtility.IsDefaultOverride(m)) continue;
+                bool only;
+                if (!result.TryGetValue(m.target, out only)) only = true;
+                result[m.target] = only && IsLocalTransformPath(m.propertyPath);
+            }
+            return result;
+        }
+
+        private static bool IsLocalTransformPath(string path)
+        {
+            return path != null && (path.StartsWith("m_LocalPosition") || path.StartsWith("m_LocalRotation") ||
+                path.StartsWith("m_LocalEulerAnglesHint") || path.StartsWith("m_LocalScale"));
+        }
+
+        // ---------------------------------------------------------------- コンストレイントが動かす骨
+
+        /// <summary>ヒエラルキーが変わるまで使い回す（部品の追加・削除・Undo でも hierarchyChanged が来る）。</summary>
+        private static class DrivenCache
+        {
+            public static readonly Dictionary<GameObject, HashSet<Transform>> Sets = new Dictionary<GameObject, HashSet<Transform>>();
+            public static readonly Dictionary<System.Type, bool> VrcTypes = new Dictionary<System.Type, bool>();
+
+            static DrivenCache()
+            {
+                EditorApplication.hierarchyChanged += Sets.Clear;
+            }
+        }
+
+        /// <summary>
+        /// root 以下で、編集中もコンストレイントが位置・回転を動かしている Transform。
+        /// Unity のコンストレイント（IConstraint）は付いている Transform を動かす。
+        /// VRChat のコンストレイントは SDK が無くてもコンパイルできるよう型名（VRCConstraintBase の派生）で見分け、
+        /// TargetTransform が指定されていればそれを、無ければ付いている Transform を動かす。
+        /// </summary>
+        internal static HashSet<Transform> DrivenTransforms(GameObject root)
+        {
+            HashSet<Transform> set;
+            if (root == null) return new HashSet<Transform>();
+            if (DrivenCache.Sets.TryGetValue(root, out set)) return set;
+            set = new HashSet<Transform>();
+            foreach (var c in root.GetComponentsInChildren<Component>(true))
+            {
+                if (c == null) continue;
+                if (c is UnityEngine.Animations.IConstraint)
+                {
+                    set.Add(c.transform);
+                    continue;
+                }
+                if (!IsVrcConstraint(c.GetType())) continue;
+                var target = VrcConstraintTarget(c);
+                set.Add(target != null ? target : c.transform);
+            }
+            DrivenCache.Sets[root] = set;
+            return set;
+        }
+
+        private static bool IsVrcConstraint(System.Type type)
+        {
+            bool result;
+            if (DrivenCache.VrcTypes.TryGetValue(type, out result)) return result;
+            for (var t = type; t != null && !result; t = t.BaseType)
+                result = t.Name == "VRCConstraintBase" && t.Namespace != null && t.Namespace.StartsWith("VRC");
+            DrivenCache.VrcTypes[type] = result;
+            return result;
+        }
+
+        /// <summary>VRChat のコンストレイントの TargetTransform（フィールドかプロパティ）。無ければ null。</summary>
+        private static Transform VrcConstraintTarget(Component constraint)
+        {
+            const System.Reflection.BindingFlags flags = System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Public;
+            var type = constraint.GetType();
+            var field = type.GetField("TargetTransform", flags);
+            if (field != null) return field.GetValue(constraint) as Transform;
+            var property = type.GetProperty("TargetTransform", flags);
+            return property != null && property.CanRead ? property.GetValue(constraint, null) as Transform : null;
         }
 
         /// <summary>
@@ -425,7 +564,8 @@ namespace Jeni.KaihenNavi
 
             var path = PrefabUtility.GetPrefabAssetPathOfNearestInstanceRoot(root);
             if (!IsMinePath(path)) return false;
-            if (!PrefabUtility.HasPrefabInstanceAnyOverrides(root, false)) return false;
+            // コンストレイントが動かした骨のずれだけなら書き込まない（Undo も積まない）
+            if (!HasUserOverrides(root)) return false;
 
             // AutomatedAction はシーンの追加物を Undo 対象外の Prefab 部品にしてしまう。
             // 保存も編集と同じグループへ入れ、Ctrl+Z でアセットとシーンを一緒に戻す。
@@ -433,13 +573,164 @@ namespace Jeni.KaihenNavi
             var group = Undo.GetCurrentGroup();
             var undoName = Undo.GetCurrentGroupName();
             if (recordUndo) Undo.FlushUndoRecordObjects();
+            // 配列が縮んだ後の範囲外の要素の変更は、Apply しても自分用 Prefab に残る（Unity の仕様）。
+            // シーン側を先に片付け、縮む枠があるときだけ保存後にファイル側も片付ける
+            RemoveStaleOverrides(root, recordUndo ? undoName : null);
+            var shrinks = ShrinksMaterials(root);
             PrefabUtility.ApplyPrefabInstance(root, recordUndo ? InteractionMode.UserAction : InteractionMode.AutomatedAction);
+            if (shrinks || HasStaleOverrides(AssetDatabase.LoadAssetAtPath<GameObject>(path))) RemoveStaleOverridesInAsset(path);
             if (recordUndo)
             {
                 Undo.SetCurrentGroupName(undoName);
                 Undo.CollapseUndoOperations(group);
             }
             return true;
+        }
+
+        // ---------------------------------------------------------------- 残った古いオーバーライド
+
+        /// <summary>
+        /// シーンのアバター（Prefab のインスタンス）に残った、もう使われていないオーバーライドを取り除く。
+        /// 自分用アバターでなくても使える（シーンだけの改変でも、消したファイルへの参照を残さない）。
+        /// </summary>
+        internal static bool RemoveStaleOverrides(VRCAvatarDescriptor avatar, string undoName)
+        {
+            var root = InstanceRoot(avatar);
+            return root != null && RemoveStaleOverrides(root, undoName);
+        }
+
+        /// <summary>
+        /// Undo・やり直しの後に呼ぶ（Undo には記録しない）。やり直しでは保存（Apply）の記録が自分用 Prefab を
+        /// 古い変更ごと戻し、ファイル側の片付け（SaveAsPrefabAsset）は Undo に載らないので、ここで片付け直す。
+        /// 古い変更が無ければ Prefab は開かない。
+        /// </summary>
+        internal static void RemoveStaleOverridesWithoutUndo(VRCAvatarDescriptor avatar)
+        {
+            if (EditorApplication.isPlayingOrWillChangePlaymode) return;
+            var root = InstanceRoot(avatar);
+            if (root == null) return;
+            RemoveStaleOverrides(root, null);
+            var path = PrefabUtility.GetPrefabAssetPathOfNearestInstanceRoot(root);
+            if (!IsMinePath(path)) return;
+            var asset = AssetDatabase.LoadAssetAtPath<GameObject>(path);
+            if (!HasStaleOverrides(asset)) return;
+            // やり直しで戻った内容がまだファイルに書かれていなければ、先に書いてから開く
+            AssetDatabase.SaveAssetIfDirty(asset);
+            RemoveStaleOverridesInAsset(path);
+        }
+
+        /// <summary>
+        /// root 以下の Prefab のインスタンスから、使われていないオーバーライドを取り除く。取り除いたら true。
+        /// ・マテリアルの配列が縮んだ後に残る、範囲外の要素の変更（m_Materials.Array.data[i]）。
+        ///   Unity は配列が短くなっても範囲外の要素の変更を消さないため、インナーカラーを戻した後も
+        ///   内側用のマテリアルへの参照が残り、ファイルを片付けられなかった。範囲外なので見た目は変わらない。
+        /// ・変更先の部品が無くなった変更のうち、インナーカラーが作ったファイルを参照しているもの。
+        /// undoName を渡すと Undo に記録する（null なら記録しない）。
+        /// </summary>
+        private static bool RemoveStaleOverrides(GameObject root, string undoName)
+        {
+            if (root == null) return false;
+            var changed = false;
+            var seen = new HashSet<Object>();
+            foreach (var t in root.GetComponentsInChildren<Transform>(true))
+            {
+                var go = t.gameObject;
+                var handle = PrefabUtility.GetPrefabInstanceHandle(go);
+                if (handle == null || !seen.Add(handle)) continue;
+                var cleaned = WithoutStale(PrefabUtility.GetPropertyModifications(go));
+                if (cleaned == null) continue;
+                if (undoName != null) Undo.RegisterCompleteObjectUndo(handle, undoName);
+                PrefabUtility.SetPropertyModifications(go, cleaned);
+                changed = true;
+            }
+            return changed;
+        }
+
+        /// <summary>取り除くものがあるか（読むだけ）。保存のたびに呼ぶので、Prefab は開かない。</summary>
+        private static bool HasStaleOverrides(GameObject root)
+        {
+            if (root == null) return false;
+            var seen = new HashSet<Object>();
+            foreach (var t in root.GetComponentsInChildren<Transform>(true))
+            {
+                var handle = PrefabUtility.GetPrefabInstanceHandle(t.gameObject);
+                if (handle == null || !seen.Add(handle)) continue;
+                if (WithoutStale(PrefabUtility.GetPropertyModifications(t.gameObject)) != null) return true;
+            }
+            return false;
+        }
+
+        /// <summary>シーンの方が自分用 Prefab よりマテリアルの枠が少ない Renderer があるか（保存で配列が縮む）。</summary>
+        private static bool ShrinksMaterials(GameObject root)
+        {
+            foreach (var r in root.GetComponentsInChildren<Renderer>(true))
+            {
+                var source = PrefabUtility.GetCorrespondingObjectFromSource(r);
+                if (source != null && r.sharedMaterials.Length < source.sharedMaterials.Length) return true;
+            }
+            return false;
+        }
+
+        /// <summary>
+        /// 自分用 Prefab（ファイル。ベースのプレハブバリアント）に残った、使われていないオーバーライドを取り除いて保存する。
+        /// Prefab 編集と同じ方法（LoadPrefabContents → SaveAsPrefabAsset）で開くので、ほかのオーバーライドはそのまま。
+        /// Ctrl+Z では、同じグループの Apply の記録が保存前の Prefab に戻す（範囲外の変更は見た目に影響しない）。
+        /// </summary>
+        private static void RemoveStaleOverridesInAsset(string path)
+        {
+            if (!IsMinePath(path)) return;
+            var contents = PrefabUtility.LoadPrefabContents(path);
+            if (contents == null) return;
+            try
+            {
+                if (RemoveStaleOverrides(contents, null)) PrefabUtility.SaveAsPrefabAsset(contents, path);
+            }
+            finally
+            {
+                PrefabUtility.UnloadPrefabContents(contents);
+            }
+        }
+
+        private const string MaterialElement = "m_Materials.Array.data[";
+        private const string MaterialSize = "m_Materials.Array.size";
+
+        /// <summary>使われていない変更を除いた一覧。除くものが無ければ null。</summary>
+        private static PropertyModification[] WithoutStale(PropertyModification[] modifications)
+        {
+            if (modifications == null || modifications.Length == 0) return null;
+            // 配列の長さは、この段の変更にあればその値、無ければ元（target）の長さ
+            var sizes = new Dictionary<Object, int>();
+            foreach (var m in modifications)
+            {
+                int size;
+                if (m != null && m.target is Renderer && m.propertyPath == MaterialSize && int.TryParse(m.value, out size))
+                    sizes[m.target] = size;
+            }
+            var result = new List<PropertyModification>(modifications.Length);
+            foreach (var m in modifications)
+            {
+                if (m != null && IsStale(m, sizes)) continue;
+                result.Add(m);
+            }
+            return result.Count == modifications.Length ? null : result.ToArray();
+        }
+
+        private static bool IsStale(PropertyModification m, Dictionary<Object, int> sizes)
+        {
+            if (m.target == null)
+            {
+                // 部品が無くなった変更は、インナーカラーの生成物を参照しているものだけ外す
+                return m.objectReference != null && InnerColorAssets.IsGenerated(m.objectReference);
+            }
+            var renderer = m.target as Renderer;
+            var path = m.propertyPath;
+            if (renderer == null || path == null || !path.StartsWith(MaterialElement, System.StringComparison.Ordinal) ||
+                !path.EndsWith("]", System.StringComparison.Ordinal)) return false;
+            int index;
+            if (!int.TryParse(path.Substring(MaterialElement.Length, path.Length - MaterialElement.Length - 1), out index)) return false;
+            int size;
+            if (!sizes.TryGetValue(m.target, out size)) size = renderer.sharedMaterials.Length;
+            return index >= size;
         }
 
         /// <summary>このアバター用に複製したマテリアルの変更をファイルに書き出す（Ctrl+S を押し忘れても残るように）。</summary>

@@ -299,6 +299,9 @@ namespace Jeni.KaihenNavi
         private static void DeleteUnused(Material material, HashSet<string> stale)
         {
             stale.RemoveWhere(p => string.IsNullOrEmpty(p) || !WorkFolders.IsToolPath(p) || !File.Exists(p));
+            // この起動のあいだに書いた画像は Ctrl+Z で戻る先になり得る（スライダーを続けて動かした手順は
+            // 履歴では 1 件にまとまるので、履歴の参照だけでは守れない）。消すのは次の起動時の片付けに任せる
+            stale.RemoveWhere(p => File.GetLastWriteTime(p) >= BackupService.SessionStart);
             if (stale.Count == 0) return;
             // ディスク上の参照を数える前に、差し替えたマテリアルを保存する
             AssetDatabase.SaveAssetIfDirty(material);

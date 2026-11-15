@@ -48,6 +48,12 @@
 - **見つけて直した（2026-11-15・Unity 未確認）：拘束で動く骨で自動保存が止まらない。** Cazalis の `LowerArmSupport_R` は Scene の再描画のたびに拘束で少し回り、Prefab の上書きとして数えられていた → 「未保存の変更あり」・数十秒ごとの Apply instance to prefab・フッターの 元に戻す がバックアップ復元になる。Unity / VRChat の拘束で動く Transform の位置・回転・大きさの上書きは「未保存」に数えず、それだけなら保存しない（MyAvatar.DrivenTransforms / HasUserOverrides）。自動保存は、ほかのツールの Undo（例：EditorEye の ExecuteDynamicScript）だけでは保存しない。VRChat の拘束の `TargetTransform` という名前は実機で未確認（無ければ拘束が付いた Transform を対象にする）。
 - 画面操作での確認は途中で止めた（ユーザーの緊急停止）。KNTest の一時ファイルは削除済み。MCP Project のパッケージは 3ed788b の修正まで入れてある（コンパイルは Unity を前面にしたときに走る）。
 
+- **2026-11-15 13 時：EditorEye（MCP Project/EditorEye の inbox/outbox）で画面操作なしに実機確認。3 件とも合格。**
+  - 拘束（VRCRotationConstraint）で動く `LowerArmSupport_R` の上書きがあっても「未保存」にならず、8 秒待っても保存も Undo も増えない。
+  - 色を変える → 自動保存 → 上の帯の 元に戻す：Unity の Undo 1 回で編集と保存がまとめて戻る（色・Prefab ファイルとも元どおり）。
+  - 2nd 層の焼き込み 色味 30 → 60 → Ctrl+Z 1 回で 30 の画像に戻る。**ここで不具合を見つけて直した**：焼き直しのたびに前の画像を消していたが、スライダーを続けて動かすと履歴が 1 件にまとまるため、Ctrl+Z の戻り先の画像まで消えていた。この起動中に書いた画像は消さず、次の起動時の片付けに任せる（ColorLayers.DeleteUnused）。
+  - EditorEye の使い方：`EditorEye/inbox/<Id>.json` に {"Id","Tool","Params"} を書き、`outbox/<Id>.json` を読む（AGENTS.md）。`execute_dynamic_compilation`（public static Run()、async 可）・`refresh_unity`・`compile`・`get_logs` が使える。
+
 **わかっている残り（今回の分）**
 - 歩き方：メッシュを含む歩き方の Prefab は、部品の一部だけ消える可能性がある（服を丸ごと消すよりは安全側）。
 - 色の焼き込みは、履歴に残っている手順の数だけ PNG が残る（起動時に使われない物は消える）。

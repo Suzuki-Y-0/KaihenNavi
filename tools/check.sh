@@ -42,6 +42,13 @@ mcs -nologo -langversion:7 -warnaserror+ -nowarn:0618 \
     "$here/stubs/UnityStubs.cs" "$here/stubs/VrcAndMaStubs.cs" "${files[@]}" "$here/tests/ImportSortTests.cs"
 mono "$out/ImportSortTests.exe"
 
+# 作業フォルダの形（新構成 <アバター>_kaihen/Variant と旧構成）・ルートの決め方・持ち物の判定・「Variant へ移す」と Ctrl+Z を確認する。
+echo "== Layout"
+mcs -nologo -langversion:7 -warnaserror+ -nowarn:0618 \
+    -r:System.Core.dll -out:"$out/LayoutTests.exe" \
+    "$here/stubs/UnityStubs.cs" "$here/stubs/VrcAndMaStubs.cs" "${files[@]}" "$here/tests/LayoutTests.cs"
+mono "$out/LayoutTests.exe"
+
 # 言語ファイルのキーがそろっているか
 python3 - "$src/Localization" <<'EOF'
 import json, sys, os

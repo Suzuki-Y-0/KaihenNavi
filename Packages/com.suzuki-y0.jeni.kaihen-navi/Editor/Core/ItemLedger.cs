@@ -447,8 +447,15 @@ namespace Jeni.KaihenNavi
         private static bool IsScanPath(string path)
         {
             if (!path.StartsWith("Assets/", StringComparison.Ordinal) ||
-                path.StartsWith(WorkFolders.Root + "/", StringComparison.OrdinalIgnoreCase) || IsToolPrefab(path) ||
+                path.StartsWith(WorkFolders.Root + "/", StringComparison.OrdinalIgnoreCase) ||
+                MyAvatar.IsBasePath(path) || WorkFolders.IsDataPath(path) ||
                 !path.EndsWith(".prefab", StringComparison.OrdinalIgnoreCase)) return false;
+            // 改変フォルダの直下は、改変アバター（アバターの Prefab）だけ除く。ユーザーが足した服のバリアントは服として出す
+            if (MyAvatar.IsMinePath(path))
+            {
+                var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(path);
+                if (prefab == null || prefab.GetComponent<VRCAvatarDescriptor>() != null) return false;
+            }
             var parts = path.Split('/');
             return !parts.Take(parts.Length - 1).Any(p =>
                 p.Equals("Editor", StringComparison.OrdinalIgnoreCase) ||
@@ -456,7 +463,10 @@ namespace Jeni.KaihenNavi
                 p.Equals("Packages", StringComparison.OrdinalIgnoreCase));
         }
 
-        /// <summary>改変アバター・ベース・内部データ（バックアップのコピーなど）の Prefab。服の一覧に関係しない。</summary>
+        /// <summary>
+        /// 改変アバター・ベース・内部データ（バックアップのコピーなど）の場所の Prefab（パスだけで判断。取り込みの通知の中で呼ぶため
+        /// Prefab を読まない）。自動保存で服の一覧を作り直さないために使う。
+        /// </summary>
         internal static bool IsToolPrefab(string path)
         {
             return MyAvatar.IsMinePath(path) || MyAvatar.IsBasePath(path) || WorkFolders.IsDataPath(path);

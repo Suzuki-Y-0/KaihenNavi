@@ -419,7 +419,7 @@ namespace UnityEngine
         public static Func<object, string> SerializeForTests;
         public static Func<string, Type, object> DeserializeForTests;
         public static string ToJson(object o) { return SerializeForTests == null ? "" : SerializeForTests(o); }
-        public static string ToJson(object o, bool pretty) { return ""; }
+        public static string ToJson(object o, bool pretty) { return ToJson(o); }
         public static T FromJson<T>(string json)
         { return DeserializeForTests == null ? default(T) : (T)DeserializeForTests(json, typeof(T)); }
     }
@@ -753,6 +753,7 @@ namespace UnityEditor
         public Vector2 minSize, maxSize;
         public UnityEngine.UIElements.VisualElement rootVisualElement;
         public static T GetWindow<T>() where T : EditorWindow { return null; }
+        public static T GetWindow<T>(bool utility, string title, bool focus) where T : EditorWindow { return null; }
         public void Show() { }
         public void ShowUtility() { }
         public void Close() { }
@@ -804,6 +805,13 @@ namespace UnityEditor
         public static bool GetBool(string key, bool fallback) { return fallback; }
         public static string GetString(string k, string d) { return d; }
         public static void SetString(string k, string v) { }
+        public static void SetBool(string key, bool value) { }
+    }
+
+    public static class EditorUserSettings
+    {
+        public static string GetConfigValue(string name) { return null; }
+        public static void SetConfigValue(string name, string value) { }
     }
 
     [AttributeUsage(AttributeTargets.Class)]
@@ -849,7 +857,9 @@ namespace UnityEditor
         public static Action<string> importPackageCompleted;
         public static Action<string> importPackageCancelled;
         public static Action<string, string> importPackageFailed;
-        public static string MoveAsset(string from, string to) { if (MoveForTests != null) MoveForTests(from, to); return ""; }
+        public static Func<string, string, string> MoveResultForTests;
+        public static string MoveAsset(string from, string to)
+        { if (MoveForTests != null) MoveForTests(from, to); return MoveResultForTests == null ? "" : MoveResultForTests(from, to); }
         public static bool TryGetGUIDAndLocalFileIdentifier(Object o, out string guid, out long localId)
         { guid = GuidForTests == null ? "" : GuidForTests(GetAssetPath(o));
             localId = LocalIdForTests == null ? 0 : LocalIdForTests(o); return o != null; }
@@ -866,7 +876,8 @@ namespace UnityEditor
         public static T LoadAssetAtPath<T>(string path) where T : Object { return LoadForTests == null ? null : LoadForTests(path) as T; }
         public static string GetAssetPath(Object o) { return PathForTests == null ? null : PathForTests(o); }
         public static bool IsValidFolder(string p) { return FolderForTests == null ? true : FolderForTests(p); }
-        public static string CreateFolder(string parent, string name) { return null; }
+        public static Action<string, string> CreateFolderForTests;
+        public static string CreateFolder(string parent, string name) { if (CreateFolderForTests != null) CreateFolderForTests(parent, name); return null; }
         public static string GenerateUniqueAssetPath(string p) { return p; }
         public static void CreateAsset(Object o, string path) { if (CreateForTests != null) CreateForTests(o, path); }
         public static void AddObjectToAsset(Object o, Object asset) { }
@@ -1048,6 +1059,7 @@ namespace UnityEditor
         public static CallbackFunction update;
         public static double timeSinceStartup;
         public static bool isPlayingOrWillChangePlaymode;
+        public static bool isCompiling, isUpdating;
         public static Action hierarchyChanged;
         public static bool ExecuteMenuItem(string path) { return false; }
         public static Action<PlayModeStateChange> playModeStateChanged;
@@ -1058,6 +1070,7 @@ namespace UnityEditor
     public static class Selection
     {
         public static Object activeObject;
+        public static string[] assetGUIDs;
         public static GameObject activeGameObject;
         public static Transform activeTransform;
     }

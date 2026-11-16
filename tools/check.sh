@@ -35,6 +35,13 @@ mcs -nologo -langversion:7 -warnaserror+ -nowarn:0618 -define:INNER_COLOR_ASSET_
     "$here/tests/InnerColorTriangleTests.cs" "$here/tests/InnerColorAssetTests.cs"
 mono "$out/InnerColorTests.exe"
 
+# インポートの振り分け：判定・移動・Ctrl+Z・台帳と取り込みの控えの書き換えを、一時フォルダの本物のファイルで確認する。
+echo "== ImportSort"
+mcs -nologo -langversion:7 -warnaserror+ -nowarn:0618 \
+    -r:System.Core.dll -out:"$out/ImportSortTests.exe" \
+    "$here/stubs/UnityStubs.cs" "$here/stubs/VrcAndMaStubs.cs" "${files[@]}" "$here/tests/ImportSortTests.cs"
+mono "$out/ImportSortTests.exe"
+
 # 言語ファイルのキーがそろっているか
 python3 - "$src/Localization" <<'EOF'
 import json, sys, os

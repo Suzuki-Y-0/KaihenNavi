@@ -160,13 +160,14 @@ namespace Jeni.KaihenNavi
             var field = new TextField { value = _name };
             field.AddToClassList("kn-list__field");
             root.Add(field);
-            var where = Ui.Text(L10n.Tr("new.where", WorkFolders.AvatarsRoot + "/" + WorkFolders.Sanitize(_name ?? "")), "kn-hint");
+            // 〈ルート〉/Variant/〈アバター〉_〈改変名〉（ベースを選んだときはそのルート）
+            var where = Ui.Text(L10n.Tr("new.where", MyAvatar.NewAvatarFolder(OriginalForNew(_base), _name ?? "", false)), "kn-hint");
             root.Add(where);
             root.Add(Ui.Text(L10n.Tr(MyAvatar.BaseOf(_base) == null ? "new.baseFirst" : "new.baseReuse"), "kn-hint"));
             field.RegisterValueChangedCallback(e =>
             {
                 _name = e.newValue;
-                where.text = L10n.Tr("new.where", WorkFolders.AvatarsRoot + "/" + WorkFolders.Sanitize(_name ?? ""));
+                where.text = L10n.Tr("new.where", MyAvatar.NewAvatarFolder(OriginalForNew(_base), _name ?? "", false));
             });
 
             root.Add(Ui.Button(L10n.Tr("new.create"), () =>
@@ -315,6 +316,12 @@ namespace Jeni.KaihenNavi
         {
             CurrentMode = Mode.Start;
             if (Picked != null) Picked(avatar);
+        }
+
+        /// <summary>保存先の表示用：CreateNew と同じく、ベースを選んだら元アバターから場所を決める。</summary>
+        private static GameObject OriginalForNew(GameObject prefab)
+        {
+            return MyAvatar.IsBasePath(AssetDatabase.GetAssetPath(prefab)) ? MyAvatar.OriginalOf(prefab) ?? prefab : prefab;
         }
 
         private static string Folder(GameObject prefab)

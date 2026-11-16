@@ -63,8 +63,9 @@ namespace Jeni.KaihenNavi
             "Editor Default Resources", "Gizmos", "Standard Assets",
         };
 
-        // ルート直下で用途フォルダとして扱わない名前
-        private static readonly HashSet<string> NonCategory = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "Variant", "Editor" };
+        // ルート直下で用途フォルダとして扱わない名前（改変アバター・作業用スクリプト・かいへんナビの内部データ）
+        private static readonly HashSet<string> NonCategory = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+            { WorkFolders.VariantName, "Editor", WorkFolders.DataName };
 
         // パスに依存しうる特別なフォルダ（Unity が名前で扱いを変える）
         private static readonly HashSet<string> SpecialFolders = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
@@ -166,6 +167,26 @@ namespace Jeni.KaihenNavi
             if (roots == null || roots.Count == 0) return null;
             if (roots.Count == 1) return roots[0];
             return roots.FirstOrDefault(r => r == saved);
+        }
+
+        /// <summary>
+        /// アバターの改変アバター・ベース・内部データを置くルート（振り分けと同じルートの考え方）。
+        /// 元アバターの Prefab がルートの中にあればそれ → 〈アバター名〉_kaihen があればそれ → 振り分けのルート（1 つだけか、選んで覚えたもの）
+        /// → どれも無ければ 〈アバター名〉_kaihen（まだ無いパス。フォルダを作るときに作る）。
+        /// </summary>
+        internal static string ChooseAvatarRoot(string originalPath, string avatarName, IList<string> roots, string saved)
+        {
+            var own = WorkFolders.KaihenRootOf(originalPath);
+            if (own != null) return own;
+            var named = NewRootPath(avatarName);
+            if (roots != null && roots.Contains(named)) return named;
+            return ChooseRoot(roots, saved) ?? named;
+        }
+
+        /// <summary>ChooseAvatarRoot を今のプロジェクトのルートと、覚えている選択で。</summary>
+        internal static string RootForAvatar(string originalPath, string avatarName)
+        {
+            return ChooseAvatarRoot(originalPath, avatarName, FindRoots(), SavedRoot);
         }
 
         /// <summary>新しく作るルートのパス（Assets/〈アバター名〉_kaihen）。</summary>

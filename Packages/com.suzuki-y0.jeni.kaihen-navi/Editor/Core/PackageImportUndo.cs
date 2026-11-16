@@ -49,7 +49,7 @@ namespace Jeni.KaihenNavi
         /// 振り分けでフォルダを移したとき、控え（Library/KaihenNavi/Imports/*/state.json）のパスを移動先へ書き換える。
         /// こうしておくと、取り込みの Ctrl+Z / やり直しが移動先のファイルを対象にする。
         /// </summary>
-        internal static void RewritePaths(Func<string, string> map)
+        internal static void RewritePaths(Func<string, string> map, bool includeManaged = false)
         {
             var root = Path.Combine("Library", "KaihenNavi", "Imports");
             if (!Directory.Exists(root)) return;
@@ -60,21 +60,23 @@ namespace Jeni.KaihenNavi
                 try
                 {
                     var snapshot = JsonUtility.FromJson<Snapshot>(File.ReadAllText(file));
-                    if (snapshot != null && RewriteSnapshot(snapshot, map))
+                    if (snapshot != null && RewriteSnapshot(snapshot, map, includeManaged))
                         File.WriteAllText(file, JsonUtility.ToJson(snapshot), Encoding.UTF8);
                 }
                 catch (Exception e) { Debug.LogWarning("[KaihenNavi] Import Undo: " + e.Message); }
             }
         }
 
-        /// <summary>控えのファイルとフォルダのパスを書き換える。.before/.after の中身は番号で引くのでそのまま使える。</summary>
-        internal static bool RewriteSnapshot(Snapshot snapshot, Func<string, string> map)
+        /// <summary>
+        /// 控えのファイルとフォルダのパスを書き換える。.before/.after の中身は番号で引くのでそのまま使える。
+        /// 台帳などツールのファイルは、Variant への移行（includeManaged）のときだけ動かす。
+        /// </summary>
+        internal static bool RewriteSnapshot(Snapshot snapshot, Func<string, string> map, bool includeManaged = false)
         {
             var changed = false;
             foreach (var file in snapshot.files)
             {
-                // 台帳などツールのファイルは動かさない
-                if (IsManaged(file.path)) continue;
+                if (!includeManaged && IsManaged(file.path)) continue;
                 var next = map(file.path);
                 if (next == file.path) continue;
                 file.path = next;
@@ -110,10 +112,11 @@ namespace Jeni.KaihenNavi
                     Add(snapshot, entry.path);
                     Add(snapshot, entry.path + ".meta");
                 }
-                Add(snapshot, ItemLedger.LedgerFile);
-                Add(snapshot, ItemLedger.LedgerFile + ".meta");
-                Add(snapshot, WorkFolders.Root + "/README.md");
-                Add(snapshot, WorkFolders.Root + "/README.md.meta");
+                var ledger = ItemLedger.LedgerFile;
+                Add(snapshot, ledger);
+                Add(snapshot, ledger + ".meta");
+                Add(snapshot, ItemLedger.ReadmeFile);
+                Add(snapshot, ItemLedger.ReadmeFile + ".meta");
                 var directory = Path.Combine("Library", "KaihenNavi", "Imports", Guid.NewGuid().ToString("N"));
                 Directory.CreateDirectory(directory);
                 for (var i = 0; i < snapshot.files.Count; i++)
@@ -249,8 +252,8 @@ namespace Jeni.KaihenNavi
 
         private static bool IsManaged(string path)
         {
-            return path == ItemLedger.LedgerFile || path == ItemLedger.LedgerFile + ".meta" ||
-                path == WorkFolders.Root + "/README.md" || path == WorkFolders.Root + "/README.md.meta";
+            // 旧構成と各ルートの KaihenNavi の台帳・README（Variant への移行で台帳の場所が変わっても見分けられるよう、形で判断する）
+            return WorkFolders.IsManagedDataFile(path);
         }
 
         internal static void ValidatePath(string path)

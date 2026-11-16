@@ -39,7 +39,8 @@ namespace Jeni.KaihenNavi
     [InitializeOnLoad]
     internal static class ItemLedger
     {
-        private const string LedgerPath = WorkFolders.Root + "/Ledger/items.json";
+        // 台帳はプロジェクトで 1 つ。旧構成の Assets/KaihenNavi/Ledger があればそれ、無ければルートの KaihenNavi/Ledger（WorkFolders.LedgerFile）
+        private static string LedgerPath { get { return WorkFolders.LedgerFile(); } }
         private static List<LedgerPackage> _cachedPackages;
         private static Dictionary<string, LedgerPackage> _recordsByPath;
         private static List<LedgerPackage> _projectItems;
@@ -47,7 +48,10 @@ namespace Jeni.KaihenNavi
         public static event Action Changed;
         private static readonly Dictionary<string, KonoAssetLedgerLinkUndo> LinkUndo = new Dictionary<string, KonoAssetLedgerLinkUndo>();
 
-        internal const string LedgerFile = LedgerPath;
+        internal static string LedgerFile { get { return LedgerPath; } }
+
+        /// <summary>台帳と同じ内部データのフォルダにある README（取り込みの Undo の控えに入れる）。</summary>
+        internal static string ReadmeFile { get { return WorkFolders.DataFolderOfLedger(LedgerPath) + "/README.md"; } }
 
         private const string PendingKey = "KaihenNavi.ItemLedger.Pending";
 
@@ -304,7 +308,8 @@ namespace Jeni.KaihenNavi
         {
             try
             {
-                if (!File.Exists(LedgerPath)) return;
+                var ledger = LedgerPath;
+                if (!File.Exists(ledger)) return;
                 var packages = ReadPackages();
                 if (RewritePackages(packages, map)) Save(packages);
             }
@@ -350,11 +355,12 @@ namespace Jeni.KaihenNavi
         {
             try
             {
-                WorkFolders.EnsureReadme();
-                WorkFolders.Ensure(WorkFolders.Root + "/Ledger");
+                var ledger = LedgerPath;
+                WorkFolders.EnsureReadme(WorkFolders.DataFolderOfLedger(ledger));
+                WorkFolders.Ensure(Path.GetDirectoryName(ledger).Replace('\\', '/'));
                 // 取り込み・発見の記録はシーンの Undo とは独立して保存する。
-                File.WriteAllText(LedgerPath, JsonUtility.ToJson(new LedgerData { packages = packages }, true), new UTF8Encoding(false));
-                AssetDatabase.ImportAsset(LedgerPath);
+                File.WriteAllText(ledger, JsonUtility.ToJson(new LedgerData { packages = packages }, true), new UTF8Encoding(false));
+                AssetDatabase.ImportAsset(ledger);
             }
             finally { _cachedPackages = null; _recordsByPath = null; _projectItems = null; }
             if (Changed != null) Changed();
@@ -426,6 +432,8 @@ namespace Jeni.KaihenNavi
                 // 振り分け先（Assets/〈アバター〉_kaihen/〈用途〉）の名前はアバターの商品名と一致しやすいので照合しない
                 if (i == 1 && ImportSorter.IsRootName(name)) continue;
                 if (i == 2 && ImportSorter.IsRootName(parts[1])) continue;
+                // 改変フォルダ（Variant/〈アバター〉_〈改変名〉）の名前もアバターの商品名と一致しやすい
+                if (i == 3 && ImportSorter.IsRootName(parts[1]) && parts[2] == WorkFolders.VariantName) continue;
                 if (GenericFolders.Contains(KonoAssetLink.Normalize(name))) continue;
                 var found = KonoAssetLink.FindByFolderName(name);
                 if (found == null) continue;
@@ -439,13 +447,19 @@ namespace Jeni.KaihenNavi
         private static bool IsScanPath(string path)
         {
             if (!path.StartsWith("Assets/", StringComparison.Ordinal) ||
-                path.StartsWith(WorkFolders.Root + "/", StringComparison.OrdinalIgnoreCase) ||
+                path.StartsWith(WorkFolders.Root + "/", StringComparison.OrdinalIgnoreCase) || IsToolPrefab(path) ||
                 !path.EndsWith(".prefab", StringComparison.OrdinalIgnoreCase)) return false;
             var parts = path.Split('/');
             return !parts.Take(parts.Length - 1).Any(p =>
                 p.Equals("Editor", StringComparison.OrdinalIgnoreCase) ||
                 p.Equals("Samples", StringComparison.OrdinalIgnoreCase) ||
                 p.Equals("Packages", StringComparison.OrdinalIgnoreCase));
+        }
+
+        /// <summary>改変アバター・ベース・内部データ（バックアップのコピーなど）の Prefab。服の一覧に関係しない。</summary>
+        internal static bool IsToolPrefab(string path)
+        {
+            return MyAvatar.IsMinePath(path) || MyAvatar.IsBasePath(path) || WorkFolders.IsDataPath(path);
         }
 
         private static void GroupFolders(string folder, List<string> paths, int depth, Dictionary<string, string> result)
@@ -514,7 +528,7 @@ namespace Jeni.KaihenNavi
             // ただし、このツールの作業フォルダ（アバターの自動保存など）の Prefab は服の一覧に関係しないので数えない。
             var prefabChanged = importedAssets.Concat(deletedAssets).Concat(movedAssets).Concat(movedFromAssetPaths)
                 .Any(p => p != null && p.EndsWith(".prefab", StringComparison.OrdinalIgnoreCase)
-                          && !p.StartsWith(WorkFolders.Root + "/", StringComparison.Ordinal));
+                          && !p.StartsWith(WorkFolders.Root + "/", StringComparison.Ordinal) && !ItemLedger.IsToolPrefab(p));
             if (prefabChanged) ItemLedger.Invalidate();
         }
     }

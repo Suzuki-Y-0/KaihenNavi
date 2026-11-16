@@ -7,7 +7,7 @@ namespace Jeni.KaihenNavi
 {
     /// <summary>
     /// アバターの元マテリアルを書き換えないための複製係。
-    /// 初めて変更するマテリアルを Assets/KaihenNavi/アバター名/Materials/ に複製し、
+    /// 初めて変更するマテリアルを改変フォルダの Materials/ に（新構成は 〈元の名前〉_〈改変名〉.mat で）複製し、
     /// アバター内でそのマテリアルを使っている場所をすべて複製に差し替える。
     /// </summary>
     internal static class MaterialCopier
@@ -23,8 +23,23 @@ namespace Jeni.KaihenNavi
 
             var folder = WorkFolders.Ensure(WorkFolders.Materials(avatar.gameObject));
             var copy = Object.Instantiate(original);
-            copy.name = original.name;
-            var path = AssetDatabase.GenerateUniqueAssetPath(folder + "/" + WorkFolders.Sanitize(original.name) + ".mat");
+            string path;
+            var modification = WorkFolders.ModificationNameFor(avatar.gameObject);
+            if (modification == null)
+            {
+                // 旧構成の改変フォルダは前と同じ名前のまま
+                copy.name = original.name;
+                path = AssetDatabase.GenerateUniqueAssetPath(folder + "/" + WorkFolders.Sanitize(original.name) + ".mat");
+            }
+            else
+            {
+                // 新構成は AvatarPrefabMaterialExporter と同じ 〈元の名前〉_〈改変名〉（重なれば 〈元の名前〉_2_〈改変名〉）
+                string display, file;
+                WorkFolders.CopyMaterialName(original.name, modification, n => System.IO.File.Exists(folder + "/" + n + ".mat"),
+                    out display, out file);
+                copy.name = display;
+                path = folder + "/" + file + ".mat";
+            }
             // 複製ファイル自体は Undo の対象にしない（参照の差し替えだけを戻せば元の見た目に戻る）
             AssetDatabase.CreateAsset(copy, path);
 

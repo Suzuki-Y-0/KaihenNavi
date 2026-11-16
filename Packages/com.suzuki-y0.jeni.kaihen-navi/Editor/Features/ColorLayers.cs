@@ -305,7 +305,7 @@ namespace Jeni.KaihenNavi
             if (stale.Count == 0) return;
             // ディスク上の参照を数える前に、差し替えたマテリアルを保存する
             AssetDatabase.SaveAssetIfDirty(material);
-            DeleteUnreferenced(stale, "t:BackupSnapshot t:Prefab", WorkFolders.Root);
+            DeleteUnreferenced(stale, "t:BackupSnapshot t:Prefab", WorkFolders.ToolFolders());
         }
 
         /// <summary>
@@ -317,9 +317,10 @@ namespace Jeni.KaihenNavi
         /// <returns>消した数。</returns>
         internal static int SweepUnusedBakes(System.DateTime sessionStart, System.Func<string, System.DateTime> lastWrite)
         {
-            if (!AssetDatabase.IsValidFolder(WorkFolders.Root)) return 0;
+            var folders = WorkFolders.ToolFolders();
+            if (folders.Length == 0) return 0;
             var stale = new HashSet<string>();
-            foreach (var guid in AssetDatabase.FindAssets("t:Texture2D", new[] { WorkFolders.Root }))
+            foreach (var guid in AssetDatabase.FindAssets("t:Texture2D", folders))
             {
                 var path = AssetDatabase.GUIDToAssetPath(guid);
                 if (string.IsNullOrEmpty(path) || !path.EndsWith(".png", System.StringComparison.OrdinalIgnoreCase)) continue;
@@ -330,12 +331,12 @@ namespace Jeni.KaihenNavi
 
             if (stale.Count == 0) return 0;
             // 起動時はまとめて 1 回なので、ツール外のプレハブ・シーン・アニメーションも参照元に数える（消しすぎないように）
-            return DeleteUnreferenced(stale, "t:BackupSnapshot t:Prefab t:Scene t:AnimationClip", "Assets");
+            return DeleteUnreferenced(stale, "t:BackupSnapshot t:Prefab t:Scene t:AnimationClip", new[] { "Assets" });
         }
 
-        /// <summary>stale のうち、開いているマテリアル・プロジェクトのマテリアル・folder の中の filter に当たるもののどれからも参照されないものを消す。</summary>
+        /// <summary>stale のうち、開いているマテリアル・プロジェクトのマテリアル・folders の中の filter に当たるもののどれからも参照されないものを消す。</summary>
         /// <returns>消した数。</returns>
-        private static int DeleteUnreferenced(HashSet<string> stale, string filter, string folder)
+        private static int DeleteUnreferenced(HashSet<string> stale, string filter, string[] folders)
         {
             var used = new HashSet<string>();
             foreach (var loaded in Resources.FindObjectsOfTypeAll<Material>())
@@ -349,7 +350,7 @@ namespace Jeni.KaihenNavi
             }
 
             var roots = AssetDatabase.FindAssets("t:Material", new[] { "Assets" })
-                .Concat(AssetDatabase.FindAssets(filter, new[] { folder }))
+                .Concat(folders.Length == 0 ? new string[0] : AssetDatabase.FindAssets(filter, folders))
                 .Select(AssetDatabase.GUIDToAssetPath)
                 .Where(p => !string.IsNullOrEmpty(p) && !stale.Contains(p)).Distinct().ToArray();
             foreach (var path in AssetDatabase.GetDependencies(roots, false)) used.Add(path);

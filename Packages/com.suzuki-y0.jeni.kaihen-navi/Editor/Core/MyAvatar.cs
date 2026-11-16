@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using UnityEditor;
 using UnityEngine;
 using VRC.Core;
@@ -10,7 +11,7 @@ namespace Jeni.KaihenNavi
     /// <summary>シーンのアバターが、自分用アバター（ツールが作った Prefab）につながっているか。</summary>
     internal enum AvatarKind
     {
-        /// <summary>Assets/KaihenNavi 以下の Prefab（自分用アバター）につながっている。改変は自動でそこへ保存される。</summary>
+        /// <summary>改変アバターの Prefab（〈ルート〉/Variant/〈フォルダ〉/ か旧構成の Avatars 以下）につながっている。改変は自動でそこへ保存される。</summary>
         Mine,
 
         /// <summary>買ったときの Prefab につながっている。改変はシーンにしか残らない。</summary>
@@ -22,8 +23,8 @@ namespace Jeni.KaihenNavi
 
     /// <summary>
     /// 自分用アバター。中身は Unity 標準のプレハブバリアントだが、画面では「自分用アバター」と呼ぶ。
-    /// 1 体につき Assets/KaihenNavi/名前/ のフォルダを 1 つ使い、Prefab・複製マテリアル・バックアップをまとめて置く。
-    /// 元の Prefab には一切書き込まない（保存先は必ず Assets/KaihenNavi 以下の Prefab）。
+    /// 1 体につき 〈ルート〉/Variant/〈アバター〉_〈改変名〉/ のフォルダを 1 つ使い、Prefab・複製マテリアルをまとめて置く（WorkFolders）。
+    /// 元の Prefab には一切書き込まない（保存先は必ず IsMinePath の Prefab）。
     /// </summary>
     internal static class MyAvatar
     {
@@ -43,24 +44,33 @@ namespace Jeni.KaihenNavi
             return string.IsNullOrEmpty(path) ? null : path;
         }
 
-        /// <summary>改変アバター（Avatars 以下の Prefab）か。ベースは含めない（自動保存で書き換えないため）。</summary>
+        /// <summary>
+        /// 改変アバターの Prefab か。新構成は 〈ルート〉/Variant/〈フォルダ〉/〈名前〉.prefab（Exporter や手で作った改変フォルダも含む。
+        /// シーンのアバターがつながっている Prefab なので、アバターの Prefab に限られる）、旧構成は Assets/KaihenNavi/Avatars 以下。
+        /// ベースは含めない（自動保存で書き換えないため）。
+        /// </summary>
         public static bool IsMinePath(string path)
         {
             if (path == null) return false;
             path = path.Replace('\\', '/');
-            return path.StartsWith(WorkFolders.AvatarsRoot + "/") && path.EndsWith(".prefab") && !path.Contains("/Backups/");
+            if (WorkFolders.IsVariantAvatarPath(path)) return true;
+            return path.StartsWith(WorkFolders.AvatarsRoot + "/") && path.EndsWith(".prefab") && !path.Contains("/Backups/") &&
+                WorkFolders.IsLegacyPath(path);
         }
 
-        /// <summary>改変のベース（Bases 以下の Prefab）か。</summary>
+        /// <summary>改変のベース（新構成は Variant/〈アバター〉_Variant_Base.prefab、旧構成は Bases 以下の Prefab）か。</summary>
         public static bool IsBasePath(string path)
         {
-            return path != null && path.Replace('\\', '/').StartsWith(WorkFolders.BasesRoot + "/") && path.EndsWith(".prefab");
+            if (path == null) return false;
+            path = path.Replace('\\', '/');
+            return WorkFolders.IsVariantBasePath(path) ||
+                (path.StartsWith(WorkFolders.BasesRoot + "/") && path.EndsWith(".prefab") && WorkFolders.IsLegacyPath(path));
         }
 
-        /// <summary>ツールが作った Prefab（改変アバターかベース）か。</summary>
+        /// <summary>ツールの Prefab（改変アバター・ベース・旧構成の中）か。元アバターをたどるときに飛ばす。</summary>
         private static bool IsToolPath(string path)
         {
-            return path != null && path.Replace('\\', '/').StartsWith(WorkFolders.Root + "/");
+            return IsMinePath(path) || IsBasePath(path) || WorkFolders.IsLegacyPath(path);
         }
 
         private static GameObject InstanceRoot(VRCAvatarDescriptor avatar)
@@ -133,11 +143,13 @@ namespace Jeni.KaihenNavi
             if (basePrefab == null || basePrefab.GetComponent<VRCAvatarDescriptor>() == null) return null;
 
             // 選んだのが元アバターならベースを用意する（ベースそのものを選んだときはそれを使う）
-            var parent = IsBasePath(AssetDatabase.GetAssetPath(basePrefab)) ? basePrefab : EnsureBase(basePrefab);
+            var isBase = IsBasePath(AssetDatabase.GetAssetPath(basePrefab));
+            var parent = isBase ? basePrefab : EnsureBase(basePrefab);
             if (parent == null) return null;
-            var original = IsBasePath(AssetDatabase.GetAssetPath(basePrefab)) ? OriginalOf(basePrefab) : basePrefab;
+            var original = isBase ? OriginalOf(basePrefab) : basePrefab;
 
-            var folder = WorkFolders.CreateAvatarFolder(name);
+            // 〈ルート〉/Variant/〈アバター〉_〈改変名〉/〈アバター〉_〈改変名〉.prefab（AvatarPrefabMaterialExporter と同じ形）
+            var folder = NewAvatarFolder(original ?? basePrefab, name, true);
             var path = folder + "/" + System.IO.Path.GetFileName(folder) + ".prefab";
 
             HideOthers(undoName);
@@ -172,11 +184,12 @@ namespace Jeni.KaihenNavi
             var existing = BaseOf(original);
             if (existing != null) return existing;
 
-            WorkFolders.EnsureReadme();
-            WorkFolders.Ensure(WorkFolders.BasesRoot);
-            var folder = AssetDatabase.GenerateUniqueAssetPath(WorkFolders.BasesRoot + "/" + WorkFolders.Sanitize(original.name));
-            WorkFolders.Ensure(folder);
-            var path = folder + "/" + WorkFolders.Sanitize(original.name) + WorkFolders.BaseSuffix + ".prefab";
+            // 〈ルート〉/Variant/〈アバター〉_Variant_Base.prefab。同じ名前で別の元アバターのベースがあれば「 1」を付ける
+            string root, avatarName;
+            WorkFolders.Placement(AssetDatabase.GetAssetPath(original), original.name, out root, out avatarName);
+            WorkFolders.EnsureReadme(WorkFolders.DataFolder(root));
+            var variant = WorkFolders.Ensure(WorkFolders.VariantFolder(root));
+            var path = AssetDatabase.GenerateUniqueAssetPath(variant + "/" + WorkFolders.Sanitize(avatarName) + WorkFolders.VariantBaseSuffix + ".prefab");
 
             // シーンには残さない一時的なインスタンスから、バリアントとして保存する
             var instance = PrefabUtility.InstantiatePrefab(original) as GameObject;
@@ -192,9 +205,20 @@ namespace Jeni.KaihenNavi
                 Object.DestroyImmediate(instance);
             }
 
-            if (saved == null) return null;
-            WorkFolders.WriteManifest(path, original, original, "base");
+            // ベースは Variant 直下なので avatar.json は書かない（親の Prefab で見分ける。BaseOf）
             return saved;
+        }
+
+        /// <summary>
+        /// 新しい改変フォルダを作る（create = false ならパスを返すだけ）。ルートとアバター名は元アバター（かベース）の場所から決める。
+        /// </summary>
+        public static string NewAvatarFolder(GameObject original, string name, bool create)
+        {
+            string root, avatarName;
+            WorkFolders.Placement(original == null ? null : AssetDatabase.GetAssetPath(original), original == null ? name : original.name,
+                out root, out avatarName);
+            if (create) return WorkFolders.CreateAvatarFolder(root, avatarName, name);
+            return AssetDatabase.GenerateUniqueAssetPath(WorkFolders.VariantFolder(root) + "/" + WorkFolders.FolderName(avatarName, name));
         }
 
         /// <summary>
@@ -231,7 +255,7 @@ namespace Jeni.KaihenNavi
             if (parent == null) return "no-base";
 
             var folder = Path.GetDirectoryName(path).Replace('\\', '/');
-            var backupFolder = WorkFolders.Ensure(folder + "/Backups");
+            var backupFolder = WorkFolders.Ensure(WorkFolders.BackupsFolderFor(folder));
             var backupPath = AssetDatabase.GenerateUniqueAssetPath(backupFolder + "/" + prefab.name + " (before base).prefab");
             if (!AssetDatabase.CopyAsset(path, backupPath)) return "backup";
 
@@ -254,11 +278,30 @@ namespace Jeni.KaihenNavi
             return null;
         }
 
-        /// <summary>この元アバターのベース（無ければ null）。avatar.json の元アバターの GUID で探す。</summary>
+        /// <summary>
+        /// この元アバターのベース（無ければ null）。新構成は各ルートの Variant 直下の 〈アバター〉_Variant_Base で、
+        /// 直接の親がこの元アバターのもの（ユーザーが自分で作ったベースも使う）。旧構成は avatar.json の元アバターの GUID で探す。
+        /// </summary>
         public static GameObject BaseOf(GameObject original)
         {
-            if (original == null || !AssetDatabase.IsValidFolder(WorkFolders.BasesRoot)) return null;
-            var guid = AssetDatabase.AssetPathToGUID(AssetDatabase.GetAssetPath(original));
+            if (original == null) return null;
+            var originalPath = AssetDatabase.GetAssetPath(original);
+            foreach (var root in ImportSorter.FindRoots())
+            {
+                var variant = WorkFolders.VariantFolder(root);
+                if (!AssetDatabase.IsValidFolder(variant)) continue;
+                foreach (var prefabGuid in AssetDatabase.FindAssets("t:Prefab", new[] { variant }))
+                {
+                    var path = AssetDatabase.GUIDToAssetPath(prefabGuid);
+                    if (!WorkFolders.IsVariantBasePath(path)) continue;
+                    var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(path);
+                    var source = prefab == null ? null : PrefabUtility.GetCorrespondingObjectFromSource(prefab);
+                    if (source != null && AssetDatabase.GetAssetPath(source) == originalPath) return prefab;
+                }
+            }
+
+            if (!AssetDatabase.IsValidFolder(WorkFolders.BasesRoot)) return null;
+            var guid = AssetDatabase.AssetPathToGUID(originalPath);
             foreach (var prefabGuid in AssetDatabase.FindAssets("t:Prefab", new[] { WorkFolders.BasesRoot }))
             {
                 var path = AssetDatabase.GUIDToAssetPath(prefabGuid);
@@ -350,7 +393,8 @@ namespace Jeni.KaihenNavi
             foreach (var guid in AssetDatabase.FindAssets("t:Prefab", new[] { "Assets" }))
             {
                 var path = AssetDatabase.GUIDToAssetPath(guid);
-                if (path.StartsWith(WorkFolders.Root + "/")) continue;
+                // 改変アバター・ベース・内部データ（バックアップのコピーなど）は、もとにするアバターに並べない
+                if (IsToolPath(path) || WorkFolders.IsDataPath(path)) continue;
                 var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(path);
                 if (prefab != null && prefab.GetComponent<VRCAvatarDescriptor>() != null) result.Add(prefab);
             }
@@ -372,14 +416,23 @@ namespace Jeni.KaihenNavi
         private static string FolderFor(GameObject avatar)
         {
             var folder = WorkFolders.ForAvatar(avatar);
-            if (AssetDatabase.IsValidFolder(folder) && AssetDatabase.FindAssets("t:Prefab", new[] { folder }).Length == 0)
+            var exists = AssetDatabase.IsValidFolder(folder);
+            if (exists && AssetDatabase.FindAssets("t:Prefab", new[] { folder }).Length == 0 ||
+                !exists && WorkFolders.IsVariantAvatarFolder(folder))
             {
-                WorkFolders.EnsureReadme();
-                foreach (var sub in new[] { "Materials", "Backups" }) WorkFolders.Ensure(folder + "/" + sub);
+                // まだ無い新構成のフォルダ（複製マテリアルも無い）は、ここで作る
+                WorkFolders.Ensure(folder);
+                WorkFolders.EnsureSubfolders(folder);
                 return folder;
             }
 
-            return WorkFolders.CreateAvatarFolder(avatar.name);
+            if (WorkFolders.IsVariantAvatarFolder(folder))
+            {
+                var root = WorkFolders.KaihenRootOf(folder);
+                return WorkFolders.CreateAvatarFolder(root, WorkFolders.AvatarNameOfRoot(root), Path.GetFileName(folder));
+            }
+            // 旧構成のフォルダ（前の版で複製マテリアルを置いた）に別の改変アバターが入っているときは、新構成に作る
+            return NewAvatarFolder(OriginalOf(avatar) ?? PrefabUtility.GetCorrespondingObjectFromSource(avatar), avatar.name, true);
         }
 
         // ---------------------------------------------------------------- アップロード先（ブループリント ID）
@@ -750,18 +803,23 @@ namespace Jeni.KaihenNavi
 
         // ---------------------------------------------------------------- 一覧（製品版）
 
-        /// <summary>改変アバターの Prefab（Assets/KaihenNavi/Avatars 以下の、Avatar Descriptor が付いた Prefab。ベースは含めない）。</summary>
+        /// <summary>
+        /// 改変アバターの Prefab（Avatar Descriptor が付いたもの。ベースは含めない）。各ルートの Variant/〈フォルダ〉 の直下
+        /// （Exporter や手で作った改変フォルダも。服などアバターでない Prefab は除く）と、旧構成の Assets/KaihenNavi/Avatars 以下。
+        /// </summary>
         public static List<GameObject> All()
         {
             var result = new List<GameObject>();
-            if (!AssetDatabase.IsValidFolder(WorkFolders.Root)) return result;
-            if (!AssetDatabase.IsValidFolder(WorkFolders.AvatarsRoot)) return result;
-            foreach (var guid in AssetDatabase.FindAssets("t:Prefab", new[] { WorkFolders.AvatarsRoot }))
+            var folders = ImportSorter.FindRoots().Select(WorkFolders.VariantFolder).Where(AssetDatabase.IsValidFolder).ToList();
+            if (AssetDatabase.IsValidFolder(WorkFolders.Root) && AssetDatabase.IsValidFolder(WorkFolders.AvatarsRoot))
+                folders.Add(WorkFolders.AvatarsRoot);
+            if (folders.Count == 0) return result;
+            foreach (var guid in AssetDatabase.FindAssets("t:Prefab", folders.ToArray()))
             {
                 var assetPath = AssetDatabase.GUIDToAssetPath(guid);
-                if (assetPath.Contains("/Backups/")) continue;
+                if (!IsMinePath(assetPath)) continue;
                 var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(assetPath);
-                if (prefab != null && prefab.GetComponent<VRCAvatarDescriptor>() != null) result.Add(prefab);
+                if (prefab != null && prefab.GetComponent<VRCAvatarDescriptor>() != null && !result.Contains(prefab)) result.Add(prefab);
             }
 
             result.Sort((a, b) => string.CompareOrdinal(a.name, b.name));
@@ -792,7 +850,18 @@ namespace Jeni.KaihenNavi
             var source = AssetDatabase.GetAssetPath(prefab);
             if (!IsMinePath(source)) return null;
 
-            var folder = WorkFolders.CreateAvatarFolder(name);
+            // 複製元と同じ構成に作る（新構成なら同じルートの Variant に 〈アバター〉_〈名前〉、旧構成なら Avatars に）
+            string folder;
+            var root = WorkFolders.KaihenRootOf(source);
+            if (root == null) folder = WorkFolders.CreateAvatarFolder(name);
+            else
+            {
+                var original = OriginalOf(prefab);
+                string ignored, avatarName;
+                WorkFolders.Placement(original == null ? null : AssetDatabase.GetAssetPath(original), WorkFolders.AvatarNameOfRoot(root),
+                    out ignored, out avatarName);
+                folder = WorkFolders.CreateAvatarFolder(root, avatarName, name);
+            }
             var path = folder + "/" + Path.GetFileName(folder) + ".prefab";
             if (!AssetDatabase.CopyAsset(source, path)) return null;
 
@@ -827,7 +896,19 @@ namespace Jeni.KaihenNavi
             if (Path.GetFileName(folder) == Path.GetFileNameWithoutExtension(path) && folder != WorkFolders.Root)
             {
                 var parent = Path.GetDirectoryName(folder).Replace('\\', '/');
-                if (!AssetDatabase.IsValidFolder(parent + "/" + name)) AssetDatabase.RenameAsset(folder, name);
+                var renamed = parent + "/" + name;
+                if (!AssetDatabase.IsValidFolder(renamed) && string.IsNullOrEmpty(AssetDatabase.RenameAsset(folder, name)))
+                {
+                    var moves = new List<SortMove> { new SortMove { from = folder, to = renamed } };
+                    // 新構成のバックアップ（KaihenNavi/Backups/〈フォルダ名〉）も名前をそろえる（インナーカラーの控えの場所が変わらないように）
+                    var oldBackups = WorkFolders.BackupsFolderFor(folder);
+                    var newBackups = WorkFolders.BackupsFolderFor(renamed);
+                    if (oldBackups != folder + "/Backups" && AssetDatabase.IsValidFolder(oldBackups) && !AssetDatabase.IsValidFolder(newBackups) &&
+                        string.IsNullOrEmpty(AssetDatabase.MoveAsset(oldBackups, newBackups)))
+                        moves.Insert(0, new SortMove { from = oldBackups, to = newBackups });
+                    // 履歴とインナーカラーの控えに書いたファイルのパスも移す
+                    LayoutMigration.FollowStatePaths(moves, true);
+                }
             }
 
             // avatar.json の名前もそろえる（元アバターの情報は前のまま）

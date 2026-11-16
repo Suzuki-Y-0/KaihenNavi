@@ -5,7 +5,7 @@ using UnityEngine;
 namespace Jeni.KaihenNavi
 {
     /// <summary>
-    /// 操作前のアバターの状態。Assets/KaihenNavi/アバター名/Backups/ に .asset として保存する。
+    /// 操作前のアバターの状態。〈ルート〉/KaihenNavi/Backups/〈改変フォルダ名〉/（旧構成は Assets/KaihenNavi/Avatars/名前/Backups/）に .asset として保存する。
     /// オブジェクトはアバターのルートからの相対パス（HierarchyPath）で記録する。
     /// </summary>
     public sealed class BackupSnapshot : ScriptableObject

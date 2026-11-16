@@ -249,7 +249,10 @@ namespace Jeni.KaihenNavi
             var context = new FeatureContext { Avatar = avatar, Backup = new BackupService(), FeatureId = "innerColor" };
             var journal = InnerColorAssetUndo.Begin(avatar);
             var state = InnerColorState.Load(avatar, true);
-            Check(AssetDatabase.GetAssetPath(state) == folder + "/Backups/InnerColorState.asset", "State must live in the avatar Backups folder");
+            // 新構成：改変フォルダは 〈ルート〉/Variant/〈名前〉、控えは 〈ルート〉/KaihenNavi/Backups/〈名前〉
+            Check(WorkFolders.IsVariantAvatarFolder(folder) &&
+                AssetDatabase.GetAssetPath(state) == WorkFolders.BackupsFolderFor(folder) + "/InnerColorState.asset",
+                "State must live in the avatar Backups folder: " + AssetDatabase.GetAssetPath(state));
             var surface = new InnerColorFeature.Surface { renderer = hair, original = originalMesh,
                 materials = new[] { source, source }, slot = 0,
                 split = new InnerColorTriangles.Split { outer = new[] { new[] { 0, 1, 2 }, new[] { 0, 2, 3 } }, inner = new[] { 1, 2, 3 } } };

@@ -634,7 +634,8 @@ namespace Jeni.KaihenNavi
         {
             if (menu == null) return false;
             var path = (AssetDatabase.GetAssetPath(menu) ?? "").Replace('\\', '/');
-            return !path.StartsWith(WorkFolders.Root + "/");
+            // ツールが作った空のメニュー（改変フォルダの Menus・旧構成）以外。ベースのルートメニューなどユーザーの物は元のメニュー
+            return !WorkFolders.IsToolMenuPath(path);
         }
 
         public static MenuEdits ReadEdits(VRCAvatarDescriptor avatar)

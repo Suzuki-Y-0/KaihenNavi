@@ -202,7 +202,7 @@ namespace Jeni.KaihenNavi
         public List<BackupSnapshot> List(VRCAvatarDescriptor avatar, bool includeHidden = false)
         {
             var result = new List<BackupSnapshot>();
-            if (avatar == null || !AssetDatabase.IsValidFolder(WorkFolders.Root)) return result;
+            if (avatar == null) return result;
 
             var id = AvatarId(avatar);
             foreach (var snapshot in AllSnapshots())
@@ -229,9 +229,11 @@ namespace Jeni.KaihenNavi
             {
                 _all = new List<BackupSnapshot>();
                 _allPaths = new HashSet<string>();
-                if (AssetDatabase.IsValidFolder(WorkFolders.Root))
+                // 旧構成（Assets/KaihenNavi）と、各ルートの KaihenNavi/Backups
+                var folders = WorkFolders.DataFolders();
+                if (folders.Length > 0)
                 {
-                    foreach (var guid in AssetDatabase.FindAssets("t:BackupSnapshot", new[] { WorkFolders.Root }))
+                    foreach (var guid in AssetDatabase.FindAssets("t:BackupSnapshot", folders))
                     {
                         var path = AssetDatabase.GUIDToAssetPath(guid);
                         var snapshot = AssetDatabase.LoadAssetAtPath<BackupSnapshot>(path);
@@ -269,7 +271,11 @@ namespace Jeni.KaihenNavi
             {
                 if (string.IsNullOrEmpty(raw)) continue;
                 var path = raw.Replace('\\', '/');
-                if (path != WorkFolders.Root && !path.StartsWith(WorkFolders.Root + "/")) continue;
+                // 内部データ（旧構成のルート・〈ルート〉/KaihenNavi）の中か、それを含むフォルダ（ルートごとの移動・削除）
+                var parts = path.Split('/');
+                var container = path == WorkFolders.Root || (parts.Length <= 3 && WorkFolders.KaihenRootOf(path) != null &&
+                    (parts.Length == 2 || parts[2] == WorkFolders.DataName));
+                if (!container && !WorkFolders.IsDataPath(path)) continue;
                 // フォルダごとの移動・削除や、バックアップのファイル。マテリアルなどの保存では読み直さない。
                 var isFolder = string.IsNullOrEmpty(System.IO.Path.GetExtension(path));
                 if (!isFolder && !path.Contains("/Backups/")) continue;
@@ -363,7 +369,7 @@ namespace Jeni.KaihenNavi
         /// </summary>
         internal static void OnSceneSaved(Scene scene)
         {
-            if (!scene.IsValid() || !AssetDatabase.IsValidFolder(WorkFolders.Root)) return;
+            if (!scene.IsValid() || WorkFolders.DataFolders().Length == 0) return;
             var roots = scene.GetRootGameObjects();
             if (roots == null) return;
             var changed = new List<BackupSnapshot>();

@@ -25,10 +25,16 @@ namespace Jeni.KaihenNavi
         {
             var root = new VisualElement();
             // 振り分けの窓で移したときや Ctrl+Z のときに、残っているアイテムの一覧を取り直す
-            if (_onChanged != null) ImportSortUndo.Changed -= _onChanged;
+            if (_onChanged != null)
+            {
+                ImportSortUndo.Changed -= _onChanged;
+                LayoutMigrationUndo.Changed -= _onChanged;
+            }
             _onChanged = () => UnityEditor.EditorApplication.delayCall += () => { if (_onChanged != null) ctx.Rebuild(); };
             ImportSortUndo.Changed += _onChanged;
+            LayoutMigrationUndo.Changed += _onChanged;
             root.Add(Ui.Notice(L10n.Tr("placement.intro"), "info"));
+            BuildMigration(root, ctx);
 
             var enabled = new Toggle(L10n.Tr("placement.enabled")) { value = ImportSorter.Enabled };
             enabled.AddToClassList("kn-field");
@@ -60,8 +66,45 @@ namespace Jeni.KaihenNavi
 
         public override void OnClosed()
         {
-            if (_onChanged != null) ImportSortUndo.Changed -= _onChanged;
+            if (_onChanged != null)
+            {
+                ImportSortUndo.Changed -= _onChanged;
+                LayoutMigrationUndo.Changed -= _onChanged;
+            }
             _onChanged = null;
+        }
+
+        /// <summary>旧構成（Assets/KaihenNavi）が残っていれば、「Variant へ移す」を出す（LayoutMigration。Ctrl+Z で戻る）。</summary>
+        private static void BuildMigration(VisualElement root, FeatureContext ctx)
+        {
+            bool legacy;
+            try { legacy = LayoutMigration.HasLegacy(); }
+            catch (Exception) { legacy = false; }
+            if (!legacy) return;
+            root.Add(Ui.Heading(L10n.Tr("layout.title")));
+            root.Add(Ui.Notice(L10n.Tr("layout.intro"), "warn"));
+            var row = Ui.Box("kn-row");
+            row.Add(Ui.Button(L10n.Tr("layout.migrate"), () =>
+            {
+                LayoutMigration.Plan plan;
+                try { plan = LayoutMigration.PlanForProject(); }
+                catch (Exception e)
+                {
+                    UnityEditor.EditorUtility.DisplayDialog(L10n.Tr("app.name"), L10n.Tr("layout.failed", e.Message), L10n.Tr("dialog.ok"));
+                    return;
+                }
+                if (!UnityEditor.EditorUtility.DisplayDialog(L10n.Tr("app.name"), L10n.Tr("layout.confirm", plan.avatars, plan.bases),
+                        L10n.Tr("layout.migrate"), L10n.Tr("dialog.cancel"))) return;
+                // シーンのアバターは GUID で Prefab につながっているので、まだ保存していない改変もそのまま残る
+                var error = LayoutMigration.Run(plan);
+                if (error != null) UnityEditor.EditorUtility.DisplayDialog(L10n.Tr("app.name"), error, L10n.Tr("dialog.ok"));
+                else if (plan.leftovers.Count > 0)
+                    UnityEditor.EditorUtility.DisplayDialog(L10n.Tr("app.name"),
+                        L10n.Tr("layout.done") + "\n\n" + L10n.Tr("layout.leftover", string.Join(", ", plan.leftovers)), L10n.Tr("dialog.ok"));
+                else ctx.Tell(L10n.Tr("layout.done"));
+                ctx.Rebuild();
+            }, "kn-button--primary"));
+            root.Add(row);
         }
 
         /// <summary>用途の一覧（追加・並べ替え・名前変更・削除）と、ルート直下の未登録フォルダ。</summary>

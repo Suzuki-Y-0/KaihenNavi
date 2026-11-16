@@ -6,13 +6,23 @@
 
 **最初に読むところ。** 下の 1 章以降は経緯の記録で、古い記述（「Unity 実機は未確認」など）を含む。食い違ったらこの 0 章が正しい。
 
+### 0.000 2026-11-16：作業フォルダを <アバター>_kaihen/Variant 構成に（feat/kaihen-layout＝import-sorting の上・Unity 未確認）
+仕様は「かいへんナビの作業フォルダを『<アバター>_kaihen/Variant』構成にそろえる」。
+- パスの形は `Core/WorkFolders.cs` に集約（KaihenRootOf・VariantAvatarFolderOf・IsVariantAvatarPath/IsVariantBasePath・IsToolPath・BackupsFolderFor・LedgerFile・FolderName・CopyMaterialName）。ルートは `ImportSorter.ChooseAvatarRoot/RootForAvatar`（元 Prefab のルート → `<アバター>_kaihen` → 振り分けのルート → 作る）。振り分けと共通。
+- MyAvatar：IsMinePath は Variant/<フォルダ>/<名前>.prefab と旧 Avatars の両方。BaseOf は Variant 直下の *_Variant_Base で親が元アバターのもの（ユーザーのベースも使う。avatar.json は書かない）→ 旧 Bases。CreateNew/Create/Duplicate/Rename/All/BaseAvatars を新構成に。
+- 「Variant へ移す」：`Core/LayoutMigration.cs`（計画・パスの書き換え）と `Core/LayoutMigrationUndo.cs`（控え。ImportSortUndo と同じ仕組み）。アイテムの置き場所のページに旧構成があるときだけボタン。改変アバターの無い旧フォルダ（改変アバターにする前の複製マテリアル）は残す。
+- 取り込み直し：PackageImportUndo.Begin は同じ GUID が別の場所にあればその場所を控える（中身が違う・Assets 外は従来どおり止める）。
+- 仕様にない判断：①ルートの決め方に「`<アバター>_kaihen` があればそれ」を振り分けのルートより先に入れた。②移行で Prefab の名前もフォルダ名（`<アバター>_<名前>`）にそろえる。③ルートが 1 つだけのプロジェクトでは、別アバターもそのルートに入る（仕様 6 のとおり）。④改変フォルダ直下の服のバリアント Prefab も、自動保存の判定ではパスだけで「改変アバターの場所」とみなす（服の一覧には出す）。
+- テスト：check.sh の Layout（66）と ImportSort の取り込み直し（+10）。
+- **Unity で見ること**：コンパイル。新しく作る（Variant/<アバター>_<名前>/、ベースの作成と再利用、Materials/Textures）、色変え → `Materials/<元>_<改変名>.mat`。Exporter で作った改変フォルダが「前に作った改変アバター」に出て、そのマテリアルを複製せずに直接変えるか（ベースのものは複製）。旧構成のプロジェクトで「Variant へ移す」→ 開ける・履歴・インナーカラーの控え・台帳 → Ctrl+Z → やり直し。移したアイテムの unitypackage の取り込み直し（窓が出ない・Ctrl+Z）。
+
 ### 0.00 2026-11-16：インポート振り分け（feat/import-sorting・Unity 未確認）
 仕様は「インポート振り分け機能 仕様」（取り込み直後に用途を聞いて `Assets/<アバター>_kaihen/<用途>/<アイテム名>/` へ移す）。昔のつづり（Accesary・Gimmic）の別名は扱わない（ユーザーの指示。用途フォルダは同じ名前＝大文字小文字無視だけで探し、無ければ移すときに作る）。
 - 足したファイル：`Core/ImportSorter.cs`（判定・設定・計画・手動メニュー。純粋な関数は System.IO だけ）、`Core/ImportSortUndo.cs`（移動の控えの ScriptableObject。Ctrl+Z / やり直しで移動・台帳・取り込みの控えを追従）、`Core/ImportSortWindow.cs`（振り分けの窓）、`Features/PlacementFeature.cs`（仕上げ「アイテムの置き場所」）、`tools/tests/ImportSortTests.cs`（check.sh の ImportSort、一時フォルダで移動と Undo まで）。
 - 入口：`ItemLedger.Completed` が台帳を保存した直後に `ImportSorter.OnImported`。SessionState に控え、delayCall で PackageImportUndo の記録・コンパイルが終わってから窓を開く（ドメインリロード後も静的コンストラクタで再開）。OFF・対象なしなら何もしない。
 - 仕様にない判断：①中身がフォルダだけでも Prefab(s)/Materials/Texture(s)/FBX などの名前があれば「ショップ階層」ではなく 1 アイテムとして丸ごと移す。②手動メニューは `Tools/かいへんナビ` が窓を開く項目なのでその下に置けず、Project の右クリック `Assets/かいへんナビ/アイテムを振り分ける…` にした。③同名は GenerateUniqueAssetPath と同じ「名前 1」をディスクと同じ回の計画で決める（まだ無い用途フォルダの中でも決めるため）。④空になったショップは .meta を控えて消し、Ctrl+Z では同じ GUID で作り直す。
 - ついでに直したもの：ルートの中にアバター本体がある（`Assets/X_kaihen/X/...`）と、服の一覧の「アバター本体のフォルダ」がルート全体になり、振り分けた服が一覧から消えていた（ItemLibrary.AvatarFolder）。KonoAsset のフォルダ名照合で `X_kaihen` とその直下の用途フォルダを使わない（`Cazalis_kaihen` がアバター商品に一致するため。ItemLedger.KonoFolderOf）。
-- 既知：移したアイテムを同じ unitypackage でもう一度取り込むと、PackageImportUndo.Begin が「同じ GUID が別の場所にある」として止める（元アセットを守るための既存の動き）。
+- 既知（feat/kaihen-layout で解消）：移したアイテムを同じ unitypackage でもう一度取り込むと、PackageImportUndo.Begin が止めていた。
 - **Unity で見ること**：コンパイル。EditorEye で Assets/TestShop/TestItem/ を作り、`ImportSorter.Move` → 移動先・ショップの削除・GUID 維持・Ctrl+Z で戻る（ショップの .meta の GUID も）・やり直し。実際の unitypackage の取り込み（スクリプト入りでドメインリロードされる物も）で窓が取り込み後に 1 回だけ出るか。台帳 `Assets/KaihenNavi/Ledger/items.json` と `Library/KaihenNavi/Imports/*/state.json` のパスが移動先になるか、移したあとに取り込みを Ctrl+Z して移動先のファイルが消えるか。窓とページの見た目（チップの折り返し、注意帯）。`EditorUserSettings` にルートが保存されるか。
 
 ### 0.0 2026-11-14〜15：洗い出しと一括修正（work/1114 → 2026-11-15 に main へマージ済み・主要部分は Unity 実機で確認済み）

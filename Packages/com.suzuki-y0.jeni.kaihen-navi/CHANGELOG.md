@@ -2,6 +2,13 @@
 
 ## 0.1.0（開発中）
 
+- 作業フォルダを改変プロジェクトの標準の形（`Assets/<アバター>_kaihen/Variant`・`KaihenNavi`）にそろえた（Unity 未確認）
+  - 新しい改変アバターは `Variant/<アバター>_<改変名>/<アバター>_<改変名>.prefab`、ベースは `Variant/<アバター>_Variant_Base.prefab`（あれば使う）
+  - Exporter や手で作った Variant の改変フォルダも「前に作った改変アバターを直す」で選べる。その Materials は自分のもの
+  - 複製マテリアルは AvatarPrefabMaterialExporter と同じ `<元の名前>_<改変名>.mat`
+  - バックアップ・台帳は `<ルート>/KaihenNavi`。前の版の `Assets/KaihenNavi` もそのまま開け、「Variant へ移す」で移せる（Ctrl+Z で戻る）
+- 振り分けで移したアイテムを、同じ（中身が同じ）unitypackage で取り込み直せるようにした。移した場所のファイルを控える
+
 - 「アイテムの置き場所をまとめたい」（仕上げ）を追加（Unity 未確認）
   - unitypackage（KonoAsset からの取り込みも）の直後に「アイテムの振り分け」の窓を出し、用途を選ぶと `Assets/<アバター>_kaihen/<用途>/<アイテム>/` へ移す。ショップ名だけのフォルダは空になったら消す。Ctrl+Z 1 回で全部戻る
   - スクリプト・"Assets/..." を読み込むシェーダー・Resources などの特別なフォルダを含むアイテムは注意を出し、初めは「移動しない」

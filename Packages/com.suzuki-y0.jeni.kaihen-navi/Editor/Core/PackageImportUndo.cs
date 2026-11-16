@@ -103,14 +103,16 @@ namespace Jeni.KaihenNavi
                 {
                     ValidatePath(entry.path);
                     ValidatePath(entry.path + ".meta");
-                    // 同名の元アセットを置き換える取り込みは実行しない。
-                    var existingPath = string.IsNullOrEmpty(entry.guid) ? null : AssetDatabase.GUIDToAssetPath(entry.guid);
-                    if (!string.IsNullOrEmpty(existingPath) && existingPath != entry.path)
-                        throw new IOException("Existing GUID at another path: " + existingPath);
-                    CheckExisting(entry.path, entry.assetHash);
-                    CheckExisting(entry.path + ".meta", entry.metaHash);
-                    Add(snapshot, entry.path);
-                    Add(snapshot, entry.path + ".meta");
+                    // 同じ GUID のファイルがあれば、Unity はパッケージのパスではなくその場所のファイルを更新する
+                    // （振り分けで移した後の取り込み直しなど）。その場所を控える。中身の違う元アセットを置き換える
+                    // 取り込みは、元に戻せないので場所によらず実行しない。
+                    var target = ImportTarget(entry.path,
+                        string.IsNullOrEmpty(entry.guid) ? null : AssetDatabase.GUIDToAssetPath(entry.guid));
+                    ValidatePath(target);
+                    CheckExisting(target, entry.assetHash);
+                    CheckExisting(target + ".meta", entry.metaHash);
+                    Add(snapshot, target);
+                    Add(snapshot, target + ".meta");
                 }
                 var ledger = ItemLedger.LedgerFile;
                 Add(snapshot, ledger);
@@ -136,6 +138,18 @@ namespace Jeni.KaihenNavi
                 EditorUtility.DisplayDialog(L10n.Tr("app.name"), L10n.Tr("library.importBlocked"), L10n.Tr("dialog.ok"));
                 return false;
             }
+        }
+
+        /// <summary>
+        /// 取り込みでファイルが書かれる場所。同じ GUID のアセットが別の場所にあれば（振り分けで移した・ユーザーが動かした）、
+        /// Unity はそこを更新するので、その場所を返す。Assets の外（Packages など）にあれば控えられないので止める。
+        /// </summary>
+        internal static string ImportTarget(string packagePath, string existingPath)
+        {
+            if (string.IsNullOrEmpty(existingPath) || existingPath == packagePath) return packagePath;
+            if (!existingPath.StartsWith("Assets/", StringComparison.Ordinal))
+                throw new IOException("Existing GUID at another path: " + existingPath);
+            return existingPath;
         }
 
         private static void CheckExisting(string path, string expected)

@@ -3,8 +3,10 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.IO.Compression;
 using System.Linq;
 using System.Reflection;
+using System.Text;
 using UnityEditor;
 using UnityEngine;
 using Object = UnityEngine.Object;
@@ -66,6 +68,7 @@ namespace Jeni.KaihenNavi
                 Targets();
                 Paths();
                 MoveAndUndo();
+                Reimport();
             }
             finally
             {
@@ -355,6 +358,108 @@ namespace Jeni.KaihenNavi
             Check(error != null && moved == 0 && Directory.Exists("Assets/Fail1") && Directory.Exists("Assets/Fail2")
                 && !Directory.Exists("Assets/Rurune_kaihen/Weapon"), "A failed move rolls back everything it did: " + error);
             Check(instances.OfType<ImportSortUndo>().Count() == count + 1, "Failed moves create a journal that is discarded");
+        }
+
+        // ---------------------------------------------------------------- 移したアイテムの取り込み直し
+
+        /// <summary>unitypackage（tar.gz：〈GUID〉/pathname・asset・asset.meta）を作る。</summary>
+        private static string Package(string name, params string[][] entries)
+        {
+            var path = Path.GetFullPath(name + ".unitypackage");
+            using (var file = System.IO.File.Create(path))
+            using (var gzip = new GZipStream(file, CompressionMode.Compress))
+            {
+                Action<string, byte[]> write = (entry, content) =>
+                {
+                    var header = new byte[512];
+                    Encoding.UTF8.GetBytes(entry).CopyTo(header, 0);
+                    Encoding.ASCII.GetBytes(Convert.ToString(content.Length, 8).PadLeft(11, '0') + "\0").CopyTo(header, 124);
+                    header[156] = (byte)'0';
+                    gzip.Write(header, 0, header.Length);
+                    gzip.Write(content, 0, content.Length);
+                    var padding = (512 - content.Length % 512) % 512;
+                    gzip.Write(new byte[padding], 0, padding);
+                };
+                foreach (var e in entries)
+                {
+                    // e = { guid, pathname, asset, meta }
+                    write(e[0] + "/pathname", Encoding.UTF8.GetBytes(e[1]));
+                    if (e[2] != null) write(e[0] + "/asset", Encoding.UTF8.GetBytes(e[2]));
+                    write(e[0] + "/asset.meta", Encoding.UTF8.GetBytes(e[3]));
+                }
+                gzip.Write(new byte[1024], 0, 1024);
+            }
+            return path;
+        }
+
+        private static PackageImportUndo.Snapshot BeginAndRead(string package, out bool ok)
+        {
+            var root = Path.Combine("Library", "KaihenNavi", "Imports");
+            var before = Directory.Exists(root) ? Directory.GetDirectories(root).ToList() : new List<string>();
+            ok = PackageImportUndo.Begin(package);
+            var created = Directory.Exists(root) ? Directory.GetDirectories(root).Except(before).ToList() : new List<string>();
+            return created.Count == 1 ? JsonUtility.FromJson<PackageImportUndo.Snapshot>(System.IO.File.ReadAllText(Path.Combine(created[0], "state.json"))) : null;
+        }
+
+        private static void Reimport()
+        {
+            Check(PackageImportUndo.ImportTarget("Assets/Booth/Dress/d.prefab", null) == "Assets/Booth/Dress/d.prefab" &&
+                  PackageImportUndo.ImportTarget("Assets/Booth/Dress/d.prefab", "Assets/Booth/Dress/d.prefab") == "Assets/Booth/Dress/d.prefab" &&
+                  PackageImportUndo.ImportTarget("Assets/Booth/Dress/d.prefab", "Assets/R_kaihen/Cloth/Dress/d.prefab") == "Assets/R_kaihen/Cloth/Dress/d.prefab",
+                "A GUID that lives elsewhere now is imported at its current place");
+            var threw = false;
+            try { PackageImportUndo.ImportTarget("Assets/Booth/Dress/d.prefab", "Packages/com.x/d.prefab"); }
+            catch (IOException) { threw = true; }
+            Check(threw, "A GUID outside Assets is still refused");
+
+            // 振り分けで移したアイテム（同じ中身・同じ .meta）。前のテストのファイルは片付ける
+            Directory.Delete("Assets", true);
+            if (Directory.Exists("Library")) Directory.Delete("Library", true);
+            ItemLedger.Invalidate();
+            const string guid = "0123456789abcdef0123456789abcdef";
+            const string folderGuid = "fedcba9876543210fedcba9876543210";
+            var meta = "fileFormatVersion: 2\nguid: " + guid + "\n";
+            var folderMeta = "fileFormatVersion: 2\nguid: " + folderGuid + "\nfolderAsset: yes\n";
+            Directory.CreateDirectory("Assets/R_kaihen/Cloth/Dress");
+            System.IO.File.WriteAllText("Assets/R_kaihen/Cloth/Dress.meta", folderMeta);
+            System.IO.File.WriteAllText("Assets/R_kaihen/Cloth/Dress/d.prefab", "dress");
+            System.IO.File.WriteAllText("Assets/R_kaihen/Cloth/Dress/d.prefab.meta", meta);
+            var locations = new Dictionary<string, string>
+                { { guid, "Assets/R_kaihen/Cloth/Dress/d.prefab" }, { folderGuid, "Assets/R_kaihen/Cloth/Dress" } };
+            AssetDatabase.PathFromGuidForTests = g => locations.ContainsKey(g) ? locations[g] : "";
+            var same = Package("same",
+                new[] { folderGuid, "Assets/Booth/Dress", null, folderMeta },
+                new[] { guid, "Assets/Booth/Dress/d.prefab", "dress", meta },
+                new[] { "11111111111111111111111111111111", "Assets/Booth/Dress/new.png", "png", "guid: 11111111111111111111111111111111\n" });
+            bool ok;
+            var snapshot = BeginAndRead(same, out ok);
+            Check(ok && snapshot != null, "Re-importing a sorted item is no longer blocked");
+            var files = snapshot.files.Select(f => f.path).ToList();
+            Check(files.Contains("Assets/R_kaihen/Cloth/Dress/d.prefab") && files.Contains("Assets/R_kaihen/Cloth/Dress/d.prefab.meta") &&
+                  !files.Contains("Assets/Booth/Dress/d.prefab") && snapshot.files.First(f => f.path == "Assets/R_kaihen/Cloth/Dress/d.prefab").before,
+                "The snapshot records where the file lives now: " + string.Join(",", files));
+            Check(files.Contains("Assets/Booth/Dress/new.png") && snapshot.directories.Contains("Assets/Booth/Dress") && snapshot.directories.Contains("Assets/Booth"),
+                "New files still go to the package path and their folders are recorded");
+            Check(files.Contains(ItemLedger.LedgerFile) && files.Contains(ItemLedger.ReadmeFile), "The ledger and README are recorded");
+
+            // 中身が変わった（更新版の）取り込みは、元アセットを上書きして戻せないので、移した場所でも止める
+            var changed = Package("changed", new[] { guid, "Assets/Booth/Dress/d.prefab", "dress v2", meta });
+            snapshot = BeginAndRead(changed, out ok);
+            Check(!ok && snapshot == null, "Overwriting a moved original with different content is still refused");
+            locations[guid] = "Packages/com.x/d.prefab";
+            snapshot = BeginAndRead(same, out ok);
+            Check(!ok, "A GUID that lives outside Assets is refused");
+            AssetDatabase.PathFromGuidForTests = null;
+
+            // 取り込み直しの後の振り分け：移した場所（ルートの中）のファイルだけなら聞かない。新しいファイルの分だけ聞く
+            Check(ImportSorter.BuildTargets(new[] { "Assets/R_kaihen/Cloth/Dress/d.prefab", "Assets/R_kaihen/Cloth/Dress" }).Count == 0,
+                "Files that landed in sorted places do not ask again");
+            System.IO.File.WriteAllText("Assets/Booth.meta", "guid: b");
+            Directory.CreateDirectory("Assets/Booth/Dress");
+            System.IO.File.WriteAllText("Assets/Booth/Dress/new.png", "png");
+            var targets = ImportSorter.BuildTargets(new[] { "Assets/R_kaihen/Cloth/Dress/d.prefab", "Assets/Booth", "Assets/Booth/Dress", "Assets/Booth/Dress/new.png" });
+            Check(targets.Count == 1 && targets[0].source == "Assets/Booth/Dress" && targets[0].fileCount == 1,
+                "Only the new top-level folder qualifies: " + string.Join(",", targets.Select(t => t.source)));
         }
     }
 }

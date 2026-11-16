@@ -123,6 +123,9 @@ namespace Jeni.KaihenNavi
             var originalPath = original == null ? null : AssetDatabase.GetAssetPath(original);
             if (string.IsNullOrEmpty(originalPath)) return null;
             var parts = originalPath.Split('/');
+            // 振り分け先のルート（Assets/〈アバター〉_kaihen/〈アバター本体〉/…）なら、ルートではなくアバター本体のフォルダ
+            // （ルート全体にすると、振り分けた服やアクセが一覧から消える）
+            if (parts.Length >= 4 && ImportSorter.IsRootName(parts[1])) return parts[0] + "/" + parts[1] + "/" + parts[2] + "/";
             return parts.Length >= 3 ? parts[0] + "/" + parts[1] + "/" : null;
         }
 

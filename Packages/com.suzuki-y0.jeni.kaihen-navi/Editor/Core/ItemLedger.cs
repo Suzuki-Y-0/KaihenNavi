@@ -293,8 +293,57 @@ namespace Jeni.KaihenNavi
                 }
                 Save(packages);
                 SessionState.EraseString("KaihenNavi.ItemLedger.ImportProduct");
+                // 台帳に記録した直後に、振り分けの窓を（取り込みが終わってから）開く。OFF や対象なしなら何もしない
+                ImportSorter.OnImported(pending.paths);
             }
             catch (Exception e) { Warn(e); }
+        }
+
+        /// <summary>振り分けでフォルダを移したとき、台帳のパスを移動先へ書き換える（Ctrl+Z では逆向きに）。</summary>
+        internal static void RewritePaths(Func<string, string> map)
+        {
+            try
+            {
+                if (!File.Exists(LedgerPath)) return;
+                var packages = ReadPackages();
+                if (RewritePackages(packages, map)) Save(packages);
+            }
+            catch (Exception e) { Warn(e); }
+        }
+
+        /// <summary>assetPaths・prefabs・commonFolder を書き換える。変わったものがあれば true。</summary>
+        internal static bool RewritePackages(List<LedgerPackage> packages, Func<string, string> map)
+        {
+            var changed = false;
+            foreach (var package in packages.Where(p => p != null))
+            {
+                if (package.assetPaths != null)
+                    for (var i = 0; i < package.assetPaths.Count; i++)
+                    {
+                        var next = map(package.assetPaths[i]);
+                        if (next == package.assetPaths[i]) continue;
+                        package.assetPaths[i] = next;
+                        changed = true;
+                    }
+                if (package.prefabs != null)
+                    foreach (var prefab in package.prefabs.Where(p => p != null))
+                    {
+                        var next = map(prefab.path);
+                        if (next == prefab.path) continue;
+                        prefab.path = next;
+                        changed = true;
+                    }
+                // 共通のフォルダがショップのフォルダ（移した先の外）なら、そのまま残す（KonoAsset の結び付けは商品 ID か名前なので変わらない）
+                var folder = map(package.commonFolder);
+                if (folder != package.commonFolder)
+                {
+                    package.commonFolder = folder;
+                    changed = true;
+                }
+                if (changed && package.assetPaths != null)
+                    package.assetPaths = package.assetPaths.Distinct().OrderBy(p => p, StringComparer.Ordinal).ToList();
+            }
+            return changed;
         }
 
         private static void Save(List<LedgerPackage> packages)
@@ -374,6 +423,9 @@ namespace Jeni.KaihenNavi
                 current += "/" + parts[i];
                 var name = parts[i];
                 if (name.StartsWith("_", StringComparison.Ordinal)) continue;
+                // 振り分け先（Assets/〈アバター〉_kaihen/〈用途〉）の名前はアバターの商品名と一致しやすいので照合しない
+                if (i == 1 && ImportSorter.IsRootName(name)) continue;
+                if (i == 2 && ImportSorter.IsRootName(parts[1])) continue;
                 if (GenericFolders.Contains(KonoAssetLink.Normalize(name))) continue;
                 var found = KonoAssetLink.FindByFolderName(name);
                 if (found == null) continue;

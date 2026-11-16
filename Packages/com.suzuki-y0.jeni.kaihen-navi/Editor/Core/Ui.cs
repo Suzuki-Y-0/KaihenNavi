@@ -223,6 +223,10 @@ namespace Jeni.KaihenNavi
                         Stroke(painter, 3, 7, 7, 7, 9, 4, 15, 4, 17, 7, 21, 7, 21, 20, 3, 20, 3, 7);
                         Circle(painter, 12, 13, 4);
                         break;
+                    case "placement":
+                        Stroke(painter, 3, 6, 3, 19, 21, 19, 21, 8, 11, 8, 9, 6, 3, 6);
+                        Stroke(painter, 9, 13, 15, 13); Stroke(painter, 13, 11, 15, 13, 13, 15);
+                        break;
                     case "uploadCheck":
                         Stroke(painter, 12, 16, 12, 4); Stroke(painter, 7, 9, 12, 4, 17, 9);
                         Stroke(painter, 4, 16, 4, 20, 20, 20, 20, 16);

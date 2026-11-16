@@ -42,6 +42,54 @@ namespace Jeni.KaihenNavi
             Undo.undoRedoPerformed += Restore;
         }
 
+        /// <summary>取り込みの記録がまだ終わっていないか（振り分けの窓はこれが終わってから開く）。</summary>
+        internal static bool IsPending { get { return SessionState.GetString(PendingKey, "").Length > 0; } }
+
+        /// <summary>
+        /// 振り分けでフォルダを移したとき、控え（Library/KaihenNavi/Imports/*/state.json）のパスを移動先へ書き換える。
+        /// こうしておくと、取り込みの Ctrl+Z / やり直しが移動先のファイルを対象にする。
+        /// </summary>
+        internal static void RewritePaths(Func<string, string> map)
+        {
+            var root = Path.Combine("Library", "KaihenNavi", "Imports");
+            if (!Directory.Exists(root)) return;
+            foreach (var folder in Directory.GetDirectories(root))
+            {
+                var file = Path.Combine(folder, "state.json");
+                if (!File.Exists(file)) continue;
+                try
+                {
+                    var snapshot = JsonUtility.FromJson<Snapshot>(File.ReadAllText(file));
+                    if (snapshot != null && RewriteSnapshot(snapshot, map))
+                        File.WriteAllText(file, JsonUtility.ToJson(snapshot), Encoding.UTF8);
+                }
+                catch (Exception e) { Debug.LogWarning("[KaihenNavi] Import Undo: " + e.Message); }
+            }
+        }
+
+        /// <summary>控えのファイルとフォルダのパスを書き換える。.before/.after の中身は番号で引くのでそのまま使える。</summary>
+        internal static bool RewriteSnapshot(Snapshot snapshot, Func<string, string> map)
+        {
+            var changed = false;
+            foreach (var file in snapshot.files)
+            {
+                // 台帳などツールのファイルは動かさない
+                if (IsManaged(file.path)) continue;
+                var next = map(file.path);
+                if (next == file.path) continue;
+                file.path = next;
+                changed = true;
+            }
+            for (var i = 0; i < snapshot.directories.Count; i++)
+            {
+                var next = map(snapshot.directories[i]);
+                if (next == snapshot.directories[i]) continue;
+                snapshot.directories[i] = next;
+                changed = true;
+            }
+            return changed;
+        }
+
         public static bool Begin(string package)
         {
             if (SessionState.GetString(PendingKey, "").Length > 0) return false;

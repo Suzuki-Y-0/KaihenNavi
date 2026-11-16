@@ -24,6 +24,7 @@ namespace Jeni.KaihenNavi
                     case "outfit": case "transform": case "toggle": case "skin": return "outfit";
                     case "color": case "innerColor": case "light": case "pink": return "appearance";
                     case "body": case "view": case "walk": return "body";
+                    case "menu": case "thumbnail": case "placement": return "finish";
                     default: return "finish";
                 }
             }

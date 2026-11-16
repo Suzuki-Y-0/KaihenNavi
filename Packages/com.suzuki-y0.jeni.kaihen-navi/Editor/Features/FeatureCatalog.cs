@@ -22,6 +22,7 @@ namespace Jeni.KaihenNavi
                 new WalkFeature(),
                 new MenuFeature(),
                 new ThumbnailFeature(),
+                new PlacementFeature(),
             };
         }
     }

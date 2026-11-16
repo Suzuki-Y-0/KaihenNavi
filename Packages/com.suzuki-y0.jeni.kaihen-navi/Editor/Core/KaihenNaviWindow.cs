@@ -24,6 +24,9 @@ namespace Jeni.KaihenNavi
         private List<FeatureBase> _features;
         private List<VRCAvatarDescriptor> _avatars = new List<VRCAvatarDescriptor>();
         private VRCAvatarDescriptor _avatar;
+
+        /// <summary>いま選んでいるアバター（振り分けの窓が、ルートの名前の候補に使う）。</summary>
+        internal VRCAvatarDescriptor SelectedAvatar { get { return _avatar; } }
         private FeatureBase _selected;
 
         private VisualElement _avatarArea;
